@@ -1,0 +1,77 @@
+{
+  "name": "doc-freshness-checker",
+  "version": "1.0.0",
+  "description": "Universal documentation freshness checker - validates documentation accuracy against actual codebase",
+  "homepage": "https://github.com/cosmocoder/doc-freshness-checker#readme",
+  "bugs": {
+    "url": "https://github.com/cosmocoder/doc-freshness-checker/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cosmocoder/doc-freshness-checker.git"
+  },
+  "license": "MIT",
+  "author": "cosmocoder",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "doc-freshness": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build",
+    "test": "node --test",
+    "lint": "eslint . --ext .js,.ts",
+    "lint:fix": "npm run lint -- --fix",
+    "prettier": "prettier --write src/",
+    "prettier:ci": "prettier --check src/",
+    "docs:check": "node dist/cli.js",
+    "docs:check:json": "node dist/cli.js --reporter json --output reports/doc-freshness.json"
+  },
+  "keywords": [
+    "documentation",
+    "freshness",
+    "validation",
+    "docs",
+    "checker",
+    "stale",
+    "lint",
+    "markdown",
+    "ci",
+    "devops"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "commander": "12.0.0",
+    "fastembed": "2.1.0",
+    "glob": "10.3.10",
+    "semver": "7.6.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.2",
+    "@types/node": "25.2.0",
+    "@types/semver": "7.7.1",
+    "eslint": "9.39.2",
+    "globals": "17.3.0",
+    "jiti": "2.6.1",
+    "prettier": "3.8.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.54.0"
+  }
+}
