@@ -51,9 +51,10 @@ export class ValidationEngine {
       const refsByType = this.groupByType(doc.references);
 
       for (const [type, refs] of refsByType) {
-        // Check if this rule is enabled
+        // Check if this rule is explicitly disabled
         const ruleConfig = this.config.rules?.[type];
-        if (ruleConfig && !ruleConfig.enabled) {
+        if (ruleConfig?.enabled === false) {
+          results.summary.total += refs.length;
           results.summary.skipped += refs.length;
           continue;
         }
@@ -61,37 +62,37 @@ export class ValidationEngine {
         const validator = this.validators.get(type);
 
         if (!validator) {
+          results.summary.total += refs.length;
           results.summary.skipped += refs.length;
           continue;
         }
 
         try {
-          // Run validation in parallel for each type
           const validationResults = await validator.validateBatch(refs, doc, this.config);
 
           for (const result of validationResults) {
             results.summary.total++;
 
-            if (result.valid) {
+            if (result.skipped) {
+              results.summary.skipped++;
+            } else if (result.valid) {
               results.summary.valid++;
+            } else if (result.severity === 'error') {
+              results.summary.errors++;
+              docResult.issues.push(result);
+            } else if (result.severity === 'warning') {
+              results.summary.warnings++;
+              docResult.issues.push(result);
             } else {
-              if (result.severity === 'error') {
-                results.summary.errors++;
-              } else if (result.severity === 'warning') {
-                results.summary.warnings++;
-              } else {
-                results.summary.valid++; // info level doesn't count as issue
-              }
-
-              if (result.severity !== 'info') {
-                docResult.issues.push(result);
-              }
+              // info-level issues: count as valid, don't add to issues
+              results.summary.valid++;
             }
           }
         } catch (error) {
           if (this.config.verbose) {
             console.warn(`Warning: Validator for ${type} failed: ${(error as Error).message}`);
           }
+          results.summary.total += refs.length;
           results.summary.skipped += refs.length;
         }
       }

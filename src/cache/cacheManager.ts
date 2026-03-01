@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { CodeDocGraph } from '../graph/codeDocGraph.js';
+import { isWithinRoot, resolveProjectRoot } from '../utils/pathSecurity.js';
 import type { CacheStats2, DocFreshnessConfig, SerializedGraph, UrlCacheEntry } from '../types.js';
 
 /**
@@ -15,40 +16,41 @@ export class CacheManager {
 
   constructor(config: DocFreshnessConfig) {
     this.config = config;
-    this.cacheDir = config.cache?.dir || config.graph?.cacheDir || '.doc-freshness-cache';
+    const rawDir = config.cache?.dir || config.graph?.cacheDir || '.doc-freshness-cache';
+    const rootDir = resolveProjectRoot(config.rootDir);
+
+    // Path traversal protection: resolve and verify cache dir stays within project root
+    const resolved = path.resolve(rootDir, rawDir);
+    if (!isWithinRoot(resolved, rootDir)) {
+      throw new Error(`Cache directory "${rawDir}" resolves outside project root`);
+    }
+
+    this.cacheDir = resolved;
     this.cacheFile = path.join(this.cacheDir, 'graph-cache.json');
     this.urlCacheFile = path.join(this.cacheDir, 'url-cache.json');
   }
 
-  /**
-   * Ensure cache directory exists
-   */
-  private ensureCacheDir(): void {
-    if (!fs.existsSync(this.cacheDir)) {
-      fs.mkdirSync(this.cacheDir, { recursive: true });
-    }
+  private async ensureCacheDir(): Promise<void> {
+    await fs.promises.mkdir(this.cacheDir, { recursive: true });
   }
 
   /**
    * Save the code-to-doc graph
    */
-  saveGraph(graph: CodeDocGraph): void {
-    this.ensureCacheDir();
+  async saveGraph(graph: CodeDocGraph): Promise<void> {
+    await this.ensureCacheDir();
     const data = graph.serialize();
     data.configHash = this.getConfigHash();
-    fs.writeFileSync(this.cacheFile, JSON.stringify(data, null, 2));
+    await fs.promises.writeFile(this.cacheFile, JSON.stringify(data, null, 2));
   }
 
   /**
    * Load the cached graph
    */
-  loadGraph(): CodeDocGraph | null {
-    if (!fs.existsSync(this.cacheFile)) {
-      return null;
-    }
-
+  async loadGraph(): Promise<CodeDocGraph | null> {
     try {
-      const data = JSON.parse(fs.readFileSync(this.cacheFile, 'utf-8')) as SerializedGraph;
+      const content = await fs.promises.readFile(this.cacheFile, 'utf-8');
+      const data = JSON.parse(content) as SerializedGraph;
       return CodeDocGraph.deserialize(data);
     } catch {
       return null;
@@ -62,25 +64,19 @@ export class CacheManager {
     if (!graph) return false;
     if (!graph.buildTimestamp) return false;
 
-    // Check if config has changed
     const configHash = this.getConfigHash();
     if (graph.configHash && graph.configHash !== configHash) {
       return false;
     }
 
-    // For git repos, cache is valid if we have the commit info
     if (currentCommit && graph.gitCommit) {
-      return true; // Will do incremental check
+      return currentCommit === graph.gitCommit;
     }
 
-    // For non-git repos, check cache age
     const maxAge = this.config.cache?.maxAge || this.config.graph?.cacheMaxAge || 24 * 60 * 60 * 1000;
     return Date.now() - graph.buildTimestamp < maxAge;
   }
 
-  /**
-   * Generate hash of current config for cache invalidation
-   */
   private getConfigHash(): string {
     const relevantConfig = {
       include: this.config.include,
@@ -94,21 +90,18 @@ export class CacheManager {
   /**
    * Save URL validation cache
    */
-  saveUrlCache(urlResults: Record<string, UrlCacheEntry>): void {
-    this.ensureCacheDir();
-    fs.writeFileSync(this.urlCacheFile, JSON.stringify(urlResults, null, 2));
+  async saveUrlCache(urlResults: Record<string, UrlCacheEntry>): Promise<void> {
+    await this.ensureCacheDir();
+    await fs.promises.writeFile(this.urlCacheFile, JSON.stringify(urlResults, null, 2));
   }
 
   /**
    * Load URL validation cache
    */
-  loadUrlCache(): Record<string, UrlCacheEntry> {
-    if (!fs.existsSync(this.urlCacheFile)) {
-      return {};
-    }
-
+  async loadUrlCache(): Promise<Record<string, UrlCacheEntry>> {
     try {
-      return JSON.parse(fs.readFileSync(this.urlCacheFile, 'utf-8')) as Record<string, UrlCacheEntry>;
+      const content = await fs.promises.readFile(this.urlCacheFile, 'utf-8');
+      return JSON.parse(content) as Record<string, UrlCacheEntry>;
     } catch {
       return {};
     }
@@ -117,40 +110,39 @@ export class CacheManager {
   /**
    * Clear all caches
    */
-  clearCache(): void {
-    if (fs.existsSync(this.cacheDir)) {
-      fs.rmSync(this.cacheDir, { recursive: true });
+  async clearCache(): Promise<void> {
+    try {
+      await fs.promises.rm(this.cacheDir, { recursive: true });
+    } catch {
+      // Directory doesn't exist
     }
   }
 
   /**
    * Get cache statistics
    */
-  getCacheStats(): CacheStats2 {
+  async getCacheStats(): Promise<CacheStats2> {
     const stats: CacheStats2 = {
-      exists: fs.existsSync(this.cacheFile),
+      exists: false,
       graphSize: 0,
       urlCacheSize: 0,
       lastUpdated: null,
     };
 
-    if (stats.exists) {
-      try {
-        const graphStat = fs.statSync(this.cacheFile);
-        stats.graphSize = graphStat.size;
-        stats.lastUpdated = graphStat.mtime;
-      } catch {
-        // Ignore errors
-      }
+    try {
+      const graphStat = await fs.promises.stat(this.cacheFile);
+      stats.exists = true;
+      stats.graphSize = graphStat.size;
+      stats.lastUpdated = graphStat.mtime;
+    } catch {
+      // File doesn't exist
     }
 
-    if (fs.existsSync(this.urlCacheFile)) {
-      try {
-        const urlStat = fs.statSync(this.urlCacheFile);
-        stats.urlCacheSize = urlStat.size;
-      } catch {
-        // Ignore errors
-      }
+    try {
+      const urlStat = await fs.promises.stat(this.urlCacheFile);
+      stats.urlCacheSize = urlStat.size;
+    } catch {
+      // File doesn't exist
     }
 
     return stats;

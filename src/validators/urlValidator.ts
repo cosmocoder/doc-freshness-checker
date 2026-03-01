@@ -1,3 +1,6 @@
+import dns from 'dns/promises';
+import net from 'net';
+import { pruneOldestEntries, setWithMaxEntries } from '../utils/boundedMap.js';
 import type { DocFreshnessConfig, Document, Reference, UrlCacheEntry, ValidationResult } from '../types.js';
 
 /**
@@ -17,6 +20,69 @@ const DOMAINS_REQUIRING_GET = [
   'learn.microsoft.com',
   'docs.microsoft.com',
 ];
+
+const MAX_URL_CACHE_ENTRIES = 5000;
+
+/**
+ * Check whether a hostname resolves to a private/internal IP range.
+ * Prevents SSRF attacks against cloud metadata services, localhost, etc.
+ */
+function isPrivateHostname(hostname: string): boolean {
+  // Block obvious private/reserved hostnames
+  if (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '[::1]' ||
+    hostname === '::1' ||
+    hostname === '0.0.0.0'
+  ) {
+    return true;
+  }
+
+  if (isPrivateIpAddress(hostname)) {
+    return true;
+  }
+
+  return false;
+}
+
+function isPrivateIpAddress(value: string): boolean {
+  const ipVersion = net.isIP(value);
+
+  if (ipVersion === 4) {
+    const octets = value.split('.').map((part) => Number(part));
+    const [a, b] = octets;
+
+    if (octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
+    if (a === 10) return true;                         // 10.0.0.0/8
+    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
+    if (a === 192 && b === 168) return true;          // 192.168.0.0/16
+    if (a === 169 && b === 254) return true;          // 169.254.0.0/16
+    if (a === 127) return true;                       // 127.0.0.0/8
+    if (a === 0) return true;                         // 0.0.0.0/8
+    if (a >= 224) return true;                        // Multicast/reserved
+    return false;
+  }
+
+  if (ipVersion === 6) {
+    const normalized = value.toLowerCase();
+    if (normalized === '::1' || normalized === '::') return true;
+    if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true; // fc00::/7
+    if (normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')) {
+      return true; // fe80::/10 link-local
+    }
+    if (normalized.startsWith('::ffff:127.')) return true; // IPv4-mapped loopback
+    return false;
+  }
+
+  return false;
+}
+
+function hostnameMatchesDomain(hostname: string, domain: string): boolean {
+  const normalizedHost = hostname.toLowerCase();
+  const normalizedDomain = domain.toLowerCase();
+  return normalizedHost === normalizedDomain || normalizedHost.endsWith(`.${normalizedDomain}`);
+}
 
 /**
  * Validates external URLs are accessible
@@ -105,15 +171,40 @@ export class UrlValidator {
       };
     }
 
-    // Check skip domains
+    // Check skip domains and SSRF protection
     try {
       const urlObj = new URL(url);
-      if (skipDomains.some((domain) => urlObj.hostname.includes(domain))) {
+      if (urlObj.protocol !== 'http:' && urlObj.protocol !== 'https:') {
+        return {
+          reference: ref,
+          valid: false,
+          severity: config.rules?.['external-url']?.severity || 'warning',
+          message: `Unsupported URL protocol: ${urlObj.protocol}`,
+        };
+      }
+
+      if (skipDomains.some((domain) => hostnameMatchesDomain(urlObj.hostname, domain))) {
         return {
           reference: ref,
           valid: true,
           skipped: true,
           message: 'Domain in skip list',
+        };
+      }
+      if (isPrivateHostname(urlObj.hostname)) {
+        return {
+          reference: ref,
+          valid: true,
+          skipped: true,
+          message: 'Skipped: private/internal address',
+        };
+      }
+      if (await this.resolvesToPrivateAddress(urlObj.hostname)) {
+        return {
+          reference: ref,
+          valid: true,
+          skipped: true,
+          message: 'Skipped: hostname resolves to private/internal address',
         };
       }
     } catch {
@@ -179,7 +270,7 @@ export class UrlValidator {
         };
       }
 
-      this.cache.set(url, { result, timestamp: Date.now() });
+      this.setCacheEntry(url, result);
 
       return {
         reference: ref,
@@ -195,7 +286,7 @@ export class UrlValidator {
           : `URL check failed: ${url} (${err.message})`,
       };
 
-      this.cache.set(url, { result, timestamp: Date.now() });
+      this.setCacheEntry(url, result);
 
       return {
         reference: ref,
@@ -204,10 +295,11 @@ export class UrlValidator {
     }
   }
 
-  /**
-   * Fetch a URL with timeout and browser-like headers
-   */
-  private async fetchWithTimeout(url: string, method: 'HEAD' | 'GET', timeout: number): Promise<Response> {
+  private async fetchWithTimeout(
+    url: string,
+    method: 'HEAD' | 'GET',
+    timeout: number
+  ): Promise<{ ok: boolean; status: number; statusText: string }> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
@@ -220,10 +312,15 @@ export class UrlValidator {
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.5',
         },
-        // Don't follow too many redirects
         redirect: 'follow',
       });
-      return response;
+
+      const result = { ok: response.ok, status: response.status, statusText: response.statusText };
+
+      // Drain the response body to free the TCP connection
+      response.body?.cancel().catch(() => {});
+
+      return result;
     } finally {
       clearTimeout(timeoutId);
     }
@@ -250,6 +347,7 @@ export class UrlValidator {
     for (const [url, data] of Object.entries(cacheData)) {
       this.cache.set(url, data);
     }
+    pruneOldestEntries(this.cache, MAX_URL_CACHE_ENTRIES);
   }
 
   /**
@@ -257,5 +355,18 @@ export class UrlValidator {
    */
   exportCache(): Record<string, UrlCacheEntry> {
     return Object.fromEntries(this.cache);
+  }
+
+  private async resolvesToPrivateAddress(hostname: string): Promise<boolean> {
+    try {
+      const addresses = await dns.lookup(hostname, { all: true, verbatim: true });
+      return addresses.some((entry) => isPrivateIpAddress(entry.address));
+    } catch {
+      return false;
+    }
+  }
+
+  private setCacheEntry(url: string, result: UrlCacheEntry['result']): void {
+    setWithMaxEntries(this.cache, url, { result, timestamp: Date.now() }, MAX_URL_CACHE_ENTRIES);
   }
 }

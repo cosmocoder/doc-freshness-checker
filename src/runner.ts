@@ -47,7 +47,7 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
   // Clear cache if requested
   if (config.clearCache) {
     const cacheManager = new CacheManager(config);
-    cacheManager.clearCache();
+    await cacheManager.clearCache();
     if (config.verbose) {
       console.log('Cache cleared.');
     }
@@ -93,7 +93,7 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
   // Load URL cache if available
   if (config.cache?.enabled !== false) {
     const cacheManager = new CacheManager(config);
-    const urlCache = cacheManager.loadUrlCache();
+    const urlCache = await cacheManager.loadUrlCache();
     urlValidator.loadCache(urlCache);
   }
 
@@ -161,8 +161,8 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
     // Save graph cache
     if (config.cache?.enabled !== false) {
       const cacheManager = new CacheManager(config);
-      cacheManager.saveGraph(graph);
-      cacheManager.saveUrlCache(urlValidator.exportCache());
+      await cacheManager.saveGraph(graph);
+      await cacheManager.saveUrlCache(urlValidator.exportCache());
     }
 
     // Calculate freshness scores if enabled

@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import type { ChangeSummaryItem, CommitInfo, DocFreshnessConfig } from '../types.js';
 import type { CodeDocGraph } from '../graph/codeDocGraph.js';
 
@@ -14,6 +14,14 @@ export class GitChangeTracker {
     this._isGitRepo = null;
   }
 
+  private git(args: string[]): string {
+    return execFileSync('git', args, {
+      cwd: this.rootDir,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+  }
+
   /**
    * Check if the project is a git repository
    */
@@ -23,10 +31,7 @@ export class GitChangeTracker {
     }
 
     try {
-      execSync('git rev-parse --git-dir', {
-        cwd: this.rootDir,
-        stdio: 'pipe',
-      });
+      this.git(['rev-parse', '--git-dir']);
       this._isGitRepo = true;
     } catch {
       this._isGitRepo = false;
@@ -42,10 +47,7 @@ export class GitChangeTracker {
     if (!this.isGitRepo()) return null;
 
     try {
-      return execSync('git rev-parse HEAD', {
-        cwd: this.rootDir,
-        encoding: 'utf-8',
-      }).trim();
+      return this.git(['rev-parse', 'HEAD']);
     } catch {
       return null;
     }
@@ -58,11 +60,8 @@ export class GitChangeTracker {
     if (!this.isGitRepo()) return [];
 
     try {
-      const output = execSync(`git diff --name-only ${fromCommit}..${toCommit}`, {
-        cwd: this.rootDir,
-        encoding: 'utf-8',
-      });
-      return output.trim().split('\n').filter(Boolean);
+      const output = this.git(['diff', '--name-only', `${fromCommit}..${toCommit}`]);
+      return output.split('\n').filter(Boolean);
     } catch {
       return [];
     }
@@ -76,11 +75,8 @@ export class GitChangeTracker {
 
     try {
       const isoDate = new Date(timestamp).toISOString();
-      const output = execSync(`git log --since="${isoDate}" --name-only --pretty=format:""`, {
-        cwd: this.rootDir,
-        encoding: 'utf-8',
-      });
-      const files = [...new Set(output.trim().split('\n').filter(Boolean))];
+      const output = this.git(['log', `--since=${isoDate}`, '--name-only', '--pretty=format:']);
+      const files = [...new Set(output.split('\n').filter(Boolean))];
       return files;
     } catch {
       return [];
@@ -94,11 +90,8 @@ export class GitChangeTracker {
     if (!this.isGitRepo()) return null;
 
     try {
-      const output = execSync(`git log -1 --format="%ct" -- "${filePath}"`, {
-        cwd: this.rootDir,
-        encoding: 'utf-8',
-      });
-      const timestamp = parseInt(output.trim(), 10);
+      const output = this.git(['log', '-1', '--format=%ct', '--', filePath]);
+      const timestamp = parseInt(output, 10);
       return timestamp ? timestamp * 1000 : null;
     } catch {
       return null;
@@ -106,24 +99,24 @@ export class GitChangeTracker {
   }
 
   /**
-   * Get commit info for a file
+   * Get commit info for a file.
+   * Uses NUL byte as separator to safely handle commit messages containing |
    */
   getFileCommitInfo(filePath: string): CommitInfo | null {
     if (!this.isGitRepo()) return null;
 
     try {
-      const output = execSync(`git log -1 --format="%H|%ct|%s" -- "${filePath}"`, {
-        cwd: this.rootDir,
-        encoding: 'utf-8',
-      });
+      const output = this.git(['log', '-1', '--format=%H%x00%ct%x00%s', '--', filePath]);
 
-      if (!output.trim()) return null;
+      if (!output) return null;
 
-      const [hash, timestamp, message] = output.trim().split('|');
+      const parts = output.split('\0');
+      if (parts.length < 3) return null;
+
       return {
-        hash,
-        timestamp: parseInt(timestamp, 10) * 1000,
-        message,
+        hash: parts[0],
+        timestamp: parseInt(parts[1], 10) * 1000,
+        message: parts.slice(2).join('\0'),
       };
     } catch {
       return null;

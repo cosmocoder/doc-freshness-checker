@@ -3,6 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { homedir } from 'os';
 import { EmbeddingModel, FlagEmbedding } from 'fastembed';
+import { pruneOldestEntries, setWithMaxEntries } from '../utils/boundedMap.js';
 import type { CacheStats, CodeFile, Comment, DocFreshnessConfig, Document, IndexMetadata, Section, VectorMismatch } from '../types.js';
 
 /**
@@ -15,6 +16,7 @@ import type { CacheStats, CodeFile, Comment, DocFreshnessConfig, Document, Index
 // FastEmbed configuration
 const EMBEDDING_DIMENSIONS = 384; // bge-small-en-v1.5 dimensions
 const MAX_RETRIES = 3;
+const MAX_EMBEDDING_CACHE_ENTRIES = 20000;
 
 interface EmbeddingCache {
   model: string;
@@ -152,6 +154,7 @@ export class VectorSearch {
 
       // Restore cache as Map
       this.embeddingCache = new Map(Object.entries(parsed.embeddings || {}));
+      pruneOldestEntries(this.embeddingCache, MAX_EMBEDDING_CACHE_ENTRIES);
 
       // Restore index if available
       if (parsed.vectorIndex && parsed.indexMetadata) {
@@ -241,7 +244,7 @@ export class VectorSearch {
 
     // Store in cache
     if (cacheKey) {
-      this.embeddingCache.set(cacheKey, embedding);
+      setWithMaxEntries(this.embeddingCache, cacheKey, embedding, MAX_EMBEDDING_CACHE_ENTRIES);
     }
 
     return embedding;
@@ -279,15 +282,18 @@ export class VectorSearch {
 
     await this.loadCache();
 
+    // Clear previous index to avoid duplicates across runs
+    this.vectorIndex = [];
+    this.indexMetadata = [];
+
     let newEmbeddings = 0;
     let cachedEmbeddings = 0;
 
     for (const doc of documents) {
-      // Split doc into semantic sections
       const sections = this.splitIntoSections(doc.content);
 
       for (const section of sections) {
-        if (section.text.length < 50) continue; // Skip tiny sections
+        if (section.text.length < 50) continue;
 
         const cacheKey = this.getCacheKey(section.text, 'doc');
         const wasCached = this.embeddingCache.has(cacheKey);
@@ -429,7 +435,9 @@ export class VectorSearch {
       normB += b[i] * b[i];
     }
 
-    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+    const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+    if (denominator === 0) return 0;
+    return dotProduct / denominator;
   }
 
   /**

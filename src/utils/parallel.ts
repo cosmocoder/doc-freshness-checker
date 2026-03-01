@@ -1,23 +1,25 @@
 /**
- * Run tasks in parallel with concurrency limit
+ * Run tasks in parallel with concurrency limit.
+ * Individual task failures don't abort remaining tasks --
+ * all rejections are collected and re-thrown via Promise.allSettled + Promise.all.
  */
 export async function runParallel<T>(
   tasks: Array<() => Promise<T>>,
   concurrency: number = 10
 ): Promise<T[]> {
   const results: Promise<T>[] = [];
-  const executing: Promise<T>[] = [];
+  const executing: Set<Promise<void>> = new Set();
 
   for (const task of tasks) {
-    const promise = task().then((result) => {
-      executing.splice(executing.indexOf(promise), 1);
-      return result;
-    });
-
+    const promise = task();
     results.push(promise);
-    executing.push(promise);
 
-    if (executing.length >= concurrency) {
+    const cleanup = promise.then(() => {}, () => {}).then(() => {
+      executing.delete(cleanup);
+    });
+    executing.add(cleanup);
+
+    if (executing.size >= concurrency) {
       await Promise.race(executing);
     }
   }

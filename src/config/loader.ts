@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { pathToFileURL } from 'url';
 import { createRequire } from 'module';
 import { DEFAULT_CONFIG } from './defaults.js';
@@ -79,37 +80,16 @@ export async function loadConfig(configPath?: string): Promise<DocFreshnessConfi
 }
 
 /**
- * Load ESM config file by transforming it to be evaluatable
- * This avoids the Node.js MODULE_TYPELESS_PACKAGE_JSON warning
+ * Load ESM config file via dynamic import with a temp .mjs file
+ * to avoid the Node.js MODULE_TYPELESS_PACKAGE_JSON warning.
  */
 async function loadESMConfig(content: string, filePath: string): Promise<DocFreshnessConfig> {
-  // Transform the content to handle doc-freshness-checker imports
   const transformedContent = transformConfigContent(content);
-  const tryEval = (configStr: string) => {
-    try {
-      return new Function('process', `return ${configStr}`)(process);
-    } catch {
-      return undefined;
-    }
-  };
 
-  const exportMatchers = [
-    /export\s+default\s+defineConfig\s*\((\{[\s\S]*\})\s*\)\s*;?\s*$/,
-    /export\s+default\s+(\{[\s\S]*\})\s*;?\s*$/,
-  ];
-
-  for (const matcher of exportMatchers) {
-    const match = transformedContent.match(matcher);
-    const evaluated = match ? tryEval(match[1]) : undefined;
-    if (evaluated) return evaluated;
-  }
-
-  // For complex configs (with other imports, function calls, etc.), use dynamic import
-  // Write to a temp .mjs file to avoid the warning
   const tempDir = path.join(path.dirname(filePath), '.doc-freshness-cache');
   const tempFile = path.join(
     tempDir,
-    `temp-config-${Date.now()}-${Math.random().toString(16).slice(2)}.mjs`
+    `temp-config-${Date.now()}-${crypto.randomUUID()}.mjs`
   );
 
   try {

@@ -72,6 +72,11 @@ const languageConfigs: Record<string, LanguageConfig> = {
 };
 
 import { isIllustrativeSymbol } from '../utils/illustrativePatterns.js';
+import {
+  createIllustrativeSkippedResult,
+  getRuleSeverity,
+  severityForIllustrative,
+} from '../utils/validation.js';
 
 /**
  * Validates code patterns exist in source files
@@ -183,13 +188,9 @@ export class CodePatternValidator {
       const illustrative = ref.isIllustrative || isIllustrativeSymbol(name);
 
       if (illustrative && skipIllustrative) {
-        // Skip validation entirely for illustrative symbols
-        results.push({
-          reference: ref,
-          valid: true,
-          skipped: true,
-          message: 'Skipped: illustrative/example code pattern',
-        });
+        results.push(
+          createIllustrativeSkippedResult(ref, 'Skipped: illustrative/example code pattern')
+        );
         continue;
       }
 
@@ -205,11 +206,11 @@ export class CodePatternValidator {
         const similar = this.findSimilarSymbol(name);
 
         // Reduce severity for illustrative patterns that weren't skipped
-        const baseSeverity = config.rules?.['code-pattern']?.severity || 'warning';
+        const baseSeverity = getRuleSeverity(config, 'code-pattern', 'warning');
         results.push({
           reference: ref,
           valid: false,
-          severity: illustrative ? 'info' : baseSeverity,
+          severity: severityForIllustrative(illustrative, baseSeverity),
           message: illustrative
             ? `Code pattern not found (illustrative): ${ref.kind} ${name}`
             : `Code pattern not found: ${ref.kind} ${name}`,

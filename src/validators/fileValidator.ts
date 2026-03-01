@@ -2,6 +2,12 @@ import fs from 'fs';
 import path from 'path';
 import { findSimilar } from '../utils/similarity.js';
 import { isIllustrativePath, compilePatterns } from '../utils/illustrativePatterns.js';
+import { isWithinRoot, resolveDocumentDir, resolveProjectRoot } from '../utils/pathSecurity.js';
+import {
+  createIllustrativeSkippedResult,
+  getRuleSeverity,
+  severityForIllustrative,
+} from '../utils/validation.js';
 import type { DocFreshnessConfig, Document, Reference, ValidationResult } from '../types.js';
 
 /**
@@ -33,7 +39,8 @@ export class FileValidator {
   ): Promise<ValidationResult[]> {
     this.initCustomPatterns(config);
     const results: ValidationResult[] = [];
-    const docDir = path.dirname(path.join(config.rootDir || process.cwd(), document.path));
+    const rootDir = resolveProjectRoot(config.rootDir);
+    const docDir = resolveDocumentDir(rootDir, document.path);
     const skipIllustrative = config.rules?.['file-path']?.skipIllustrative !== false;
 
     for (const ref of references) {
@@ -41,17 +48,11 @@ export class FileValidator {
       const illustrative = ref.isIllustrative || isIllustrativePath(ref.value, this.customPatterns);
 
       if (illustrative && skipIllustrative) {
-        // Skip validation entirely for illustrative paths
-        results.push({
-          reference: ref,
-          valid: true,
-          skipped: true,
-          message: 'Skipped: illustrative/example path',
-        });
+        results.push(createIllustrativeSkippedResult(ref, 'Skipped: illustrative/example path'));
         continue;
       }
 
-      const result = await this.validateReference(ref, docDir, config, illustrative);
+      const result = await this.validateReference(ref, docDir, rootDir, config, illustrative);
       results.push(result);
     }
 
@@ -61,19 +62,35 @@ export class FileValidator {
   private async validateReference(
     ref: Reference,
     docDir: string,
+    rootDir: string,
     config: DocFreshnessConfig,
     isIllustrative: boolean = false
   ): Promise<ValidationResult> {
     // Handle both relative and absolute paths
     let resolvedPath: string;
     if (path.isAbsolute(ref.value)) {
-      resolvedPath = ref.value;
+      resolvedPath = path.resolve(ref.value);
     } else {
       resolvedPath = path.resolve(docDir, ref.value);
     }
 
     // Normalize path
     resolvedPath = path.normalize(resolvedPath);
+    const baseSeverity = getRuleSeverity(config, 'file-path', 'error');
+
+    // Prevent probing files outside the configured project root
+    if (!isWithinRoot(resolvedPath, rootDir)) {
+      return {
+        reference: ref,
+        valid: false,
+        severity: severityForIllustrative(isIllustrative, baseSeverity),
+        message: isIllustrative
+          ? `Path escapes project root (illustrative): ${ref.value}`
+          : `Path escapes project root: ${ref.value}`,
+        suggestion: null,
+        resolvedPath,
+      };
+    }
 
     try {
       await fs.promises.access(resolvedPath);
@@ -84,14 +101,13 @@ export class FileValidator {
       };
     } catch {
       // File doesn't exist - try to find similar files
-      const suggestion = await this.findSuggestion(ref.value, docDir, config);
+      const suggestion = await this.findSuggestion(ref.value, docDir, rootDir);
 
       // Reduce severity for illustrative paths that weren't skipped
-      const baseSeverity = config.rules?.['file-path']?.severity || 'error';
       return {
         reference: ref,
         valid: false,
-        severity: isIllustrative ? 'info' : baseSeverity,
+        severity: severityForIllustrative(isIllustrative, baseSeverity),
         message: isIllustrative
           ? `File not found (illustrative): ${ref.value}`
           : `File not found: ${ref.value}`,
@@ -104,10 +120,14 @@ export class FileValidator {
   private async findSuggestion(
     refPath: string,
     docDir: string,
-    _config: DocFreshnessConfig
+    rootDir: string
   ): Promise<string | null> {
-    const dir = path.dirname(path.join(docDir, refPath));
+    const dir = path.dirname(path.resolve(docDir, refPath));
     const fileName = path.basename(refPath);
+
+    if (!isWithinRoot(dir, rootDir)) {
+      return null;
+    }
 
     // Check if directory exists
     try {
