@@ -20,7 +20,7 @@ const manifestParsers: Record<string, ManifestParser> = {
       versions.set('npm', normalizeVersion(content.engines.npm));
     }
 
-    const allDeps = { ...content.dependencies, ...content.devDependencies };
+    const allDeps = { ...content.dependencies, ...content.devDependencies } as Record<string, string>;
     for (const [name, version] of Object.entries(allDeps)) {
       versions.set(name.toLowerCase(), normalizeVersion(version as string));
     }
@@ -33,17 +33,12 @@ const manifestParsers: Record<string, ManifestParser> = {
     const content = await fs.promises.readFile(filePath, 'utf-8');
     const versions = new Map<string, string>();
 
-    const lines = content.split('\n');
-    for (const line of lines) {
+    for (const line of content.split('\n')) {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith('#')) continue;
-
       const match = trimmed.match(/^([a-zA-Z0-9\-_]+)([<>=!]+)?(.+)?$/);
-      if (match) {
-        const pkg = match[1].toLowerCase();
-        const version = match[3] ? normalizeVersion(match[3]) : 'any';
-        versions.set(pkg, version);
-      }
+      if (!match) continue;
+      versions.set(match[1].toLowerCase(), match[3] ? normalizeVersion(match[3]) : 'any');
     }
 
     return versions;
@@ -57,13 +52,11 @@ const manifestParsers: Record<string, ManifestParser> = {
     // Basic TOML parsing for dependencies
     const depsMatch = content.match(/\[project\.dependencies\]([\s\S]*?)(?:\[|$)/);
     if (depsMatch) {
-      const depsSection = depsMatch[1];
-      const depLines = depsSection.match(/"([^"]+)"/g) || [];
-      for (const dep of depLines) {
-        const clean = dep.replace(/"/g, '');
-        const parts = clean.split(/[<>=!]+/);
-        if (parts[0]) {
-          versions.set(parts[0].toLowerCase(), parts[1] || 'any');
+      const depEntries = Array.from(depsMatch[1].matchAll(/"([^"]+)"/g), (match) => match[1]);
+      for (const dep of depEntries) {
+        const [pkg, version = 'any'] = dep.split(/[<>=!]+/);
+        if (pkg) {
+          versions.set(pkg.toLowerCase(), version);
         }
       }
     }
@@ -84,12 +77,10 @@ const manifestParsers: Record<string, ManifestParser> = {
 
     const requireMatch = content.match(/require\s+\(([\s\S]*?)\)/);
     if (requireMatch) {
-      const lines = requireMatch[1].split('\n');
-      for (const line of lines) {
+      for (const line of requireMatch[1].split('\n')) {
         const match = line.trim().match(/^([^\s]+)\s+v?([^\s]+)/);
-        if (match) {
-          versions.set(match[1], normalizeVersion(match[2]));
-        }
+        if (!match) continue;
+        versions.set(match[1], normalizeVersion(match[2]));
       }
     }
 
@@ -103,13 +94,10 @@ const manifestParsers: Record<string, ManifestParser> = {
 
     const depsMatch = content.match(/\[dependencies\]([\s\S]*?)(?:\[|$)/);
     if (depsMatch) {
-      const depsSection = depsMatch[1];
-      const depLines = depsSection.split('\n');
-      for (const line of depLines) {
+      for (const line of depsMatch[1].split('\n')) {
         const match = line.match(/^([a-zA-Z0-9\-_]+)\s*=\s*"?([^"\n]+)"?/);
-        if (match) {
-          versions.set(match[1].toLowerCase(), normalizeVersion(match[2]));
-        }
+        if (!match) continue;
+        versions.set(match[1].toLowerCase(), normalizeVersion(match[2]));
       }
     }
 
@@ -126,10 +114,9 @@ const manifestParsers: Record<string, ManifestParser> = {
       versions.set('java', javaMatch[1]);
     }
 
-    const depMatches = content.matchAll(
+    for (const match of content.matchAll(
       /<dependency>[\s\S]*?<artifactId>([^<]+)<\/artifactId>[\s\S]*?<version>([^<]+)<\/version>[\s\S]*?<\/dependency>/g
-    );
-    for (const match of depMatches) {
+    )) {
       versions.set(match[1].toLowerCase(), normalizeVersion(match[2]));
     }
 

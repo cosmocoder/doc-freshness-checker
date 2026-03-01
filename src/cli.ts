@@ -86,14 +86,13 @@ export function applyCliOverrides(config: DocFreshnessConfig, options: CLIOption
     config.verbose = true;
   }
   if (options.skipUrls) {
-    config.urlValidation = config.urlValidation || {};
+    config.urlValidation ??= {};
     config.urlValidation.enabled = false;
   }
   if (options.only) {
     const types = options.only.split(',');
-    config.rules = config.rules || {};
-    for (const rule of Object.keys(config.rules)) {
-      const ruleConfig = config.rules[rule];
+    const rules = (config.rules ??= {});
+    for (const [rule, ruleConfig] of Object.entries(rules)) {
       if (ruleConfig) {
         ruleConfig.enabled = types.includes(rule);
       }

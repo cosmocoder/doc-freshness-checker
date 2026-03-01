@@ -71,22 +71,9 @@ export class ValidationEngine {
           const validationResults = await validator.validateBatch(refs, doc, this.config);
 
           for (const result of validationResults) {
-            results.summary.total++;
-
-            if (result.skipped) {
-              results.summary.skipped++;
-            } else if (result.valid) {
-              results.summary.valid++;
-            } else if (result.severity === 'error') {
-              results.summary.errors++;
-              docResult.issues.push(result);
-            } else if (result.severity === 'warning') {
-              results.summary.warnings++;
-              docResult.issues.push(result);
-            } else {
-              // info-level issues: count as valid, don't add to issues
-              results.summary.valid++;
-            }
+            const bucket = this.classifyResult(result);
+            this.incrementSummary(results, bucket);
+            if (bucket === 'error' || bucket === 'warning') docResult.issues.push(result);
           }
         } catch (error) {
           if (this.config.verbose) {
@@ -117,5 +104,38 @@ export class ValidationEngine {
       grouped.get(ref.type)!.push(ref);
     }
     return grouped;
+  }
+
+  private classifyResult(result: {
+    skipped?: boolean;
+    valid: boolean;
+    severity?: 'error' | 'warning' | 'info';
+  }): 'valid' | 'error' | 'warning' | 'skipped' {
+    if (result.skipped) return 'skipped';
+    if (result.valid || result.severity === 'info') return 'valid';
+    if (result.severity === 'error') return 'error';
+    if (result.severity === 'warning') return 'warning';
+    return 'valid';
+  }
+
+  private incrementSummary(
+    results: ValidationResults,
+    bucket: 'valid' | 'error' | 'warning' | 'skipped'
+  ): void {
+    results.summary.total++;
+    switch (bucket) {
+      case 'valid':
+        results.summary.valid++;
+        break;
+      case 'error':
+        results.summary.errors++;
+        break;
+      case 'warning':
+        results.summary.warnings++;
+        break;
+      case 'skipped':
+        results.summary.skipped++;
+        break;
+    }
   }
 }

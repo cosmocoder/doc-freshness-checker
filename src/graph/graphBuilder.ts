@@ -17,11 +17,17 @@ export class GraphBuilder {
    */
   async buildGraph(documents: Document[], codeIndex: Map<string, SymbolLocation[]> | null): Promise<CodeDocGraph> {
     const graph = new CodeDocGraph();
+    const indexedFilePaths = codeIndex
+      ? new Set(
+          Array.from(codeIndex.values())
+            .flatMap((locations) => locations.map((loc) => loc.filePath))
+        )
+      : null;
 
     // Resolve references and build edges
     for (const doc of documents) {
       for (const ref of doc.references) {
-        const resolvedFiles = this.resolveReference(ref, doc, codeIndex);
+        const resolvedFiles = this.resolveReference(ref, doc, codeIndex, indexedFilePaths);
 
         for (const codeFile of resolvedFiles) {
           graph.addReference(doc.path, codeFile, ref);
@@ -49,7 +55,12 @@ export class GraphBuilder {
   /**
    * Resolve a reference to actual code files
    */
-  private resolveReference(ref: Reference, doc: Document, codeIndex: Map<string, SymbolLocation[]> | null): string[] {
+  private resolveReference(
+    ref: Reference,
+    doc: Document,
+    codeIndex: Map<string, SymbolLocation[]> | null,
+    indexedFilePaths: Set<string> | null
+  ): string[] {
     const resolvedFiles: string[] = [];
 
     switch (ref.type) {
@@ -59,14 +70,8 @@ export class GraphBuilder {
         const resolvedPath = path.resolve(docDir, ref.value);
         const relativePath = path.relative(this.config.rootDir || process.cwd(), resolvedPath);
 
-        // Check if this file is in our code index (via any symbol)
-        if (codeIndex) {
-          for (const locations of codeIndex.values()) {
-            if (locations.some((loc) => loc.filePath === relativePath)) {
-              resolvedFiles.push(relativePath);
-              break;
-            }
-          }
+        if (indexedFilePaths?.has(relativePath)) {
+          resolvedFiles.push(relativePath);
         }
         break;
       }

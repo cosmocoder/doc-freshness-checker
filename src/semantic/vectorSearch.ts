@@ -372,22 +372,21 @@ export class VectorSearch {
     threshold = threshold ?? this.config.vectorSearch?.similarityThreshold ?? 0.3;
 
     const mismatches: VectorMismatch[] = [];
+    const docs = this.indexMetadata
+      .map((meta, index) => ({ meta, embedding: this.vectorIndex[index] }))
+      .filter((entry) => entry.meta.type === 'doc');
+    const codeEntries = this.indexMetadata
+      .map((meta, index) => ({ meta, embedding: this.vectorIndex[index] }))
+      .filter((entry) => entry.meta.type === 'code');
 
     // For each doc section, find best matching code comment
-    for (let i = 0; i < this.vectorIndex.length; i++) {
-      const meta = this.indexMetadata[i];
-      if (meta.type !== 'doc') continue;
-
-      const docEmbedding = this.vectorIndex[i];
+    for (const { meta, embedding: docEmbedding } of docs) {
       let bestMatch: IndexMetadata | null = null;
       let bestScore = 0;
 
       // Find most similar code comment
-      for (let j = 0; j < this.vectorIndex.length; j++) {
-        const codeMeta = this.indexMetadata[j];
-        if (codeMeta.type !== 'code') continue;
-
-        const similarity = this.cosineSimilarity(docEmbedding, this.vectorIndex[j]);
+      for (const { meta: codeMeta, embedding } of codeEntries) {
+        const similarity = this.cosineSimilarity(docEmbedding, embedding);
 
         if (similarity > bestScore) {
           bestScore = similarity;

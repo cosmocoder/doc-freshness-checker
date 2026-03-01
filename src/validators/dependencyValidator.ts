@@ -41,76 +41,8 @@ export class DependencyValidator {
   }
 
   private async parseManifest(fileName: string, content: string): Promise<string[]> {
-    const deps: string[] = [];
-
-    switch (fileName) {
-      case 'package.json': {
-        const json = JSON.parse(content);
-        deps.push(
-          ...Object.keys(json.dependencies || {}),
-          ...Object.keys(json.devDependencies || {}),
-          ...Object.keys(json.peerDependencies || {}),
-          ...Object.keys(json.optionalDependencies || {})
-        );
-        break;
-      }
-
-      case 'requirements.txt': {
-        const lines = content.split('\n');
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed.startsWith('#')) continue;
-          const match = trimmed.match(/^([a-zA-Z0-9\-_]+)/);
-          if (match) deps.push(match[1]);
-        }
-        break;
-      }
-
-      case 'pyproject.toml': {
-        const depsMatch = content.match(/\[project\.dependencies\]([\s\S]*?)(?:\[|$)/);
-        if (depsMatch) {
-          const depMatches = depsMatch[1].match(/"([^"<>=!]+)/g) || [];
-          for (const match of depMatches) {
-            deps.push(match.replace(/"/g, '').split(/[<>=!]/)[0]);
-          }
-        }
-        break;
-      }
-
-      case 'go.mod': {
-        const requireMatch = content.match(/require\s+\(([\s\S]*?)\)/);
-        if (requireMatch) {
-          const lines = requireMatch[1].split('\n');
-          for (const line of lines) {
-            const match = line.trim().match(/^([^\s]+)/);
-            if (match) deps.push(match[1]);
-          }
-        }
-        break;
-      }
-
-      case 'Cargo.toml': {
-        const depsMatch = content.match(/\[dependencies\]([\s\S]*?)(?:\[|$)/);
-        if (depsMatch) {
-          const lines = depsMatch[1].split('\n');
-          for (const line of lines) {
-            const match = line.match(/^([a-zA-Z0-9\-_]+)\s*=/);
-            if (match) deps.push(match[1]);
-          }
-        }
-        break;
-      }
-
-      case 'pom.xml': {
-        const depMatches = content.matchAll(/<artifactId>([^<]+)<\/artifactId>/g);
-        for (const match of depMatches) {
-          deps.push(match[1]);
-        }
-        break;
-      }
-    }
-
-    return deps;
+    const parser = manifestDependencyParsers[fileName];
+    return parser ? parser(content) : [];
   }
 
   async validateBatch(
@@ -146,3 +78,44 @@ export class DependencyValidator {
     return results;
   }
 }
+
+const manifestDependencyParsers: Record<string, (content: string) => string[]> = {
+  'package.json': (content) => {
+    const json = JSON.parse(content) as Record<string, Record<string, unknown>>;
+    return ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']
+      .flatMap((key) => Object.keys(json[key] || {}));
+  },
+  'requirements.txt': (content) =>
+    content
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#'))
+      .map((line) => line.match(/^([a-zA-Z0-9\-_]+)/)?.[1])
+      .filter((dep): dep is string => Boolean(dep)),
+  'pyproject.toml': (content) => {
+    const depsMatch = content.match(/\[project\.dependencies\]([\s\S]*?)(?:\[|$)/);
+    if (!depsMatch) return [];
+    return Array.from(
+      depsMatch[1].matchAll(/"([^"<>=!]+)/g),
+      (match) => match[1].split(/[<>=!]/)[0]
+    );
+  },
+  'go.mod': (content) => {
+    const requireMatch = content.match(/require\s+\(([\s\S]*?)\)/);
+    if (!requireMatch) return [];
+    return requireMatch[1]
+      .split('\n')
+      .map((line) => line.trim().match(/^([^\s]+)/)?.[1])
+      .filter((dep): dep is string => Boolean(dep));
+  },
+  'Cargo.toml': (content) => {
+    const depsMatch = content.match(/\[dependencies\]([\s\S]*?)(?:\[|$)/);
+    if (!depsMatch) return [];
+    return depsMatch[1]
+      .split('\n')
+      .map((line) => line.match(/^([a-zA-Z0-9\-_]+)\s*=/)?.[1])
+      .filter((dep): dep is string => Boolean(dep));
+  },
+  'pom.xml': (content) =>
+    Array.from(content.matchAll(/<artifactId>([^<]+)<\/artifactId>/g), (match) => match[1]),
+};

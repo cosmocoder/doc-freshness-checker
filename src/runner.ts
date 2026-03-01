@@ -254,65 +254,53 @@ async function generateReports(
 ): Promise<void> {
   const reporters = config.reporters || ['console'];
 
-  for (const reporterType of reporters) {
-    let reporter;
-    let output: string;
+  const emitOutput = async (output: string, reportName: string): Promise<void> => {
+    if (config.outputPath) {
+      await writeOutput(config.outputPath, output);
+      if (config.verbose) {
+        console.log(`${reportName} report written to ${config.outputPath}`);
+      }
+      return;
+    }
+    console.log(output);
+  };
 
+  for (const reporterType of reporters) {
     switch (reporterType) {
-      case 'console':
-        reporter = new ConsoleReporter();
+      case 'console': {
+        const reporter = new ConsoleReporter();
         if (freshnessScores) {
           reporter.generateWithScores(results, freshnessScores);
         } else {
           reporter.generate(results);
         }
         break;
+      }
 
-      case 'json':
-        reporter = new JsonReporter();
-        output = freshnessScores
+      case 'json': {
+        const reporter = new JsonReporter();
+        const output = freshnessScores
           ? reporter.generateWithScores(results, freshnessScores)
           : reporter.generate(results);
-
-        if (config.outputPath) {
-          await writeOutput(config.outputPath, output);
-          if (config.verbose) {
-            console.log(`JSON report written to ${config.outputPath}`);
-          }
-        } else {
-          console.log(output);
-        }
+        await emitOutput(output, 'JSON');
         break;
+      }
 
-      case 'markdown':
-        reporter = new MarkdownReporter();
-        output = freshnessScores
+      case 'markdown': {
+        const reporter = new MarkdownReporter();
+        const output = freshnessScores
           ? reporter.generateWithScores(results, freshnessScores)
           : reporter.generate(results);
-
-        if (config.outputPath) {
-          await writeOutput(config.outputPath, output);
-          if (config.verbose) {
-            console.log(`Markdown report written to ${config.outputPath}`);
-          }
-        } else {
-          console.log(output);
-        }
+        await emitOutput(output, 'Markdown');
         break;
+      }
 
-      case 'enhanced':
-        reporter = new EnhancedReporter();
-        output = reporter.generateScanReport(results, graph, gitTracker, freshnessScores);
-
-        if (config.outputPath) {
-          await writeOutput(config.outputPath, output);
-          if (config.verbose) {
-            console.log(`Enhanced report written to ${config.outputPath}`);
-          }
-        } else {
-          console.log(output);
-        }
+      case 'enhanced': {
+        const reporter = new EnhancedReporter();
+        const output = reporter.generateScanReport(results, graph, gitTracker, freshnessScores);
+        await emitOutput(output, 'Enhanced');
         break;
+      }
 
       default:
         if (config.verbose) {
