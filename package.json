@@ -34,7 +34,10 @@
     "build:watch": "tsc --watch",
     "clean": "rm -rf dist",
     "prepublishOnly": "npm run clean && npm run build",
-    "test": "node --test",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:types": "tsc --noEmit",
     "lint": "eslint . --ext .js,.ts",
     "lint:fix": "npm run lint -- --fix",
     "prettier": "prettier --write src/",
@@ -67,11 +70,14 @@
     "@eslint/js": "9.39.2",
     "@types/node": "25.2.0",
     "@types/semver": "7.7.1",
+    "@vitest/coverage-v8": "4.0.18",
     "eslint": "9.39.2",
     "globals": "17.3.0",
     "jiti": "2.6.1",
     "prettier": "3.8.1",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.54.0"
+    "typescript-eslint": "8.54.0",
+    "vitest": "4.0.18",
+    "vitest-fetch-mock": "0.4.5"
   }
 }

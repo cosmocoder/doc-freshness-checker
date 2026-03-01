@@ -31,6 +31,9 @@ export async function runParallel<T>(
  * Batch an array into chunks
  */
 export function batch<T>(array: T[], size: number): T[][] {
+  if (size <= 0) {
+    throw new Error('Batch size must be greater than 0');
+  }
   const batches: T[][] = [];
   for (let i = 0; i < array.length; i += size) {
     batches.push(array.slice(i, i + size));

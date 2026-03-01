@@ -23,9 +23,9 @@ export class DependencyExtractor extends BaseExtractor {
 
     const patterns: PatternConfig[] = [
       // npm scoped packages: @scope/package-name
-      { regex: /`(@[a-z0-9\-]+\/[a-z0-9\-]+)`/g, ecosystem: 'npm' },
+      { regex: /`(@[a-z0-9-]+\/[a-z0-9-]+)`/g, ecosystem: 'npm' },
       // npm regular packages in backticks
-      { regex: /`([a-z][a-z0-9\-]{2,})`/g, ecosystem: 'npm' },
+      { regex: /`([a-z][a-z0-9-]{2,})`/g, ecosystem: 'npm' },
       // Go packages
       { regex: /`(github\.com\/[a-zA-Z0-9\-_]+\/[a-zA-Z0-9\-_]+)`/g, ecosystem: 'go' },
     ];

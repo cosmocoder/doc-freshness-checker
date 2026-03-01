@@ -148,9 +148,11 @@ function normalizeVersion(version: string): string {
 export class VersionValidator {
   private packageVersions: Map<string, string> | null;
   private technologyMap: Record<string, string[]>;
+  private loadedFromKey: string | null;
 
   constructor() {
     this.packageVersions = null;
+    this.loadedFromKey = null;
     this.technologyMap = {
       react: ['react'],
       typescript: ['typescript'],
@@ -164,14 +166,17 @@ export class VersionValidator {
   }
 
   private async loadPackageVersions(config: DocFreshnessConfig): Promise<void> {
-    if (this.packageVersions) return;
+    const rootDir = config.rootDir || process.cwd();
+    const manifestFiles = config.manifestFiles || ['package.json'];
+    const configKey = `${rootDir}::${manifestFiles.join('|')}`;
+
+    if (this.packageVersions && this.loadedFromKey === configKey) return;
 
     this.packageVersions = new Map();
-
-    const manifestFiles = config.manifestFiles || ['package.json'];
+    this.loadedFromKey = configKey;
 
     for (const manifestPath of manifestFiles) {
-      const fullPath = path.join(config.rootDir || process.cwd(), manifestPath);
+      const fullPath = path.join(rootDir, manifestPath);
       const fileName = path.basename(manifestPath);
       const parser = manifestParsers[fileName];
 

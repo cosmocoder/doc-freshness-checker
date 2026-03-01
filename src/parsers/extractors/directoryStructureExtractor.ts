@@ -152,12 +152,12 @@ export class DirectoryStructureExtractor extends BaseExtractor {
     // Remove tree characters and extract the name
     // Handles: ├── name, │   ├── name, └── name, |-- name, `-- name
     const cleaned = line
-      .replace(/^[\s│|]*[├└+`][\s─\-]*/g, '') // Tree prefixes
+      .replace(/^[\s│|]*[├└+`][\s─-]*/g, '') // Tree prefixes
       .replace(/^[\s│|]+/g, '') // Just vertical bars and spaces
       .trim();
 
     // Extract just the name (handle trailing / for directories)
-    const match = cleaned.match(/^([a-zA-Z0-9_\-\.@]+)\/?$/);
+    const match = cleaned.match(/^([a-zA-Z0-9_\-.@]+)\/?$/);
 
     return match ? match[1] : null;
   }

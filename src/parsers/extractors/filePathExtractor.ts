@@ -26,16 +26,16 @@ export class FilePathExtractor extends BaseExtractor {
 
     // Format-specific patterns
     const patterns: PatternMap = {
-      markdown: /\[([^\]]*)\]\((\.\.[\/\\][^)]+|\.\/[^)]+|[a-zA-Z0-9_\-\/\\]+\.[a-zA-Z]{1,10})\)/g,
+      markdown: /\[([^\]]*)\]\((\.\.[/\\][^)]+|\.\/[^)]+|[a-zA-Z0-9_\-/\\]+\.[a-zA-Z]{1,10})\)/g,
       restructuredtext: /`([^`]+)\s+<([^>]+)>`_/g,
-      asciidoc: /link:([^\[]+)\[([^\]]*)\]/g,
+      asciidoc: /link:([^[]+)\[([^\]]*)\]/g,
     };
 
     const pattern = patterns[document.format] || patterns.markdown;
 
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(document.content)) !== null) {
-      let refPath = document.format === 'asciidoc' ? match[1] : match[2];
+      const refPath = document.format === 'asciidoc' ? match[1] : match[2];
 
       // Skip URLs
       if (refPath.startsWith('http://') || refPath.startsWith('https://')) {

@@ -7,20 +7,25 @@ import type { DocFreshnessConfig, Document, Reference, ValidationResult } from '
  */
 export class DependencyValidator {
   private dependencies: Set<string> | null;
+  private loadedFromKey: string | null;
 
   constructor() {
     this.dependencies = null;
+    this.loadedFromKey = null;
   }
 
   private async loadDependencies(config: DocFreshnessConfig): Promise<void> {
-    if (this.dependencies) return;
+    const rootDir = config.rootDir || process.cwd();
+    const manifestFiles = config.manifestFiles || ['package.json'];
+    const configKey = `${rootDir}::${manifestFiles.join('|')}`;
+
+    if (this.dependencies && this.loadedFromKey === configKey) return;
 
     this.dependencies = new Set();
-
-    const manifestFiles = config.manifestFiles || ['package.json'];
+    this.loadedFromKey = configKey;
 
     for (const manifestPath of manifestFiles) {
-      const fullPath = path.join(config.rootDir || process.cwd(), manifestPath);
+      const fullPath = path.join(rootDir, manifestPath);
       const fileName = path.basename(manifestPath);
 
       try {

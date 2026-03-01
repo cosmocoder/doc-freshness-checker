@@ -27,9 +27,9 @@ export class FileValidator {
    */
   private initCustomPatterns(config: DocFreshnessConfig): void {
     const configPatterns = config.rules?.['file-path']?.illustrativePatterns;
-    if (configPatterns && configPatterns.length > 0) {
-      this.customPatterns = compilePatterns(configPatterns);
-    }
+    this.customPatterns = configPatterns && configPatterns.length > 0
+      ? compilePatterns(configPatterns)
+      : [];
   }
 
   async validateBatch(

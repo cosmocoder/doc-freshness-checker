@@ -36,9 +36,9 @@ export class DirectoryValidator {
    */
   private initCustomPatterns(config: DocFreshnessConfig): void {
     const configPatterns = config.rules?.['directory-structure']?.illustrativePatterns;
-    if (configPatterns && configPatterns.length > 0) {
-      this.customPatterns = compilePatterns(configPatterns);
-    }
+    this.customPatterns = configPatterns && configPatterns.length > 0
+      ? compilePatterns(configPatterns)
+      : [];
   }
 
   async validateBatch(
@@ -76,9 +76,11 @@ export class DirectoryValidator {
     const rootDir = resolveProjectRoot(config.rootDir);
     const baseSeverity = getRuleSeverity(config, 'directory-structure', 'warning');
 
+    const cacheKey = `${rootDir}::${document.path}::${itemPath}`;
+
     // Check cache first
-    if (this.pathCache.has(itemPath)) {
-      const cached = this.pathCache.get(itemPath)!;
+    if (this.pathCache.has(cacheKey)) {
+      const cached = this.pathCache.get(cacheKey)!;
       return {
         reference: ref,
         valid: cached.found,
@@ -93,7 +95,7 @@ export class DirectoryValidator {
     // This handles full paths like "frontend/src/apps/domains"
     const fullPath = path.resolve(rootDir, itemPath);
     if (isWithinRoot(fullPath, rootDir) && (await this.pathExists(fullPath))) {
-      this.pathCache.set(itemPath, { found: true, foundAt: itemPath });
+      this.pathCache.set(cacheKey, { found: true, foundAt: itemPath });
       return {
         reference: ref,
         valid: true,
@@ -107,7 +109,7 @@ export class DirectoryValidator {
     const relativeToDoc = path.resolve(docDir, itemPath);
     if (isWithinRoot(relativeToDoc, rootDir) && (await this.pathExists(relativeToDoc))) {
       const foundAt = path.relative(rootDir, relativeToDoc);
-      this.pathCache.set(itemPath, { found: true, foundAt });
+      this.pathCache.set(cacheKey, { found: true, foundAt });
       return {
         reference: ref,
         valid: true,
@@ -132,7 +134,7 @@ export class DirectoryValidator {
     const suggestion = await this.findSimilarPath(itemPath, config);
 
     // Not found - reduce severity for illustrative paths that weren't skipped
-    this.pathCache.set(itemPath, { found: false, suggestion });
+    this.pathCache.set(cacheKey, { found: false, suggestion });
     return {
       reference: ref,
       valid: false,
