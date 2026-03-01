@@ -1,5 +1,13 @@
-import { applyCliOverrides, main, parseCliOptions, runAsCli, runCli, type CLIOptions } from './cli.js';
+import { mkdtemp, symlink, rm } from 'fs/promises';
+import { tmpdir } from 'os';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { applyCliOverrides, isDirectCliInvocation, main, parseCliOptions, runAsCli, runCli, type CLIOptions } from './cli.js';
 import type { DocFreshnessConfig, ValidationResults } from './types.js';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 function makeConfig(): DocFreshnessConfig {
   return {
@@ -186,5 +194,30 @@ describe('runAsCli', () => {
 
     await runAsCli(['node', 'doc-freshness'], deps);
     expect(exitSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('isDirectCliInvocation', () => {
+  const cliPath = fileURLToPath(new URL('./cli.ts', import.meta.url));
+
+  it('returns true when argv entry points directly to cli file', () => {
+    expect(isDirectCliInvocation(['node', cliPath])).toBe(true);
+  });
+
+  it('returns true when argv entry is a symlink to cli file', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'doc-freshness-cli-'));
+    const linkPath = path.join(tempDir, 'doc-freshness');
+
+    await symlink(cliPath, linkPath);
+
+    try {
+      expect(isDirectCliInvocation(['node', linkPath])).toBe(true);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('returns false when argv entry points elsewhere', () => {
+    expect(isDirectCliInvocation(['node', '/tmp/not-cli.js'])).toBe(false);
   });
 });

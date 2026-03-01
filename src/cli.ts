@@ -3,7 +3,7 @@
 import { Command } from 'commander';
 import { run } from './runner.js';
 import { loadConfig } from './config/loader.js';
-import { readFileSync } from 'fs';
+import { readFileSync, realpathSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
 import type { DocFreshnessConfig, ValidationResults } from './types.js';
@@ -157,6 +157,22 @@ export async function runAsCli(argv: string[] = process.argv, deps: CliDeps = de
   }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === __filename) {
+function toRealPath(filePath: string): string {
+  try {
+    return realpathSync(filePath);
+  } catch {
+    return resolve(filePath);
+  }
+}
+
+export function isDirectCliInvocation(argv: string[] = process.argv): boolean {
+  const entryPath = argv[1];
+  if (!entryPath) {
+    return false;
+  }
+  return toRealPath(entryPath) === toRealPath(__filename);
+}
+
+if (isDirectCliInvocation()) {
   void runAsCli();
 }
