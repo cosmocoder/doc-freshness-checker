@@ -16,16 +16,7 @@ describe('DirectoryStructureExtractor', () => {
   const extractor = new DirectoryStructureExtractor();
 
   it('extracts paths from ASCII tree structures', () => {
-    const tree = [
-      '```',
-      'src/',
-      '├── index.ts',
-      '├── utils/',
-      '│   └── helper.ts',
-      '└── config/',
-      '    └── defaults.ts',
-      '```',
-    ].join('\n');
+    const tree = ['```', 'src/', '├── index.ts', '├── utils/', '│   └── helper.ts', '└── config/', '    └── defaults.ts', '```'].join('\n');
 
     const refs = extractor.extract(makeDoc(tree));
     const values = refs.map((r) => r.value);
@@ -43,13 +34,7 @@ describe('DirectoryStructureExtractor', () => {
   });
 
   it('marks illustrative paths', () => {
-    const tree = [
-      '```',
-      'project/',
-      '├── YourComponent.tsx',
-      '└── real-file.ts',
-      '```',
-    ].join('\n');
+    const tree = ['```', 'project/', '├── YourComponent.tsx', '└── real-file.ts', '```'].join('\n');
 
     const refs = extractor.extract(makeDoc(tree));
     const illustrative = refs.filter((r) => r.isIllustrative);
@@ -57,14 +42,7 @@ describe('DirectoryStructureExtractor', () => {
   });
 
   it('skips comments and ellipsis entries', () => {
-    const tree = [
-      '```',
-      'src/',
-      '├── ...',
-      '├── # comment',
-      '└── real.ts',
-      '```',
-    ].join('\n');
+    const tree = ['```', 'src/', '├── ...', '├── # comment', '└── real.ts', '```'].join('\n');
 
     const refs = extractor.extract(makeDoc(tree));
     const values = refs.map((r) => r.value);
@@ -73,14 +51,7 @@ describe('DirectoryStructureExtractor', () => {
   });
 
   it('handles backtick-dash style trees', () => {
-    const tree = [
-      '```',
-      'root/',
-      '├── file.ts',
-      '└── nested/',
-      '    └── deep.ts',
-      '```',
-    ].join('\n');
+    const tree = ['```', 'root/', '├── file.ts', '└── nested/', '    └── deep.ts', '```'].join('\n');
 
     const refs = extractor.extract(makeDoc(tree));
     const values = refs.map((r) => r.value);
@@ -90,16 +61,7 @@ describe('DirectoryStructureExtractor', () => {
   });
 
   it('skips separator and dash entries', () => {
-    const tree = [
-      '```',
-      'src/',
-      '├── -',
-      '├── ---',
-      '├── ___',
-      '├── ===',
-      '└── real.ts',
-      '```',
-    ].join('\n');
+    const tree = ['```', 'src/', '├── -', '├── ---', '├── ___', '├── ===', '└── real.ts', '```'].join('\n');
 
     const refs = extractor.extract(makeDoc(tree));
     const values = refs.map((r) => r.value);
@@ -109,12 +71,7 @@ describe('DirectoryStructureExtractor', () => {
   });
 
   it('skips short single-segment paths', () => {
-    const tree = [
-      '```',
-      'ab',
-      '├── long-name.ts',
-      '```',
-    ].join('\n');
+    const tree = ['```', 'ab', '├── long-name.ts', '```'].join('\n');
 
     const refs = extractor.extract(makeDoc(tree));
     const values = refs.map((r) => r.value);
@@ -123,14 +80,7 @@ describe('DirectoryStructureExtractor', () => {
   });
 
   it('handles backtick-dash connector in trees', () => {
-    const tree = [
-      '```',
-      'project/',
-      '├── src/',
-      '│   └── index.ts',
-      '`-- config.ts',
-      '```',
-    ].join('\n');
+    const tree = ['```', 'project/', '├── src/', '│   └── index.ts', '`-- config.ts', '```'].join('\n');
 
     const refs = extractor.extract(makeDoc(tree));
     const values = refs.map((r) => r.value);
@@ -139,51 +89,45 @@ describe('DirectoryStructureExtractor', () => {
   });
 
   it('extracts from restructuredtext format', () => {
-    const content = [
-      '.. code-block::',
-      '',
-      '   project/',
-      '   ├── src/',
-      '   │   └── main.ts',
-      '   └── README.md',
-    ].join('\n');
+    const content = ['.. code-block::', '', '   project/', '   ├── src/', '   │   └── main.ts', '   └── README.md'].join('\n');
 
     const doc = {
-      path: 'docs/test.rst', absolutePath: '/project/docs/test.rst',
-      content, format: 'restructuredtext' as const, lines: content.split('\n'), references: [],
+      path: 'docs/test.rst',
+      absolutePath: '/project/docs/test.rst',
+      content,
+      format: 'restructuredtext' as const,
+      lines: content.split('\n'),
+      references: [],
     };
     const refs = extractor.extract(doc);
     expect(refs.length).toBeGreaterThan(0);
   });
 
   it('extracts from asciidoc format', () => {
-    const content = [
-      '----',
-      'project/',
-      '├── src/',
-      '│   └── main.ts',
-      '----',
-    ].join('\n');
+    const content = ['----', 'project/', '├── src/', '│   └── main.ts', '----'].join('\n');
 
     const doc = {
-      path: 'docs/test.adoc', absolutePath: '/project/docs/test.adoc',
-      content, format: 'asciidoc' as const, lines: content.split('\n'), references: [],
+      path: 'docs/test.adoc',
+      absolutePath: '/project/docs/test.adoc',
+      content,
+      format: 'asciidoc' as const,
+      lines: content.split('\n'),
+      references: [],
     };
     const refs = extractor.extract(doc);
     expect(refs.length).toBeGreaterThan(0);
   });
 
   it('handles plaintext format with fallback to markdown pattern', () => {
-    const tree = [
-      '```',
-      'app/',
-      '├── main.py',
-      '```',
-    ].join('\n');
+    const tree = ['```', 'app/', '├── main.py', '```'].join('\n');
 
     const doc = {
-      path: 'docs/test.txt', absolutePath: '/project/docs/test.txt',
-      content: tree, format: 'plaintext' as const, lines: tree.split('\n'), references: [],
+      path: 'docs/test.txt',
+      absolutePath: '/project/docs/test.txt',
+      content: tree,
+      format: 'plaintext' as const,
+      lines: tree.split('\n'),
+      references: [],
     };
     const refs = extractor.extract(doc);
     expect(refs.length).toBeGreaterThan(0);
@@ -193,13 +137,7 @@ describe('DirectoryStructureExtractor', () => {
     const ext = new DirectoryStructureExtractor({
       rules: { 'directory-structure': { illustrativePatterns: ['^custom-'] } },
     });
-    const tree = [
-      '```',
-      'project/',
-      '├── custom-example.ts',
-      '└── real.ts',
-      '```',
-    ].join('\n');
+    const tree = ['```', 'project/', '├── custom-example.ts', '└── real.ts', '```'].join('\n');
 
     const refs = ext.extract(makeDoc(tree));
     const illustrative = refs.filter((r) => r.isIllustrative);

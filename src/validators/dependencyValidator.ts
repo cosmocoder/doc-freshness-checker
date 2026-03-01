@@ -45,11 +45,7 @@ export class DependencyValidator {
     return parser ? parser(content) : [];
   }
 
-  async validateBatch(
-    references: Reference[],
-    _document: Document,
-    config: DocFreshnessConfig
-  ): Promise<ValidationResult[]> {
+  async validateBatch(references: Reference[], _document: Document, config: DocFreshnessConfig): Promise<ValidationResult[]> {
     await this.loadDependencies(config);
 
     const results: ValidationResult[] = [];
@@ -82,8 +78,7 @@ export class DependencyValidator {
 const manifestDependencyParsers: Record<string, (content: string) => string[]> = {
   'package.json': (content) => {
     const json = JSON.parse(content) as Record<string, Record<string, unknown>>;
-    return ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies']
-      .flatMap((key) => Object.keys(json[key] || {}));
+    return ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'].flatMap((key) => Object.keys(json[key] || {}));
   },
   'requirements.txt': (content) =>
     content
@@ -95,10 +90,7 @@ const manifestDependencyParsers: Record<string, (content: string) => string[]> =
   'pyproject.toml': (content) => {
     const depsMatch = content.match(/\[project\.dependencies\]([\s\S]*?)(?:\[|$)/);
     if (!depsMatch) return [];
-    return Array.from(
-      depsMatch[1].matchAll(/"([^"<>=!]+)/g),
-      (match) => match[1].split(/[<>=!]/)[0]
-    );
+    return Array.from(depsMatch[1].matchAll(/"([^"<>=!]+)/g), (match) => match[1].split(/[<>=!]/)[0]);
   },
   'go.mod': (content) => {
     const requireMatch = content.match(/require\s+\(([\s\S]*?)\)/);
@@ -116,6 +108,5 @@ const manifestDependencyParsers: Record<string, (content: string) => string[]> =
       .map((line) => line.match(/^([a-zA-Z0-9\-_]+)\s*=/)?.[1])
       .filter((dep): dep is string => Boolean(dep));
   },
-  'pom.xml': (content) =>
-    Array.from(content.matchAll(/<artifactId>([^<]+)<\/artifactId>/g), (match) => match[1]),
+  'pom.xml': (content) => Array.from(content.matchAll(/<artifactId>([^<]+)<\/artifactId>/g), (match) => match[1]),
 };

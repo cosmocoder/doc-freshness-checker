@@ -536,9 +536,7 @@ export class VectorSearch {
    */
   private findNearestSymbol(content: string, commentIndex: number): string {
     const after = content.substring(commentIndex);
-    const symbolMatch = after.match(
-      /(?:function|class|const|let|var|def|async|fn|func|type|interface|struct)\s+(\w+)/
-    );
+    const symbolMatch = after.match(/(?:function|class|const|let|var|def|async|fn|func|type|interface|struct)\s+(\w+)/);
     return symbolMatch ? symbolMatch[1] : 'unknown';
   }
 

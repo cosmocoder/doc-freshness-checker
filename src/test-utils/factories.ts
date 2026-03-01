@@ -16,11 +16,7 @@ export function makeDoc(overrides: Partial<Document> = {}): Document {
   };
 }
 
-export function makeRef(
-  type: string,
-  value: string,
-  overrides: Partial<Reference> = {},
-): Reference {
+export function makeRef(type: string, value: string, overrides: Partial<Reference> = {}): Reference {
   return {
     type,
     value,

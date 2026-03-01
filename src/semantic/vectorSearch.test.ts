@@ -29,11 +29,13 @@ vi.mock('fastembed', () => {
             });
           })();
         }),
-        queryEmbed: vi.fn().mockResolvedValue((() => {
-          const arr = new Float32Array(384);
-          for (let i = 0; i < 384; i++) arr[i] = Math.sin(42 + i * 0.1);
-          return arr;
-        })()),
+        queryEmbed: vi.fn().mockResolvedValue(
+          (() => {
+            const arr = new Float32Array(384);
+            for (let i = 0; i < 384; i++) arr[i] = Math.sin(42 + i * 0.1);
+            return arr;
+          })()
+        ),
       }),
     },
   };
@@ -172,19 +174,7 @@ describe('VectorSearch', () => {
   describe('indexDocumentation', () => {
     it('indexes sections from documents, skipping short ones', async () => {
       const vs = createVS();
-      const content = [
-        '# Introduction',
-        '',
-        'A'.repeat(60),
-        '',
-        '# Short',
-        '',
-        'tiny',
-        '',
-        '# Details',
-        '',
-        'B'.repeat(80),
-      ].join('\n');
+      const content = ['# Introduction', '', 'A'.repeat(60), '', '# Short', '', 'tiny', '', '# Details', '', 'B'.repeat(80)].join('\n');
 
       await vs.indexDocumentation([makeDoc(content)]);
       const stats = vs.getCacheStats();
@@ -206,10 +196,7 @@ describe('VectorSearch', () => {
     it('indexes multiple documents', async () => {
       const vs = createVS();
       const content = '# Heading\n\n' + 'Z'.repeat(60);
-      await vs.indexDocumentation([
-        makeDoc(content, 'docs/a.md'),
-        makeDoc(content, 'docs/b.md'),
-      ]);
+      await vs.indexDocumentation([makeDoc(content, 'docs/a.md'), makeDoc(content, 'docs/b.md')]);
       expect(vs.getCacheStats().indexedDocSections).toBe(2);
     });
 
@@ -241,61 +228,73 @@ describe('VectorSearch', () => {
   describe('indexCodeComments', () => {
     it('indexes TypeScript JSDoc comments', async () => {
       const vs = await createInitializedVS();
-      await vs.indexCodeComments([{
-        path: 'src/a.ts',
-        content: '/** Handles user authentication and session management */\nfunction auth() {}',
-        language: 'typescript',
-      }]);
+      await vs.indexCodeComments([
+        {
+          path: 'src/a.ts',
+          content: '/** Handles user authentication and session management */\nfunction auth() {}',
+          language: 'typescript',
+        },
+      ]);
       expect(vs.getCacheStats().indexedCodeComments).toBeGreaterThan(0);
     });
 
     it('indexes Python docstrings', async () => {
       const vs = await createInitializedVS();
-      await vs.indexCodeComments([{
-        path: 'src/app.py',
-        content: '"""This module handles data processing and transformation"""\ndef process(): pass',
-        language: 'python',
-      }]);
+      await vs.indexCodeComments([
+        {
+          path: 'src/app.py',
+          content: '"""This module handles data processing and transformation"""\ndef process(): pass',
+          language: 'python',
+        },
+      ]);
       expect(vs.getCacheStats().indexedCodeComments).toBeGreaterThan(0);
     });
 
     it('indexes Go comments', async () => {
       const vs = await createInitializedVS();
-      await vs.indexCodeComments([{
-        path: 'main.go',
-        content: '// HandleRequest processes incoming HTTP requests and returns responses\nfunc HandleRequest() {}',
-        language: 'go',
-      }]);
+      await vs.indexCodeComments([
+        {
+          path: 'main.go',
+          content: '// HandleRequest processes incoming HTTP requests and returns responses\nfunc HandleRequest() {}',
+          language: 'go',
+        },
+      ]);
       expect(vs.getCacheStats().indexedCodeComments).toBeGreaterThan(0);
     });
 
     it('indexes Rust doc comments', async () => {
       const vs = await createInitializedVS();
-      await vs.indexCodeComments([{
-        path: 'lib.rs',
-        content: '/// Processes the input configuration and validates all fields\nfn process_config() {}',
-        language: 'rust',
-      }]);
+      await vs.indexCodeComments([
+        {
+          path: 'lib.rs',
+          content: '/// Processes the input configuration and validates all fields\nfn process_config() {}',
+          language: 'rust',
+        },
+      ]);
       expect(vs.getCacheStats().indexedCodeComments).toBeGreaterThan(0);
     });
 
     it('falls back to JavaScript patterns for unknown languages', async () => {
       const vs = await createInitializedVS();
-      await vs.indexCodeComments([{
-        path: 'script.rb',
-        content: '// This helper utility performs string sanitization operations\nfunction sanitize() {}',
-        language: 'ruby',
-      }]);
+      await vs.indexCodeComments([
+        {
+          path: 'script.rb',
+          content: '// This helper utility performs string sanitization operations\nfunction sanitize() {}',
+          language: 'ruby',
+        },
+      ]);
       expect(vs.getCacheStats().indexedCodeComments).toBeGreaterThan(0);
     });
 
     it('skips comments shorter than 20 characters', async () => {
       const vs = await createInitializedVS();
-      await vs.indexCodeComments([{
-        path: 'src/a.ts',
-        content: '// short\nfunction f() {}\n/** Also short */\nfunction g() {}',
-        language: 'typescript',
-      }]);
+      await vs.indexCodeComments([
+        {
+          path: 'src/a.ts',
+          content: '// short\nfunction f() {}\n/** Also short */\nfunction g() {}',
+          language: 'typescript',
+        },
+      ]);
       expect(vs.getCacheStats().indexedCodeComments).toBe(0);
     });
 
@@ -334,11 +333,13 @@ describe('VectorSearch', () => {
       const docContent = '# API\n\nThis function handles authentication and returns a session token.';
       await vs.indexDocumentation([makeDoc(docContent)]);
 
-      await vs.indexCodeComments([{
-        path: 'src/unrelated.ts',
-        content: '/** Handles database connection pooling and query optimization */\nfunction dbConnect() {}',
-        language: 'typescript',
-      }]);
+      await vs.indexCodeComments([
+        {
+          path: 'src/unrelated.ts',
+          content: '/** Handles database connection pooling and query optimization */\nfunction dbConnect() {}',
+          language: 'typescript',
+        },
+      ]);
 
       // With different embeddings (seeded differently), similarity won't be 1.0
       // Use a very high threshold to force mismatch detection
@@ -356,29 +357,31 @@ describe('VectorSearch', () => {
       const docContent = '# About\n\n' + 'This is a general overview of the project and its goals. '.repeat(3);
       await vs.indexDocumentation([makeDoc(docContent)]);
 
-      await vs.indexCodeComments([{
-        path: 'src/a.ts',
-        content: '/** Handles something completely different than what the doc says */\nfunction x() {}',
-        language: 'typescript',
-      }]);
+      await vs.indexCodeComments([
+        {
+          path: 'src/a.ts',
+          content: '/** Handles something completely different than what the doc says */\nfunction x() {}',
+          language: 'typescript',
+        },
+      ]);
 
       const mismatches = await vs.findMismatches(1.0);
       expect(mismatches).toHaveLength(0);
     });
 
-    it.each([
-      'function', 'class', 'method', 'API', 'returns',
-    ])('detects mismatch when doc contains keyword "%s"', async (keyword) => {
+    it.each(['function', 'class', 'method', 'API', 'returns'])('detects mismatch when doc contains keyword "%s"', async (keyword) => {
       const vs = createVS();
 
       const docContent = `# Reference\n\nThis section describes the ${keyword} that handles processing.` + ' '.repeat(20);
       await vs.indexDocumentation([makeDoc(docContent)]);
 
-      await vs.indexCodeComments([{
-        path: 'src/other.ts',
-        content: '/** Completely unrelated documentation string here */\nfunction z() {}',
-        language: 'typescript',
-      }]);
+      await vs.indexCodeComments([
+        {
+          path: 'src/other.ts',
+          content: '/** Completely unrelated documentation string here */\nfunction z() {}',
+          language: 'typescript',
+        },
+      ]);
 
       const mismatches = await vs.findMismatches(1.0);
       expect(mismatches.length).toBeGreaterThan(0);
@@ -389,11 +392,13 @@ describe('VectorSearch', () => {
 
       const docContent = '# API\n\nThis function performs data validation and returns errors.';
       await vs.indexDocumentation([makeDoc(docContent)]);
-      await vs.indexCodeComments([{
-        path: 'src/a.ts',
-        content: '/** Handles file system operations and directory management */\nfunction fsOp() {}',
-        language: 'typescript',
-      }]);
+      await vs.indexCodeComments([
+        {
+          path: 'src/a.ts',
+          content: '/** Handles file system operations and directory management */\nfunction fsOp() {}',
+          language: 'typescript',
+        },
+      ]);
 
       const mismatches = await vs.findMismatches();
       // threshold=1.0 from config, so almost everything is a mismatch
@@ -405,11 +410,13 @@ describe('VectorSearch', () => {
 
       const docContent = '# Auth API\n\nThis function handles user authentication and returns a JWT token.';
       await vs.indexDocumentation([makeDoc(docContent, 'docs/auth.md')]);
-      await vs.indexCodeComments([{
-        path: 'src/db.ts',
-        content: '/** Manages database connections and query execution lifecycle */\nfunction dbQuery() {}',
-        language: 'typescript',
-      }]);
+      await vs.indexCodeComments([
+        {
+          path: 'src/db.ts',
+          content: '/** Manages database connections and query execution lifecycle */\nfunction dbQuery() {}',
+          language: 'typescript',
+        },
+      ]);
 
       const mismatches = await vs.findMismatches(1.0);
       expect(mismatches.length).toBeGreaterThan(0);
@@ -502,11 +509,13 @@ describe('VectorSearch', () => {
       const vs = createVS();
       await vs.initialize();
       // The JSDoc has delimiters that should be stripped
-      await vs.indexCodeComments([{
-        path: 'test.ts',
-        content: '/**\n * Validates authentication tokens and refreshes session data\n */\nfunction validate() {}',
-        language: 'typescript',
-      }]);
+      await vs.indexCodeComments([
+        {
+          path: 'test.ts',
+          content: '/**\n * Validates authentication tokens and refreshes session data\n */\nfunction validate() {}',
+          language: 'typescript',
+        },
+      ]);
       expect(vs.getCacheStats().indexedCodeComments).toBe(1);
     });
 
@@ -520,11 +529,13 @@ describe('VectorSearch', () => {
     it('finds function name after a comment', async () => {
       const vs = createVS();
       await vs.initialize();
-      await vs.indexCodeComments([{
-        path: 'test.ts',
-        content: '/** This function handles authentication */\nfunction authenticate() {}',
-        language: 'typescript',
-      }]);
+      await vs.indexCodeComments([
+        {
+          path: 'test.ts',
+          content: '/** This function handles authentication */\nfunction authenticate() {}',
+          language: 'typescript',
+        },
+      ]);
       // We can't inspect metadata directly, but the indexing should succeed
       expect(vs.getCacheStats().indexedCodeComments).toBeGreaterThan(0);
     });
@@ -532,11 +543,13 @@ describe('VectorSearch', () => {
     it('finds class name after a comment', async () => {
       const vs = createVS();
       await vs.initialize();
-      await vs.indexCodeComments([{
-        path: 'test.ts',
-        content: '/** Manages user session lifecycle and token refresh */\nclass SessionManager {}',
-        language: 'typescript',
-      }]);
+      await vs.indexCodeComments([
+        {
+          path: 'test.ts',
+          content: '/** Manages user session lifecycle and token refresh */\nclass SessionManager {}',
+          language: 'typescript',
+        },
+      ]);
       expect(vs.getCacheStats().indexedCodeComments).toBeGreaterThan(0);
     });
   });
@@ -562,7 +575,10 @@ describe('VectorSearch', () => {
       await vs.findMismatches();
 
       const cacheFile = path.join(cacheDir, 'embedding-cache.json');
-      const exists = await fs.promises.access(cacheFile).then(() => true).catch(() => false);
+      const exists = await fs.promises
+        .access(cacheFile)
+        .then(() => true)
+        .catch(() => false);
       expect(exists).toBe(true);
 
       const data = JSON.parse(await fs.promises.readFile(cacheFile, 'utf-8'));
@@ -583,11 +599,13 @@ describe('VectorSearch', () => {
       const vs = createVS();
       const docContent = '# Doc\n\n' + 'D'.repeat(60);
       await vs.indexDocumentation([makeDoc(docContent)]);
-      await vs.indexCodeComments([{
-        path: 'a.ts',
-        content: '/** Handles request processing and response formatting */\nfunction handle() {}',
-        language: 'typescript',
-      }]);
+      await vs.indexCodeComments([
+        {
+          path: 'a.ts',
+          content: '/** Handles request processing and response formatting */\nfunction handle() {}',
+          language: 'typescript',
+        },
+      ]);
 
       const stats = vs.getCacheStats();
       expect(stats.indexedDocSections).toBe(1);
@@ -687,10 +705,12 @@ describe('VectorSearch', () => {
       try {
         const initPromise = vs.initialize();
         let settled = false;
-        initPromise.finally(() => { settled = true; });
+        initPromise.finally(() => {
+          settled = true;
+        });
         while (!settled) {
           vi.advanceTimersByTime(5000);
-          await new Promise(r => setImmediate(r));
+          await new Promise((r) => setImmediate(r));
         }
         const result = await initPromise;
         expect(result).toBe(false);
@@ -722,11 +742,13 @@ describe('VectorSearch', () => {
     it('logs code comment indexing stats in verbose mode', async () => {
       const logSpy = captureLog();
       const vs = await createInitializedVS({ verbose: true });
-      await vs.indexCodeComments([{
-        path: 'verbose.ts',
-        content: '/** Processes authentication tokens and validates session integrity */\nfunction auth() {}',
-        language: 'typescript',
-      }]);
+      await vs.indexCodeComments([
+        {
+          path: 'verbose.ts',
+          content: '/** Processes authentication tokens and validates session integrity */\nfunction auth() {}',
+          language: 'typescript',
+        },
+      ]);
       const output = logSpy.mock.calls.flat().join(' ');
       expect(output).toContain('Indexed code comments');
     });

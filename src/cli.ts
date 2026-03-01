@@ -15,9 +15,7 @@ interface PackageJson {
   version: string;
 }
 
-const packageJson: PackageJson = JSON.parse(
-  readFileSync(join(__dirname, '..', 'package.json'), 'utf-8')
-);
+const packageJson: PackageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
 
 export interface CLIOptions {
   config?: string;
@@ -124,10 +122,7 @@ export function applyCliOverrides(config: DocFreshnessConfig, options: CLIOption
   }
 }
 
-export async function runCli(
-  options: CLIOptions,
-  deps: CliDeps = defaultDeps,
-): Promise<number> {
+export async function runCli(options: CLIOptions, deps: CliDeps = defaultDeps): Promise<number> {
   try {
     const config = await deps.loadConfig(options.config);
     applyCliOverrides(config, options);
@@ -147,20 +142,14 @@ export async function runCli(
   }
 }
 
-export async function main(
-  argv: string[] = process.argv,
-  deps: CliDeps = defaultDeps,
-): Promise<number> {
+export async function main(argv: string[] = process.argv, deps: CliDeps = defaultDeps): Promise<number> {
   const options = parseCliOptions(argv);
   return runCli(options, deps);
 }
 
 // This wrapper keeps the process-exit side effect out of `main` so tests can
 // verify CLI behavior without terminating the Vitest process.
-export async function runAsCli(
-  argv: string[] = process.argv,
-  deps: CliDeps = defaultDeps,
-): Promise<void> {
+export async function runAsCli(argv: string[] = process.argv, deps: CliDeps = defaultDeps): Promise<void> {
   const options = parseCliOptions(argv);
   const exitCode = await runCli(options, deps);
   if (exitCode !== 0) {

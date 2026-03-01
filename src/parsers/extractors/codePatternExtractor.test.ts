@@ -16,14 +16,9 @@ describe('CodePatternExtractor', () => {
   const extractor = new CodePatternExtractor();
 
   it('extracts class and function names from TypeScript code blocks', () => {
-    const doc = makeDoc([
-      '```typescript',
-      'class ValidationEngine {',
-      '  constructor() {}',
-      '}',
-      'function runCheck() {}',
-      '```',
-    ].join('\n'));
+    const doc = makeDoc(
+      ['```typescript', 'class ValidationEngine {', '  constructor() {}', '}', 'function runCheck() {}', '```'].join('\n')
+    );
 
     const refs = extractor.extract(doc);
     expect(refs.map((r) => r.value)).toContain('ValidationEngine');
@@ -31,12 +26,7 @@ describe('CodePatternExtractor', () => {
   });
 
   it('extracts interfaces and types from TypeScript', () => {
-    const doc = makeDoc([
-      '```ts',
-      'interface ConfigOptions {}',
-      'type ResultType = string;',
-      '```',
-    ].join('\n'));
+    const doc = makeDoc(['```ts', 'interface ConfigOptions {}', 'type ResultType = string;', '```'].join('\n'));
 
     const refs = extractor.extract(doc);
     expect(refs.map((r) => r.value)).toContain('ConfigOptions');
@@ -44,13 +34,7 @@ describe('CodePatternExtractor', () => {
   });
 
   it('extracts Python symbols', () => {
-    const doc = makeDoc([
-      '```python',
-      'class UserService:',
-      '    def get_user(self):',
-      '        pass',
-      '```',
-    ].join('\n'));
+    const doc = makeDoc(['```python', 'class UserService:', '    def get_user(self):', '        pass', '```'].join('\n'));
 
     const refs = extractor.extract(doc);
     expect(refs.map((r) => r.value)).toContain('UserService');
@@ -58,12 +42,7 @@ describe('CodePatternExtractor', () => {
   });
 
   it('marks illustrative symbols', () => {
-    const doc = makeDoc([
-      '```javascript',
-      'class YourComponent {}',
-      'function FooBar() {}',
-      '```',
-    ].join('\n'));
+    const doc = makeDoc(['```javascript', 'class YourComponent {}', 'function FooBar() {}', '```'].join('\n'));
 
     const refs = extractor.extract(doc);
     const illustrative = refs.filter((r) => r.isIllustrative);
@@ -76,12 +55,7 @@ describe('CodePatternExtractor', () => {
   });
 
   it('detects language from code block tag', () => {
-    const doc = makeDoc([
-      '```go',
-      'type ServerConfig struct {}',
-      'func HandleRequest() {}',
-      '```',
-    ].join('\n'));
+    const doc = makeDoc(['```go', 'type ServerConfig struct {}', 'func HandleRequest() {}', '```'].join('\n'));
 
     const refs = extractor.extract(doc);
     expect(refs.some((r) => r.language === 'go')).toBe(true);

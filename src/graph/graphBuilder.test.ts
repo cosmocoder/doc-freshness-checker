@@ -82,10 +82,13 @@ describe('GraphBuilder', () => {
 
   it('resolves code-pattern to multiple files', async () => {
     const codeIndex = new Map<string, SymbolLocation[]>([
-      ['SharedFunc', [
-        { filePath: 'src/a.ts', kind: 'function', language: 'typescript' },
-        { filePath: 'src/b.ts', kind: 'function', language: 'typescript' },
-      ]],
+      [
+        'SharedFunc',
+        [
+          { filePath: 'src/a.ts', kind: 'function', language: 'typescript' },
+          { filePath: 'src/b.ts', kind: 'function', language: 'typescript' },
+        ],
+      ],
     ]);
     const docs = [makeDoc('docs/api.md', [makeRef('code-pattern', 'SharedFunc')])];
     const graph = await new GraphBuilder(config).buildGraph(docs, codeIndex);

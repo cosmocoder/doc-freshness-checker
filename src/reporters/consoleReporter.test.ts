@@ -11,22 +11,26 @@ describe('ConsoleReporter', () => {
   };
 
   const resultsWithIssues: ValidationResults = {
-    documents: [{
-      path: 'docs/api.md',
-      issues: [
-        {
-          reference: { type: 'file-path', value: 'missing.ts', lineNumber: 10, raw: 'missing.ts', sourceFile: 'api.md' },
-          valid: false, severity: 'error',
-          message: 'File not found: missing.ts',
-          suggestion: 'Did you mean: missing.tsx?',
-        },
-        {
-          reference: { type: 'external-url', value: 'https://old.com', lineNumber: 20, raw: 'https://old.com', sourceFile: 'api.md' },
-          valid: false, severity: 'warning',
-          message: 'URL returned 404',
-        },
-      ],
-    }],
+    documents: [
+      {
+        path: 'docs/api.md',
+        issues: [
+          {
+            reference: { type: 'file-path', value: 'missing.ts', lineNumber: 10, raw: 'missing.ts', sourceFile: 'api.md' },
+            valid: false,
+            severity: 'error',
+            message: 'File not found: missing.ts',
+            suggestion: 'Did you mean: missing.tsx?',
+          },
+          {
+            reference: { type: 'external-url', value: 'https://old.com', lineNumber: 20, raw: 'https://old.com', sourceFile: 'api.md' },
+            valid: false,
+            severity: 'warning',
+            message: 'URL returned 404',
+          },
+        ],
+      },
+    ],
     summary: { total: 5, valid: 3, errors: 1, warnings: 1, skipped: 0 },
   };
 
@@ -52,9 +56,15 @@ describe('ConsoleReporter', () => {
   it('generateWithScores() includes freshness scores', () => {
     const spy = captureConsoleLog();
     const scores: ProjectScores = {
-      projectScore: 85, projectGrade: 'B',
+      projectScore: 85,
+      projectGrade: 'B',
       documents: [
-        { document: 'docs/api.md', totalScore: 85, factors: { referenceValidity: 100, gitTimeDelta: 75, codeChangeFrequency: 75, symbolCoverage: 80 }, grade: 'B' },
+        {
+          document: 'docs/api.md',
+          totalScore: 85,
+          factors: { referenceValidity: 100, gitTimeDelta: 75, codeChangeFrequency: 75, symbolCoverage: 80 },
+          grade: 'B',
+        },
       ],
       summary: { total: 1, gradeA: 0, gradeB: 1, gradeC: 0, gradeD: 0, gradeF: 0 },
     };
@@ -74,12 +84,33 @@ describe('ConsoleReporter', () => {
   it('generateWithScores() shows all grade icons', () => {
     const spy = captureConsoleLog();
     const scores: ProjectScores = {
-      projectScore: 70, projectGrade: 'C',
+      projectScore: 70,
+      projectGrade: 'C',
       documents: [
-        { document: 'a.md', totalScore: 95, factors: { referenceValidity: 100, gitTimeDelta: 90, codeChangeFrequency: 90, symbolCoverage: 90 }, grade: 'A' },
-        { document: 'b.md', totalScore: 85, factors: { referenceValidity: 90, gitTimeDelta: 80, codeChangeFrequency: 80, symbolCoverage: 80 }, grade: 'B' },
-        { document: 'c.md', totalScore: 75, factors: { referenceValidity: 80, gitTimeDelta: 70, codeChangeFrequency: 70, symbolCoverage: 70 }, grade: 'C' },
-        { document: 'd.md', totalScore: 50, factors: { referenceValidity: 50, gitTimeDelta: 50, codeChangeFrequency: 50, symbolCoverage: 50 }, grade: 'F' },
+        {
+          document: 'a.md',
+          totalScore: 95,
+          factors: { referenceValidity: 100, gitTimeDelta: 90, codeChangeFrequency: 90, symbolCoverage: 90 },
+          grade: 'A',
+        },
+        {
+          document: 'b.md',
+          totalScore: 85,
+          factors: { referenceValidity: 90, gitTimeDelta: 80, codeChangeFrequency: 80, symbolCoverage: 80 },
+          grade: 'B',
+        },
+        {
+          document: 'c.md',
+          totalScore: 75,
+          factors: { referenceValidity: 80, gitTimeDelta: 70, codeChangeFrequency: 70, symbolCoverage: 70 },
+          grade: 'C',
+        },
+        {
+          document: 'd.md',
+          totalScore: 50,
+          factors: { referenceValidity: 50, gitTimeDelta: 50, codeChangeFrequency: 50, symbolCoverage: 50 },
+          grade: 'F',
+        },
       ],
       summary: { total: 4, gradeA: 1, gradeB: 1, gradeC: 1, gradeD: 0, gradeF: 1 },
     };
@@ -93,12 +124,16 @@ describe('ConsoleReporter', () => {
 
   it('generateWithScores() shows vector mismatches when present', () => {
     const spy = captureConsoleLog();
-    const mismatches: VectorMismatch[] = [{
-      docPath: 'docs/api.md', docSection: 'Auth API', docText: 'This function handles auth',
-      bestMatchScore: 0.2,
-      bestMatch: { type: 'code', path: 'src/db.ts', symbol: 'dbConnect', text: 'DB connect' },
-      suggestion: 'Documentation may describe functionality not found in code',
-    }];
+    const mismatches: VectorMismatch[] = [
+      {
+        docPath: 'docs/api.md',
+        docSection: 'Auth API',
+        docText: 'This function handles auth',
+        bestMatchScore: 0.2,
+        bestMatch: { type: 'code', path: 'src/db.ts', symbol: 'dbConnect', text: 'DB connect' },
+        suggestion: 'Documentation may describe functionality not found in code',
+      },
+    ];
     const results: ValidationResults = { ...cleanResults, vectorMismatches: mismatches };
     reporter.generateWithScores(results, null);
     const output = spy.mock.calls.flat().join('\n');
@@ -111,11 +146,16 @@ describe('ConsoleReporter', () => {
 
   it('generateVectorMismatches handles mismatches without bestMatch', () => {
     const spy = captureConsoleLog();
-    const mismatches: VectorMismatch[] = [{
-      docPath: 'docs/guide.md', docSection: 'Setup', docText: 'Setup instructions',
-      bestMatchScore: 0, bestMatch: null,
-      suggestion: 'No matching code found',
-    }];
+    const mismatches: VectorMismatch[] = [
+      {
+        docPath: 'docs/guide.md',
+        docSection: 'Setup',
+        docText: 'Setup instructions',
+        bestMatchScore: 0,
+        bestMatch: null,
+        suggestion: 'No matching code found',
+      },
+    ];
     const results: ValidationResults = { ...cleanResults, vectorMismatches: mismatches };
     reporter.generateWithScores(results, null);
     const output = spy.mock.calls.flat().join('\n');

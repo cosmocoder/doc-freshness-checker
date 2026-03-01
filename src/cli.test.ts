@@ -95,11 +95,14 @@ describe('runCli', () => {
     const runMock = vi.fn().mockResolvedValue(makeResults(0));
     const logErrorMock = vi.fn();
 
-    const exitCode = await runCli({ config: 'doc-freshness.config.ts' }, {
-      loadConfig: loadConfigMock,
-      run: runMock,
-      logError: logErrorMock,
-    });
+    const exitCode = await runCli(
+      { config: 'doc-freshness.config.ts' },
+      {
+        loadConfig: loadConfigMock,
+        run: runMock,
+        logError: logErrorMock,
+      }
+    );
 
     expect(exitCode).toBe(0);
     expect(loadConfigMock).toHaveBeenCalledWith('doc-freshness.config.ts');
@@ -108,11 +111,14 @@ describe('runCli', () => {
   });
 
   it('returns 1 when validation reports errors', async () => {
-    const exitCode = await runCli({}, {
-      loadConfig: vi.fn().mockResolvedValue(makeConfig()),
-      run: vi.fn().mockResolvedValue(makeResults(2)),
-      logError: vi.fn(),
-    });
+    const exitCode = await runCli(
+      {},
+      {
+        loadConfig: vi.fn().mockResolvedValue(makeConfig()),
+        run: vi.fn().mockResolvedValue(makeResults(2)),
+        logError: vi.fn(),
+      }
+    );
 
     expect(exitCode).toBe(1);
   });
@@ -121,11 +127,14 @@ describe('runCli', () => {
     const logErrorMock = vi.fn();
     const thrown = new Error('boom');
 
-    const exitCode = await runCli({ verbose: true }, {
-      loadConfig: vi.fn().mockRejectedValue(thrown),
-      run: vi.fn(),
-      logError: logErrorMock,
-    });
+    const exitCode = await runCli(
+      { verbose: true },
+      {
+        loadConfig: vi.fn().mockRejectedValue(thrown),
+        run: vi.fn(),
+        logError: logErrorMock,
+      }
+    );
 
     expect(exitCode).toBe(1);
     expect(logErrorMock).toHaveBeenCalledWith('Error:', 'boom');
@@ -142,17 +151,14 @@ describe('main', () => {
       logError: vi.fn(),
     };
 
-    const exitCode = await main(
-      ['node', 'doc-freshness', '--reporter', 'json', '--no-cache'],
-      deps,
-    );
+    const exitCode = await main(['node', 'doc-freshness', '--reporter', 'json', '--no-cache'], deps);
 
     expect(exitCode).toBe(0);
     expect(runMock).toHaveBeenCalledWith(
       expect.objectContaining({
         reporters: ['json'],
         cache: { enabled: false },
-      }),
+      })
     );
   });
 });

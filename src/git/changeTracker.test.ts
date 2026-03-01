@@ -25,7 +25,9 @@ describe('GitChangeTracker', () => {
     });
 
     it('returns false when git rev-parse fails', () => {
-      mockExecFileSync.mockImplementation(() => { throw new Error('not a git repo'); });
+      mockExecFileSync.mockImplementation(() => {
+        throw new Error('not a git repo');
+      });
       expect(new GitChangeTracker(config).isGitRepo()).toBe(false);
     });
 
@@ -40,10 +42,7 @@ describe('GitChangeTracker', () => {
     it('uses process.cwd() when rootDir not specified', () => {
       mockExecFileSync.mockReturnValue('.git\n');
       new GitChangeTracker({}).isGitRepo();
-      expect(mockExecFileSync).toHaveBeenCalledWith(
-        'git', ['rev-parse', '--git-dir'],
-        expect.objectContaining({ cwd: process.cwd() }),
-      );
+      expect(mockExecFileSync).toHaveBeenCalledWith('git', ['rev-parse', '--git-dir'], expect.objectContaining({ cwd: process.cwd() }));
     });
   });
 
@@ -54,14 +53,16 @@ describe('GitChangeTracker', () => {
     });
 
     it('returns null for non-git repos', () => {
-      mockExecFileSync.mockImplementation(() => { throw new Error(); });
+      mockExecFileSync.mockImplementation(() => {
+        throw new Error();
+      });
       expect(new GitChangeTracker(config).getCurrentCommit()).toBeNull();
     });
 
     it('returns null when rev-parse HEAD fails', () => {
-      mockExecFileSync
-        .mockReturnValueOnce('.git\n')
-        .mockImplementationOnce(() => { throw new Error('no commits'); });
+      mockExecFileSync.mockReturnValueOnce('.git\n').mockImplementationOnce(() => {
+        throw new Error('no commits');
+      });
       expect(new GitChangeTracker(config).getCurrentCommit()).toBeNull();
     });
   });
@@ -73,14 +74,16 @@ describe('GitChangeTracker', () => {
     });
 
     it('returns empty for non-git repos', () => {
-      mockExecFileSync.mockImplementation(() => { throw new Error(); });
+      mockExecFileSync.mockImplementation(() => {
+        throw new Error();
+      });
       expect(new GitChangeTracker(config).getChangedFiles('a', 'b')).toEqual([]);
     });
 
     it('returns empty when git diff fails', () => {
-      mockExecFileSync
-        .mockReturnValueOnce('.git\n')
-        .mockImplementationOnce(() => { throw new Error('diff failed'); });
+      mockExecFileSync.mockReturnValueOnce('.git\n').mockImplementationOnce(() => {
+        throw new Error('diff failed');
+      });
       expect(new GitChangeTracker(config).getChangedFiles('a', 'b')).toEqual([]);
     });
   });
@@ -93,14 +96,16 @@ describe('GitChangeTracker', () => {
     });
 
     it('returns empty for non-git repos', () => {
-      mockExecFileSync.mockImplementation(() => { throw new Error(); });
+      mockExecFileSync.mockImplementation(() => {
+        throw new Error();
+      });
       expect(new GitChangeTracker(config).getChangedFilesSince(Date.now())).toEqual([]);
     });
 
     it('returns empty when git log fails', () => {
-      mockExecFileSync
-        .mockReturnValueOnce('.git\n')
-        .mockImplementationOnce(() => { throw new Error('log failed'); });
+      mockExecFileSync.mockReturnValueOnce('.git\n').mockImplementationOnce(() => {
+        throw new Error('log failed');
+      });
       expect(new GitChangeTracker(config).getChangedFilesSince(Date.now())).toEqual([]);
     });
   });
@@ -113,7 +118,9 @@ describe('GitChangeTracker', () => {
     });
 
     it('returns null for non-git repos', () => {
-      mockExecFileSync.mockImplementation(() => { throw new Error(); });
+      mockExecFileSync.mockImplementation(() => {
+        throw new Error();
+      });
       expect(new GitChangeTracker(config).getFileLastModified('file.ts')).toBeNull();
     });
 
@@ -123,9 +130,9 @@ describe('GitChangeTracker', () => {
     });
 
     it('returns null when git log fails', () => {
-      mockExecFileSync
-        .mockReturnValueOnce('.git\n')
-        .mockImplementationOnce(() => { throw new Error('log failed'); });
+      mockExecFileSync.mockReturnValueOnce('.git\n').mockImplementationOnce(() => {
+        throw new Error('log failed');
+      });
       expect(new GitChangeTracker(config).getFileLastModified('file.ts')).toBeNull();
     });
   });
@@ -149,14 +156,16 @@ describe('GitChangeTracker', () => {
     });
 
     it('returns null for non-git repos', () => {
-      mockExecFileSync.mockImplementation(() => { throw new Error(); });
+      mockExecFileSync.mockImplementation(() => {
+        throw new Error();
+      });
       expect(new GitChangeTracker(config).getFileCommitInfo('file.ts')).toBeNull();
     });
 
     it('returns null when git log fails', () => {
-      mockExecFileSync
-        .mockReturnValueOnce('.git\n')
-        .mockImplementationOnce(() => { throw new Error(); });
+      mockExecFileSync.mockReturnValueOnce('.git\n').mockImplementationOnce(() => {
+        throw new Error();
+      });
       expect(new GitChangeTracker(config).getFileCommitInfo('file.ts')).toBeNull();
     });
   });
@@ -187,9 +196,7 @@ describe('GitChangeTracker', () => {
   describe('getChangeSummary', () => {
     it('returns summary with affected docs and commit info', () => {
       const ts = Math.floor(Date.now() / 1000);
-      mockExecFileSync
-        .mockReturnValueOnce('.git\n')
-        .mockReturnValueOnce(`hash1\0${ts}\0Update\n`);
+      mockExecFileSync.mockReturnValueOnce('.git\n').mockReturnValueOnce(`hash1\0${ts}\0Update\n`);
       const graph = new CodeDocGraph();
       graph.addReference('docs/api.md', 'src/server.ts', makeRef('src/server.ts'));
       const summary = new GitChangeTracker(config).getChangeSummary(graph, ['src/server.ts']);

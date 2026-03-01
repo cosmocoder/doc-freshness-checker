@@ -3,11 +3,7 @@ import path from 'path';
 import { findSimilar } from '../utils/similarity.js';
 import { isIllustrativePath, compilePatterns } from '../utils/illustrativePatterns.js';
 import { isWithinRoot, resolveDocumentDir, resolveProjectRoot } from '../utils/pathSecurity.js';
-import {
-  createIllustrativeSkippedResult,
-  getRuleSeverity,
-  severityForIllustrative,
-} from '../utils/validation.js';
+import { createIllustrativeSkippedResult, getRuleSeverity, severityForIllustrative } from '../utils/validation.js';
 import type { DocFreshnessConfig, Document, Reference, ValidationResult } from '../types.js';
 
 /**
@@ -27,16 +23,10 @@ export class FileValidator {
    */
   private initCustomPatterns(config: DocFreshnessConfig): void {
     const configPatterns = config.rules?.['file-path']?.illustrativePatterns;
-    this.customPatterns = configPatterns && configPatterns.length > 0
-      ? compilePatterns(configPatterns)
-      : [];
+    this.customPatterns = configPatterns && configPatterns.length > 0 ? compilePatterns(configPatterns) : [];
   }
 
-  async validateBatch(
-    references: Reference[],
-    document: Document,
-    config: DocFreshnessConfig
-  ): Promise<ValidationResult[]> {
+  async validateBatch(references: Reference[], document: Document, config: DocFreshnessConfig): Promise<ValidationResult[]> {
     this.initCustomPatterns(config);
     const results: ValidationResult[] = [];
     const rootDir = resolveProjectRoot(config.rootDir);
@@ -84,9 +74,7 @@ export class FileValidator {
         reference: ref,
         valid: false,
         severity: severityForIllustrative(isIllustrative, baseSeverity),
-        message: isIllustrative
-          ? `Path escapes project root (illustrative): ${ref.value}`
-          : `Path escapes project root: ${ref.value}`,
+        message: isIllustrative ? `Path escapes project root (illustrative): ${ref.value}` : `Path escapes project root: ${ref.value}`,
         suggestion: null,
         resolvedPath,
       };
@@ -108,20 +96,14 @@ export class FileValidator {
         reference: ref,
         valid: false,
         severity: severityForIllustrative(isIllustrative, baseSeverity),
-        message: isIllustrative
-          ? `File not found (illustrative): ${ref.value}`
-          : `File not found: ${ref.value}`,
+        message: isIllustrative ? `File not found (illustrative): ${ref.value}` : `File not found: ${ref.value}`,
         suggestion: suggestion ? `Did you mean: ${suggestion}?` : null,
         resolvedPath,
       };
     }
   }
 
-  private async findSuggestion(
-    refPath: string,
-    docDir: string,
-    rootDir: string
-  ): Promise<string | null> {
+  private async findSuggestion(refPath: string, docDir: string, rootDir: string): Promise<string | null> {
     const dir = path.dirname(path.resolve(docDir, refPath));
     const fileName = path.basename(refPath);
 

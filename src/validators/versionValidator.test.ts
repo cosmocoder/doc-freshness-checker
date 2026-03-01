@@ -27,7 +27,8 @@ describe('VersionValidator', () => {
   it('detects major version mismatches', async () => {
     const validator = new VersionValidator();
     const config: DocFreshnessConfig = {
-      rootDir: process.cwd(), manifestFiles: ['package.json'],
+      rootDir: process.cwd(),
+      manifestFiles: ['package.json'],
       rules: { version: { severity: 'warning' } },
     };
     const results = await validator.validateBatch([makeRef('TypeScript', '1.0')], doc, config);
@@ -135,8 +136,12 @@ describe('VersionValidator', () => {
     const validator = new VersionValidator();
     const config: DocFreshnessConfig = { rootDir: process.cwd(), manifestFiles: ['package.json'] };
     const ref: Reference = {
-      type: 'version', value: 'typescript', technology: 'typescript',
-      lineNumber: 1, raw: 'typescript', sourceFile: 'doc.md',
+      type: 'version',
+      value: 'typescript',
+      technology: 'typescript',
+      lineNumber: 1,
+      raw: 'typescript',
+      sourceFile: 'doc.md',
     };
     const results = await validator.validateBatch([ref], doc, config);
     expect(results[0].valid).toBe(true);
@@ -152,9 +157,12 @@ describe('VersionValidator', () => {
   it('treats empty version in package.json as "any"', async () => {
     const dir = path.join(tmpDir, 'empty-ver');
     await fs.promises.mkdir(dir, { recursive: true });
-    await fs.promises.writeFile(path.join(dir, 'package.json'), JSON.stringify({
-      dependencies: { 'test-pkg': '' },
-    }));
+    await fs.promises.writeFile(
+      path.join(dir, 'package.json'),
+      JSON.stringify({
+        dependencies: { 'test-pkg': '' },
+      })
+    );
     const validator = new VersionValidator();
     const config: DocFreshnessConfig = {
       rootDir: process.cwd(),
@@ -174,9 +182,12 @@ describe('VersionValidator', () => {
   it('parses package.json with peerDependencies', async () => {
     const dir = path.join(tmpDir, 'peer-deps');
     await fs.promises.mkdir(dir, { recursive: true });
-    await fs.promises.writeFile(path.join(dir, 'package.json'), JSON.stringify({
-      peerDependencies: { react: '^18.0.0' },
-    }));
+    await fs.promises.writeFile(
+      path.join(dir, 'package.json'),
+      JSON.stringify({
+        peerDependencies: { react: '^18.0.0' },
+      })
+    );
     const validator = new VersionValidator();
     const config: DocFreshnessConfig = {
       rootDir: process.cwd(),
@@ -189,9 +200,12 @@ describe('VersionValidator', () => {
   it('uses technology name directly when not in technologyMap', async () => {
     const dir = path.join(tmpDir, 'direct-tech');
     await fs.promises.mkdir(dir, { recursive: true });
-    await fs.promises.writeFile(path.join(dir, 'package.json'), JSON.stringify({
-      dependencies: { 'custom-lib': '5.0.0' },
-    }));
+    await fs.promises.writeFile(
+      path.join(dir, 'package.json'),
+      JSON.stringify({
+        dependencies: { 'custom-lib': '5.0.0' },
+      })
+    );
     const validator = new VersionValidator();
     const config: DocFreshnessConfig = {
       rootDir: process.cwd(),
@@ -240,11 +254,14 @@ describe('manifestParsers', () => {
 
   it('parses package.json with engines and all dep types', async () => {
     const filePath = path.join(tmpDir, 'package.json');
-    await fs.promises.writeFile(filePath, JSON.stringify({
-      engines: { node: '>=18.0.0', npm: '>=9.0.0' },
-      dependencies: { express: '^4.18.0' },
-      devDependencies: { jest: '^29.0.0' },
-    }));
+    await fs.promises.writeFile(
+      filePath,
+      JSON.stringify({
+        engines: { node: '>=18.0.0', npm: '>=9.0.0' },
+        dependencies: { express: '^4.18.0' },
+        devDependencies: { jest: '^29.0.0' },
+      })
+    );
     const versions = await manifestParsers['package.json'](filePath);
     expect(versions.get('node')).toBe('18.0.0');
     expect(versions.get('nodejs')).toBe('18.0.0');
@@ -319,7 +336,10 @@ describe('manifestParsers', () => {
 
   it('parses pom.xml without java version', async () => {
     const filePath = path.join(tmpDir, 'pom-no-java.xml');
-    await fs.promises.writeFile(filePath, '<project><dependencies><dependency><artifactId>junit</artifactId><version>5.9</version></dependency></dependencies></project>');
+    await fs.promises.writeFile(
+      filePath,
+      '<project><dependencies><dependency><artifactId>junit</artifactId><version>5.9</version></dependency></dependencies></project>'
+    );
     const versions = await manifestParsers['pom.xml'](filePath);
     expect(versions.get('junit')).toBe('5.9');
     expect(versions.has('java')).toBe(false);
@@ -327,12 +347,15 @@ describe('manifestParsers', () => {
 
   it('parses pom.xml with java version and dependencies', async () => {
     const filePath = path.join(tmpDir, 'pom.xml');
-    await fs.promises.writeFile(filePath, `<project>
+    await fs.promises.writeFile(
+      filePath,
+      `<project>
   <properties><java.version>17</java.version></properties>
   <dependencies>
     <dependency><artifactId>spring-boot</artifactId><version>3.1.0</version></dependency>
   </dependencies>
-</project>`);
+</project>`
+    );
     const versions = await manifestParsers['pom.xml'](filePath);
     expect(versions.get('java')).toBe('17');
     expect(versions.get('spring-boot')).toBe('3.1.0');

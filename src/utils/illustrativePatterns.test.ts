@@ -29,11 +29,7 @@ describe('isIllustrativePath', () => {
     expect(isIllustrativePath(p)).toBe(true);
   });
 
-  it.each([
-    'src/utils/helper.ts',
-    'package.json',
-    'tsconfig.json',
-  ])('does not flag real path: %s', (p) => {
+  it.each(['src/utils/helper.ts', 'package.json', 'tsconfig.json'])('does not flag real path: %s', (p) => {
     expect(isIllustrativePath(p)).toBe(false);
   });
 
@@ -45,24 +41,14 @@ describe('isIllustrativePath', () => {
 });
 
 describe('isIllustrativeSymbol', () => {
-  it.each([
-    'YourComponent',
-    'ExampleService',
-    'FooBar',
-    'MockAdapter',
-    'POST',
-    'a',
-    'Chat',
-    'Dashboard',
-  ])('detects illustrative symbol: %s', (s) => {
-    expect(isIllustrativeSymbol(s)).toBe(true);
-  });
+  it.each(['YourComponent', 'ExampleService', 'FooBar', 'MockAdapter', 'POST', 'a', 'Chat', 'Dashboard'])(
+    'detects illustrative symbol: %s',
+    (s) => {
+      expect(isIllustrativeSymbol(s)).toBe(true);
+    }
+  );
 
-  it.each([
-    'DocumentParser',
-    'ValidationEngine',
-    'runParallel',
-  ])('does not flag real symbol: %s', (s) => {
+  it.each(['DocumentParser', 'ValidationEngine', 'runParallel'])('does not flag real symbol: %s', (s) => {
     expect(isIllustrativeSymbol(s)).toBe(false);
   });
 });

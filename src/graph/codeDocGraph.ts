@@ -108,9 +108,7 @@ export class CodeDocGraph {
     const graph = new CodeDocGraph();
     graph.docToCode = new Map(Object.entries(data.docToCode || {}).map(([k, v]) => [k, new Set(v)]));
     graph.codeToDoc = new Map(Object.entries(data.codeToDoc || {}).map(([k, v]) => [k, new Set(v)]));
-    graph.codeSymbols = new Map(
-      Object.entries(data.codeSymbols || {}).map(([k, v]) => [k, new Set(v)])
-    );
+    graph.codeSymbols = new Map(Object.entries(data.codeSymbols || {}).map(([k, v]) => [k, new Set(v)]));
     graph.docReferences = new Map(Object.entries(data.docReferences || {}));
     graph.buildTimestamp = data.buildTimestamp;
     graph.gitCommit = data.gitCommit;

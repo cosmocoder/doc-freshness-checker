@@ -17,9 +17,11 @@ describe('Plugin', () => {
     const plugin = new Plugin('test');
     await expect(plugin.initialize({})).resolves.not.toThrow();
     await expect(plugin.beforeValidation([])).resolves.not.toThrow();
-    await expect(plugin.afterValidation({
-      documents: [],
-      summary: { total: 0, valid: 0, errors: 0, warnings: 0, skipped: 0 },
-    })).resolves.not.toThrow();
+    await expect(
+      plugin.afterValidation({
+        documents: [],
+        summary: { total: 0, valid: 0, errors: 0, warnings: 0, skipped: 0 },
+      })
+    ).resolves.not.toThrow();
   });
 });

@@ -11,12 +11,7 @@ function makeRef(value: string) {
 const doc = makeDoc();
 const tmpBase = path.join(process.cwd(), '.doc-freshness-cache', 'dep-test');
 
-async function writeManifestAndValidate(
-  dirName: string,
-  fileName: string,
-  content: string,
-  pkgNames: string[],
-): Promise<boolean[]> {
+async function writeManifestAndValidate(dirName: string, fileName: string, content: string, pkgNames: string[]): Promise<boolean[]> {
   const dir = path.join(tmpBase, dirName);
   const filePath = path.join(dir, fileName);
   await fs.promises.mkdir(dir, { recursive: true });
@@ -55,7 +50,8 @@ describe('DependencyValidator', () => {
   it('respects custom severity from config', async () => {
     const validator = new DependencyValidator();
     const config: DocFreshnessConfig = {
-      rootDir: process.cwd(), manifestFiles: ['package.json'],
+      rootDir: process.cwd(),
+      manifestFiles: ['package.json'],
       rules: { dependency: { severity: 'error' } },
     };
     const results = await validator.validateBatch([makeRef('nonexistent-pkg')], doc, config);
@@ -83,20 +79,19 @@ describe('DependencyValidator', () => {
     }
 
     it('parses requirements.txt', async () => {
-      const results = await writeAndValidate(
-        'requirements.txt',
-        'flask>=2.0\nrequests\n# comment\ndjango==4.0',
-        ['flask', 'requests', 'django'],
-      );
+      const results = await writeAndValidate('requirements.txt', 'flask>=2.0\nrequests\n# comment\ndjango==4.0', [
+        'flask',
+        'requests',
+        'django',
+      ]);
       expect(results).toEqual([true, true, true]);
     });
 
     it('parses pyproject.toml', async () => {
-      const results = await writeAndValidate(
-        'pyproject.toml',
-        '[project.dependencies]\n"fastapi>=0.100"\n"uvicorn"',
-        ['fastapi', 'uvicorn'],
-      );
+      const results = await writeAndValidate('pyproject.toml', '[project.dependencies]\n"fastapi>=0.100"\n"uvicorn"', [
+        'fastapi',
+        'uvicorn',
+      ]);
       expect(results).toEqual([true, true]);
     });
 
@@ -104,17 +99,13 @@ describe('DependencyValidator', () => {
       const results = await writeAndValidate(
         'go.mod',
         'module example.com/app\n\ngo 1.21\n\nrequire (\n\tgithub.com/gin-gonic/gin v1.9.1\n\tgolang.org/x/text v0.14.0\n)',
-        ['github.com/gin-gonic/gin', 'golang.org/x/text'],
+        ['github.com/gin-gonic/gin', 'golang.org/x/text']
       );
       expect(results).toEqual([true, true]);
     });
 
     it('parses Cargo.toml', async () => {
-      const results = await writeAndValidate(
-        'Cargo.toml',
-        '[dependencies]\nserde = "1.0"\ntokio = "1.28"',
-        ['serde', 'tokio'],
-      );
+      const results = await writeAndValidate('Cargo.toml', '[dependencies]\nserde = "1.0"\ntokio = "1.28"', ['serde', 'tokio']);
       expect(results).toEqual([true, true]);
     });
 
@@ -122,7 +113,7 @@ describe('DependencyValidator', () => {
       const results = await writeAndValidate(
         'pom.xml',
         '<project><dependencies><dependency><artifactId>spring-boot</artifactId></dependency></dependencies></project>',
-        ['spring-boot'],
+        ['spring-boot']
       );
       expect(results).toEqual([true]);
     });
@@ -142,44 +133,32 @@ describe('DependencyValidator', () => {
     }
 
     it('handles go.mod without require block', async () => {
-      const results = await writeAndValidate(
-        'go.mod', 'module example.com/app\n\ngo 1.22\n', ['example.com/app'],
-      );
+      const results = await writeAndValidate('go.mod', 'module example.com/app\n\ngo 1.22\n', ['example.com/app']);
       expect(results).toEqual([false]);
     });
 
     it('handles pyproject.toml without project.dependencies section', async () => {
-      const results = await writeAndValidate(
-        'pyproject.toml', '[project]\nname = "myapp"\nversion = "1.0"\n', ['myapp'],
-      );
+      const results = await writeAndValidate('pyproject.toml', '[project]\nname = "myapp"\nversion = "1.0"\n', ['myapp']);
       expect(results).toEqual([false]);
     });
 
     it('handles Cargo.toml without dependencies section', async () => {
-      const results = await writeAndValidate(
-        'Cargo.toml', '[package]\nname = "myapp"\nversion = "0.1.0"\n', ['myapp'],
-      );
+      const results = await writeAndValidate('Cargo.toml', '[package]\nname = "myapp"\nversion = "0.1.0"\n', ['myapp']);
       expect(results).toEqual([false]);
     });
 
     it('handles unknown manifest format gracefully', async () => {
-      const results = await writeAndValidate(
-        'build.gradle', 'implementation "org.something:artifact:1.0"\n', ['org.something'],
-      );
+      const results = await writeAndValidate('build.gradle', 'implementation "org.something:artifact:1.0"\n', ['org.something']);
       expect(results).toEqual([false]);
     });
 
     it('handles requirements.txt with blank lines and comments only', async () => {
-      const results = await writeAndValidate(
-        'requirements.txt', '# this is a comment\n\n# another comment\n', ['flask'],
-      );
+      const results = await writeAndValidate('requirements.txt', '# this is a comment\n\n# another comment\n', ['flask']);
       expect(results).toEqual([false]);
     });
 
     it('handles pom.xml with no artifactId', async () => {
-      const results = await writeAndValidate(
-        'pom.xml', '<project><groupId>com.example</groupId></project>', ['anything'],
-      );
+      const results = await writeAndValidate('pom.xml', '<project><groupId>com.example</groupId></project>', ['anything']);
       expect(results).toEqual([false]);
     });
 
@@ -192,17 +171,13 @@ describe('DependencyValidator', () => {
           peerDependencies: { 'peer-c': '>=3.0' },
           optionalDependencies: { 'opt-d': '4.0' },
         }),
-        ['dep-a', 'dev-b', 'peer-c', 'opt-d'],
+        ['dep-a', 'dev-b', 'peer-c', 'opt-d']
       );
       expect(results).toEqual([true, true, true, true]);
     });
 
     it('parses package.json with only dependencies (no devDependencies)', async () => {
-      const results = await writeAndValidate(
-        'package.json',
-        JSON.stringify({ dependencies: { 'only-dep': '1.0' } }),
-        ['only-dep'],
-      );
+      const results = await writeAndValidate('package.json', JSON.stringify({ dependencies: { 'only-dep': '1.0' } }), ['only-dep']);
       expect(results).toEqual([true]);
     });
 
@@ -210,7 +185,7 @@ describe('DependencyValidator', () => {
       const results = await writeAndValidate(
         'requirements.txt',
         '-e git+https://github.com/org/repo.git#egg=mypackage\nflask>=2.0\n-r other-requirements.txt',
-        ['flask'],
+        ['flask']
       );
       expect(results).toEqual([true]);
     });

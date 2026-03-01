@@ -6,10 +6,7 @@ import path from 'path';
 export function isWithinRoot(candidatePath: string, rootDir: string): boolean {
   const resolvedRoot = path.resolve(rootDir);
   const resolvedCandidate = path.resolve(candidatePath);
-  return (
-    resolvedCandidate === resolvedRoot ||
-    resolvedCandidate.startsWith(resolvedRoot + path.sep)
-  );
+  return resolvedCandidate === resolvedRoot || resolvedCandidate.startsWith(resolvedRoot + path.sep);
 }
 
 /**

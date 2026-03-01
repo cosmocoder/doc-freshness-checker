@@ -42,10 +42,7 @@ export const ILLUSTRATIVE_SYMBOL_PATTERNS: RegExp[] = [
 /**
  * Check if a path looks like an illustrative/placeholder path
  */
-export function isIllustrativePath(
-  itemPath: string,
-  customPatterns: RegExp[] = []
-): boolean {
+export function isIllustrativePath(itemPath: string, customPatterns: RegExp[] = []): boolean {
   const patterns = [...ILLUSTRATIVE_PATH_PATTERNS, ...customPatterns];
   const segments = itemPath.split('/');
   const filename = segments[segments.length - 1];
@@ -72,10 +69,7 @@ export function isIllustrativePath(
 /**
  * Check if a code symbol name looks like an illustrative/placeholder name
  */
-export function isIllustrativeSymbol(
-  name: string,
-  customPatterns: RegExp[] = []
-): boolean {
+export function isIllustrativeSymbol(name: string, customPatterns: RegExp[] = []): boolean {
   const patterns = [...ILLUSTRATIVE_SYMBOL_PATTERNS, ...customPatterns];
 
   for (const pattern of patterns) {

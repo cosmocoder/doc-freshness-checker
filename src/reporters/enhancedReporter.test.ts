@@ -7,22 +7,26 @@ describe('EnhancedReporter', () => {
   const reporter = new EnhancedReporter();
 
   const results: ValidationResults = {
-    documents: [{
-      path: 'docs/api.md',
-      issues: [
-        {
-          reference: { type: 'file-path', value: 'missing.ts', lineNumber: 5, raw: 'missing.ts', sourceFile: 'api.md' },
-          valid: false, severity: 'error',
-          message: 'File not found',
-          suggestion: 'Did you mean missing.tsx?',
-        },
-        {
-          reference: { type: 'external-url', value: 'https://old.com', lineNumber: 12, raw: 'https://old.com', sourceFile: 'api.md' },
-          valid: false, severity: 'warning',
-          message: 'URL returned 404',
-        },
-      ],
-    }],
+    documents: [
+      {
+        path: 'docs/api.md',
+        issues: [
+          {
+            reference: { type: 'file-path', value: 'missing.ts', lineNumber: 5, raw: 'missing.ts', sourceFile: 'api.md' },
+            valid: false,
+            severity: 'error',
+            message: 'File not found',
+            suggestion: 'Did you mean missing.tsx?',
+          },
+          {
+            reference: { type: 'external-url', value: 'https://old.com', lineNumber: 12, raw: 'https://old.com', sourceFile: 'api.md' },
+            valid: false,
+            severity: 'warning',
+            message: 'URL returned 404',
+          },
+        ],
+      },
+    ],
     summary: { total: 3, valid: 1, errors: 1, warnings: 1, skipped: 0 },
   };
 
@@ -41,8 +45,16 @@ describe('EnhancedReporter', () => {
 
   it('includes freshness scores with grade table', () => {
     const scores: ProjectScores = {
-      projectScore: 80, projectGrade: 'B',
-      documents: [{ document: 'docs/api.md', totalScore: 80, factors: { referenceValidity: 80, gitTimeDelta: 80, codeChangeFrequency: 80, symbolCoverage: 80 }, grade: 'B' }],
+      projectScore: 80,
+      projectGrade: 'B',
+      documents: [
+        {
+          document: 'docs/api.md',
+          totalScore: 80,
+          factors: { referenceValidity: 80, gitTimeDelta: 80, codeChangeFrequency: 80, symbolCoverage: 80 },
+          grade: 'B',
+        },
+      ],
       summary: { total: 1, gradeA: 0, gradeB: 1, gradeC: 0, gradeD: 0, gradeF: 0 },
     };
     const report = reporter.generateScanReport(results, null, null, scores);
@@ -54,7 +66,11 @@ describe('EnhancedReporter', () => {
   it('shows referenced code files from graph', () => {
     const graph = new CodeDocGraph();
     graph.addReference('docs/api.md', 'src/server.ts', {
-      type: 'file-path', value: 'src/server.ts', lineNumber: 1, raw: 'src/server.ts', sourceFile: 'api.md',
+      type: 'file-path',
+      value: 'src/server.ts',
+      lineNumber: 1,
+      raw: 'src/server.ts',
+      sourceFile: 'api.md',
     });
     const report = reporter.generateScanReport(results, graph, null, null);
     expect(report).toContain('src/server.ts');
@@ -64,7 +80,11 @@ describe('EnhancedReporter', () => {
   it('shows commit info for referenced code files', () => {
     const graph = new CodeDocGraph();
     graph.addReference('docs/api.md', 'src/server.ts', {
-      type: 'file-path', value: 'src/server.ts', lineNumber: 1, raw: 'src/server.ts', sourceFile: 'api.md',
+      type: 'file-path',
+      value: 'src/server.ts',
+      lineNumber: 1,
+      raw: 'src/server.ts',
+      sourceFile: 'api.md',
     });
     const gitTracker = {
       isGitRepo: () => true,
@@ -79,8 +99,16 @@ describe('EnhancedReporter', () => {
 
   it('shows document score inline when scores are provided', () => {
     const scores: ProjectScores = {
-      projectScore: 80, projectGrade: 'B',
-      documents: [{ document: 'docs/api.md', totalScore: 80, factors: { referenceValidity: 80, gitTimeDelta: 80, codeChangeFrequency: 80, symbolCoverage: 80 }, grade: 'B' }],
+      projectScore: 80,
+      projectGrade: 'B',
+      documents: [
+        {
+          document: 'docs/api.md',
+          totalScore: 80,
+          factors: { referenceValidity: 80, gitTimeDelta: 80, codeChangeFrequency: 80, symbolCoverage: 80 },
+          grade: 'B',
+        },
+      ],
       summary: { total: 1, gradeA: 0, gradeB: 1, gradeC: 0, gradeD: 0, gradeF: 0 },
     };
     const report = reporter.generateScanReport(results, null, null, scores);
@@ -105,7 +133,11 @@ describe('EnhancedReporter', () => {
   it('shows recent code changes impacting docs when git is available', () => {
     const graph = new CodeDocGraph();
     graph.addReference('docs/api.md', 'src/server.ts', {
-      type: 'file-path', value: 'src/server.ts', lineNumber: 1, raw: 'src/server.ts', sourceFile: 'api.md',
+      type: 'file-path',
+      value: 'src/server.ts',
+      lineNumber: 1,
+      raw: 'src/server.ts',
+      sourceFile: 'api.md',
     });
     const gitTracker = {
       isGitRepo: () => true,
@@ -124,7 +156,9 @@ describe('EnhancedReporter', () => {
     const gitTracker = {
       isGitRepo: () => true,
       getFileCommitInfo: vi.fn(),
-      getChangedFilesSince: vi.fn().mockImplementation(() => { throw new Error('git error'); }),
+      getChangedFilesSince: vi.fn().mockImplementation(() => {
+        throw new Error('git error');
+      }),
       getAffectedDocs: vi.fn(),
     } as unknown as GitChangeTracker;
 

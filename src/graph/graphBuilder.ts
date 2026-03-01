@@ -18,10 +18,7 @@ export class GraphBuilder {
   async buildGraph(documents: Document[], codeIndex: Map<string, SymbolLocation[]> | null): Promise<CodeDocGraph> {
     const graph = new CodeDocGraph();
     const indexedFilePaths = codeIndex
-      ? new Set(
-          Array.from(codeIndex.values())
-            .flatMap((locations) => locations.map((loc) => loc.filePath))
-        )
+      ? new Set(Array.from(codeIndex.values()).flatMap((locations) => locations.map((loc) => loc.filePath)))
       : null;
 
     // Resolve references and build edges

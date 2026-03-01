@@ -25,11 +25,7 @@ describe('delay', () => {
 
 describe('runParallel', () => {
   it('runs all tasks and returns results in order', async () => {
-    const tasks = [
-      () => Promise.resolve(1),
-      () => Promise.resolve(2),
-      () => Promise.resolve(3),
-    ];
+    const tasks = [() => Promise.resolve(1), () => Promise.resolve(2), () => Promise.resolve(3)];
     const results = await runParallel(tasks);
     expect(results).toEqual([1, 2, 3]);
   });
@@ -54,10 +50,7 @@ describe('runParallel', () => {
   });
 
   it('propagates errors from tasks', async () => {
-    const tasks = [
-      () => Promise.resolve(1),
-      () => Promise.reject(new Error('fail')),
-    ];
+    const tasks = [() => Promise.resolve(1), () => Promise.reject(new Error('fail'))];
     await expect(runParallel(tasks)).rejects.toThrow('fail');
   });
 });

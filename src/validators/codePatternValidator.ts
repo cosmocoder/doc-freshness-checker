@@ -72,11 +72,7 @@ const languageConfigs: Record<string, LanguageConfig> = {
 };
 
 import { isIllustrativeSymbol } from '../utils/illustrativePatterns.js';
-import {
-  createIllustrativeSkippedResult,
-  getRuleSeverity,
-  severityForIllustrative,
-} from '../utils/validation.js';
+import { createIllustrativeSkippedResult, getRuleSeverity, severityForIllustrative } from '../utils/validation.js';
 
 /**
  * Validates code patterns exist in source files
@@ -170,11 +166,7 @@ export class CodePatternValidator {
     }
   }
 
-  async validateBatch(
-    references: Reference[],
-    _document: Document,
-    config: DocFreshnessConfig
-  ): Promise<ValidationResult[]> {
+  async validateBatch(references: Reference[], _document: Document, config: DocFreshnessConfig): Promise<ValidationResult[]> {
     await this.buildSourceIndex(config);
 
     const results: ValidationResult[] = [];
@@ -188,9 +180,7 @@ export class CodePatternValidator {
       const illustrative = ref.isIllustrative || isIllustrativeSymbol(name);
 
       if (illustrative && skipIllustrative) {
-        results.push(
-          createIllustrativeSkippedResult(ref, 'Skipped: illustrative/example code pattern')
-        );
+        results.push(createIllustrativeSkippedResult(ref, 'Skipped: illustrative/example code pattern'));
         continue;
       }
 

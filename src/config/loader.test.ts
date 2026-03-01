@@ -23,7 +23,7 @@ describe('loadConfig', () => {
   async function withTempConfig(
     fileName: string,
     content: string | Record<string, unknown>,
-    assertConfig: (configPath: string) => Promise<void>,
+    assertConfig: (configPath: string) => Promise<void>
   ) {
     const configPath = path.join(tmpDir, fileName);
     const serialized = typeof content === 'string' ? content : JSON.stringify(content);
@@ -60,13 +60,17 @@ describe('loadConfig', () => {
   });
 
   it('deep-merges nested config objects', async () => {
-    await withTempConfig('merge-config.json', {
-      urlValidation: { timeout: 5000 },
-    }, async (tmpConfig) => {
-      const config = await loadConfig(tmpConfig);
-      expect(config.urlValidation?.timeout).toBe(5000);
-      expect(config.urlValidation?.enabled).toBe(true);
-    });
+    await withTempConfig(
+      'merge-config.json',
+      {
+        urlValidation: { timeout: 5000 },
+      },
+      async (tmpConfig) => {
+        const config = await loadConfig(tmpConfig);
+        expect(config.urlValidation?.timeout).toBe(5000);
+        expect(config.urlValidation?.enabled).toBe(true);
+      }
+    );
   });
 
   it('auto-detects manifest files', async () => {
@@ -86,36 +90,32 @@ describe('loadConfig', () => {
   });
 
   it('preserves user-provided manifestFiles and sourcePatterns', async () => {
-    await withTempConfig('custom-patterns.json', {
-      manifestFiles: ['custom-manifest.json'],
-      sourcePatterns: ['custom/**/*.ts'],
-    }, async (tmpConfig) => {
-      const config = await loadConfig(tmpConfig);
-      expect(config.manifestFiles).toEqual(['custom-manifest.json']);
-      expect(config.sourcePatterns).toEqual(['custom/**/*.ts']);
-    });
+    await withTempConfig(
+      'custom-patterns.json',
+      {
+        manifestFiles: ['custom-manifest.json'],
+        sourcePatterns: ['custom/**/*.ts'],
+      },
+      async (tmpConfig) => {
+        const config = await loadConfig(tmpConfig);
+        expect(config.manifestFiles).toEqual(['custom-manifest.json']);
+        expect(config.sourcePatterns).toEqual(['custom/**/*.ts']);
+      }
+    );
   });
 
   it('loads .cjs config file', async () => {
-    await withTempConfig(
-      'test-config.cjs',
-      'module.exports = { verbose: true, include: ["**/*.md"] };',
-      async (tmpConfig) => {
-        const config = await loadConfig(tmpConfig);
-        expect(config.verbose).toBe(true);
-      },
-    );
+    await withTempConfig('test-config.cjs', 'module.exports = { verbose: true, include: ["**/*.md"] };', async (tmpConfig) => {
+      const config = await loadConfig(tmpConfig);
+      expect(config.verbose).toBe(true);
+    });
   });
 
   it('handles config file with ESM syntax (export default)', async () => {
-    await withTempConfig(
-      'test-esm.js',
-      'export default { verbose: true, include: ["**/*.md"] };',
-      async (tmpConfig) => {
-        const config = await loadConfig(tmpConfig);
-        expect(config.verbose).toBe(true);
-      },
-    );
+    await withTempConfig('test-esm.js', 'export default { verbose: true, include: ["**/*.md"] };', async (tmpConfig) => {
+      const config = await loadConfig(tmpConfig);
+      expect(config.verbose).toBe(true);
+    });
   });
 
   it('handles config file importing defineConfig', async () => {
@@ -125,7 +125,7 @@ describe('loadConfig', () => {
       async (tmpConfig) => {
         const config = await loadConfig(tmpConfig);
         expect(config.verbose).toBe(true);
-      },
+      }
     );
   });
 
@@ -143,25 +143,17 @@ describe('loadConfig', () => {
   });
 
   it('detects ESM from export const pattern', async () => {
-    await withTempConfig(
-      'esm-export-const.js',
-      'export const config = { verbose: true };\nexport default config;',
-      async (tmpConfig) => {
-        const config = await loadConfig(tmpConfig);
-        expect(config.verbose).toBe(true);
-      },
-    );
+    await withTempConfig('esm-export-const.js', 'export const config = { verbose: true };\nexport default config;', async (tmpConfig) => {
+      const config = await loadConfig(tmpConfig);
+      expect(config.verbose).toBe(true);
+    });
   });
 
   it('detects ESM from import ... from pattern', async () => {
-    await withTempConfig(
-      'esm-import.js',
-      'import path from "path";\nexport default { verbose: true };',
-      async (tmpConfig) => {
-        const config = await loadConfig(tmpConfig);
-        expect(config.verbose).toBe(true);
-      },
-    );
+    await withTempConfig('esm-import.js', 'import path from "path";\nexport default { verbose: true };', async (tmpConfig) => {
+      const config = await loadConfig(tmpConfig);
+      expect(config.verbose).toBe(true);
+    });
   });
 
   it('detects ESM from export { ... } pattern', async () => {
@@ -171,30 +163,30 @@ describe('loadConfig', () => {
       async (tmpConfig) => {
         const config = await loadConfig(tmpConfig);
         expect(config.verbose).toBe(true);
-      },
+      }
     );
   });
 
   it('detects .cjs extension and loads CJS config directly', async () => {
-    await withTempConfig(
-      'direct-cjs.cjs',
-      'module.exports = { verbose: true, include: ["**/*.md"] };',
-      async (tmpConfig) => {
-        const config = await loadConfig(tmpConfig);
-        expect(config.verbose).toBe(true);
-      },
-    );
+    await withTempConfig('direct-cjs.cjs', 'module.exports = { verbose: true, include: ["**/*.md"] };', async (tmpConfig) => {
+      const config = await loadConfig(tmpConfig);
+      expect(config.verbose).toBe(true);
+    });
   });
 
   it('merges arrays from user config (overrides, not deep merge)', async () => {
-    await withTempConfig('array-merge.json', {
-      include: ['custom/**/*.md'],
-      exclude: ['draft/**'],
-    }, async (tmpConfig) => {
-      const config = await loadConfig(tmpConfig);
-      expect(config.include).toEqual(['custom/**/*.md']);
-      expect(config.exclude).toEqual(['draft/**']);
-    });
+    await withTempConfig(
+      'array-merge.json',
+      {
+        include: ['custom/**/*.md'],
+        exclude: ['draft/**'],
+      },
+      async (tmpConfig) => {
+        const config = await loadConfig(tmpConfig);
+        expect(config.include).toEqual(['custom/**/*.md']);
+        expect(config.exclude).toEqual(['draft/**']);
+      }
+    );
   });
 
   it('skips undefined user config values during merge', async () => {
@@ -237,13 +229,17 @@ describe('loadConfig', () => {
   });
 
   it('deep-merges nested objects but overwrites null with object values', async () => {
-    await withTempConfig('deep-null.json', {
-      rules: { 'file-path': { severity: 'error' } },
-      urlValidation: null,
-    }, async (tmpConfig) => {
-      const config = await loadConfig(tmpConfig);
-      expect(config.rules?.['file-path']?.severity).toBe('error');
-    });
+    await withTempConfig(
+      'deep-null.json',
+      {
+        rules: { 'file-path': { severity: 'error' } },
+        urlValidation: null,
+      },
+      async (tmpConfig) => {
+        const config = await loadConfig(tmpConfig);
+        expect(config.rules?.['file-path']?.severity).toBe('error');
+      }
+    );
   });
 
   it('falls back to broad source pattern when rootDir has no source dirs', async () => {
@@ -324,13 +320,14 @@ describe('loadConfig', () => {
   });
 
   it('handles mixed ESM+CJS content by checking package.json type', async () => {
-    await withTempConfig('mixed-module.js', [
-      '// Legacy: module.exports = config;',
-      'export default { verbose: true };',
-    ].join('\n'), async (tmpConfig) => {
-      const config = await loadConfig(tmpConfig);
-      expect(config.verbose).toBe(true);
-    });
+    await withTempConfig(
+      'mixed-module.js',
+      ['// Legacy: module.exports = config;', 'export default { verbose: true };'].join('\n'),
+      async (tmpConfig) => {
+        const config = await loadConfig(tmpConfig);
+        expect(config.verbose).toBe(true);
+      }
+    );
   });
 
   it('skips non-directory entries during source detection', async () => {

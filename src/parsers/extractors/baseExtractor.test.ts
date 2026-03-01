@@ -13,12 +13,9 @@ describe('BaseExtractor', () => {
   });
 
   describe('supportsFormat', () => {
-    it.each(['markdown', 'restructuredtext', 'asciidoc', 'plaintext'] as const)(
-      'supports %s',
-      (format) => {
-        expect(extractor.supportsFormat(format)).toBe(true);
-      }
-    );
+    it.each(['markdown', 'restructuredtext', 'asciidoc', 'plaintext'] as const)('supports %s', (format) => {
+      expect(extractor.supportsFormat(format)).toBe(true);
+    });
 
     it('rejects unknown formats', () => {
       expect(extractor.supportsFormat('unknown' as 'markdown')).toBe(false);

@@ -6,8 +6,7 @@ import type { DocFreshnessConfig, Document, Reference, UrlCacheEntry, Validation
 /**
  * Browser-like User-Agent to avoid being blocked by sites that reject bots
  */
-const USER_AGENT =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 /**
  * Domains known to not support HEAD requests properly or have bot detection
@@ -29,13 +28,7 @@ const MAX_URL_CACHE_ENTRIES = 5000;
  */
 function isPrivateHostname(hostname: string): boolean {
   // Block obvious private/reserved hostnames
-  if (
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname === '[::1]' ||
-    hostname === '::1' ||
-    hostname === '0.0.0.0'
-  ) {
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1' || hostname === '0.0.0.0') {
     return true;
   }
 
@@ -54,13 +47,13 @@ function isPrivateIpAddress(value: string): boolean {
     const [a, b] = octets;
 
     if (octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
-    if (a === 10) return true;                         // 10.0.0.0/8
+    if (a === 10) return true; // 10.0.0.0/8
     if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
-    if (a === 192 && b === 168) return true;          // 192.168.0.0/16
-    if (a === 169 && b === 254) return true;          // 169.254.0.0/16
-    if (a === 127) return true;                       // 127.0.0.0/8
-    if (a === 0) return true;                         // 0.0.0.0/8
-    if (a >= 224) return true;                        // Multicast/reserved
+    if (a === 192 && b === 168) return true; // 192.168.0.0/16
+    if (a === 169 && b === 254) return true; // 169.254.0.0/16
+    if (a === 127) return true; // 127.0.0.0/8
+    if (a === 0) return true; // 0.0.0.0/8
+    if (a >= 224) return true; // Multicast/reserved
     return false;
   }
 
@@ -94,11 +87,7 @@ export class UrlValidator {
     this.cache = new Map();
   }
 
-  async validateBatch(
-    references: Reference[],
-    _document: Document,
-    config: DocFreshnessConfig
-  ): Promise<ValidationResult[]> {
+  async validateBatch(references: Reference[], _document: Document, config: DocFreshnessConfig): Promise<ValidationResult[]> {
     if (!config.urlValidation?.enabled) {
       return references.map((ref) => ({
         reference: ref,
@@ -153,12 +142,7 @@ export class UrlValidator {
     return results;
   }
 
-  private async validateUrl(
-    ref: Reference,
-    timeout: number,
-    skipDomains: string[],
-    config: DocFreshnessConfig
-  ): Promise<ValidationResult> {
+  private async validateUrl(ref: Reference, timeout: number, skipDomains: string[], config: DocFreshnessConfig): Promise<ValidationResult> {
     const url = ref.value;
 
     // Skip URLs with template placeholders (${...}, {{...}}, etc.)
@@ -281,9 +265,7 @@ export class UrlValidator {
       const result = {
         valid: false,
         severity: (config.rules?.['external-url']?.severity || 'warning') as 'error' | 'warning' | 'info',
-        message: err.name === 'AbortError'
-          ? `URL timeout: ${url}`
-          : `URL check failed: ${url} (${err.message})`,
+        message: err.name === 'AbortError' ? `URL timeout: ${url}` : `URL check failed: ${url} (${err.message})`,
       };
 
       this.setCacheEntry(url, result);
@@ -309,7 +291,7 @@ export class UrlValidator {
         signal: controller.signal,
         headers: {
           'User-Agent': USER_AGENT,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.5',
         },
         redirect: 'follow',
@@ -332,9 +314,7 @@ export class UrlValidator {
   private isGitHubUrl(url: string): boolean {
     try {
       const urlObj = new URL(url);
-      return urlObj.hostname === 'github.com' ||
-             urlObj.hostname === 'raw.githubusercontent.com' ||
-             urlObj.hostname.endsWith('.github.com');
+      return urlObj.hostname === 'github.com' || urlObj.hostname === 'raw.githubusercontent.com' || urlObj.hostname.endsWith('.github.com');
     } catch {
       return false;
     }

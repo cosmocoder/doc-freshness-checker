@@ -15,12 +15,7 @@ export function pruneOldestEntries<K, V>(map: Map<K, V>, maxEntries: number): vo
 /**
  * Set an entry and enforce a maximum map size.
  */
-export function setWithMaxEntries<K, V>(
-  map: Map<K, V>,
-  key: K,
-  value: V,
-  maxEntries: number
-): void {
+export function setWithMaxEntries<K, V>(map: Map<K, V>, key: K, value: V, maxEntries: number): void {
   map.set(key, value);
   pruneOldestEntries(map, maxEntries);
 }

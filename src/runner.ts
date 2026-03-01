@@ -279,18 +279,14 @@ async function generateReports(
 
       case 'json': {
         const reporter = new JsonReporter();
-        const output = freshnessScores
-          ? reporter.generateWithScores(results, freshnessScores)
-          : reporter.generate(results);
+        const output = freshnessScores ? reporter.generateWithScores(results, freshnessScores) : reporter.generate(results);
         await emitOutput(output, 'JSON');
         break;
       }
 
       case 'markdown': {
         const reporter = new MarkdownReporter();
-        const output = freshnessScores
-          ? reporter.generateWithScores(results, freshnessScores)
-          : reporter.generate(results);
+        const output = freshnessScores ? reporter.generateWithScores(results, freshnessScores) : reporter.generate(results);
         await emitOutput(output, 'Markdown');
         break;
       }

@@ -56,9 +56,7 @@ export class EnhancedReporter {
           report += '**Referenced Code Files:**\n';
           for (const codeFile of codeFiles) {
             const commitInfo = gitTracker?.getFileCommitInfo(codeFile);
-            const commitStr = commitInfo
-              ? ` (last modified: ${new Date(commitInfo.timestamp).toLocaleDateString()})`
-              : '';
+            const commitStr = commitInfo ? ` (last modified: ${new Date(commitInfo.timestamp).toLocaleDateString()})` : '';
             report += `- \`${codeFile}\`${commitStr}\n`;
           }
           report += '\n';

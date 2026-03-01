@@ -56,9 +56,7 @@ describe('IncrementalChecker', () => {
 
   describe('shouldCheck', () => {
     it('returns true for new files not in previous state', async () => {
-      vi.spyOn(fs.promises, 'readFile')
-        .mockResolvedValueOnce(JSON.stringify({}))
-        .mockResolvedValueOnce('file content');
+      vi.spyOn(fs.promises, 'readFile').mockResolvedValueOnce(JSON.stringify({})).mockResolvedValueOnce('file content');
 
       await checker.loadState();
       expect(await checker.shouldCheck('/project/new.md')).toBe(true);
@@ -77,9 +75,7 @@ describe('IncrementalChecker', () => {
     });
 
     it('returns true when file read fails', async () => {
-      vi.spyOn(fs.promises, 'readFile')
-        .mockResolvedValueOnce(JSON.stringify({}))
-        .mockRejectedValueOnce(new Error('read error'));
+      vi.spyOn(fs.promises, 'readFile').mockResolvedValueOnce(JSON.stringify({})).mockRejectedValueOnce(new Error('read error'));
 
       await checker.loadState();
       expect(await checker.shouldCheck('/project/broken.md')).toBe(true);

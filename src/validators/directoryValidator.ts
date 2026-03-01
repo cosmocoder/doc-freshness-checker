@@ -3,11 +3,7 @@ import path from 'path';
 import { isIllustrativePath, compilePatterns } from '../utils/illustrativePatterns.js';
 import { similarityRatio } from '../utils/similarity.js';
 import { isWithinRoot, resolveDocumentDir, resolveProjectRoot } from '../utils/pathSecurity.js';
-import {
-  createIllustrativeSkippedResult,
-  getRuleSeverity,
-  severityForIllustrative,
-} from '../utils/validation.js';
+import { createIllustrativeSkippedResult, getRuleSeverity, severityForIllustrative } from '../utils/validation.js';
 import type { DocFreshnessConfig, Document, Reference, ValidationResult } from '../types.js';
 
 interface CacheEntry {
@@ -36,16 +32,10 @@ export class DirectoryValidator {
    */
   private initCustomPatterns(config: DocFreshnessConfig): void {
     const configPatterns = config.rules?.['directory-structure']?.illustrativePatterns;
-    this.customPatterns = configPatterns && configPatterns.length > 0
-      ? compilePatterns(configPatterns)
-      : [];
+    this.customPatterns = configPatterns && configPatterns.length > 0 ? compilePatterns(configPatterns) : [];
   }
 
-  async validateBatch(
-    references: Reference[],
-    document: Document,
-    config: DocFreshnessConfig
-  ): Promise<ValidationResult[]> {
+  async validateBatch(references: Reference[], document: Document, config: DocFreshnessConfig): Promise<ValidationResult[]> {
     this.initCustomPatterns(config);
     const results: ValidationResult[] = [];
     const skipIllustrative = config.rules?.['directory-structure']?.skipIllustrative !== false;
@@ -123,9 +113,7 @@ export class DirectoryValidator {
         reference: ref,
         valid: false,
         severity: severityForIllustrative(isIllustrative, baseSeverity),
-        message: isIllustrative
-          ? `Path escapes project root (illustrative): ${itemPath}`
-          : `Path escapes project root: ${itemPath}`,
+        message: isIllustrative ? `Path escapes project root (illustrative): ${itemPath}` : `Path escapes project root: ${itemPath}`,
         suggestion: null,
       };
     }
@@ -139,9 +127,7 @@ export class DirectoryValidator {
       reference: ref,
       valid: false,
       severity: severityForIllustrative(isIllustrative, baseSeverity),
-      message: isIllustrative
-        ? `Directory/file not found (illustrative): ${itemPath}`
-        : `Directory/file not found: ${itemPath}`,
+      message: isIllustrative ? `Directory/file not found (illustrative): ${itemPath}` : `Directory/file not found: ${itemPath}`,
       suggestion,
     };
   }

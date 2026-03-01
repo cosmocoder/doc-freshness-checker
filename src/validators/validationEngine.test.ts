@@ -32,9 +32,7 @@ describe('ValidationEngine', () => {
   it('validates references using registered validators', async () => {
     const engine = new ValidationEngine(config);
     const ref = makeRef('file-path', './file.ts');
-    engine.registerValidator('file-path', new StubValidator([
-      { reference: ref, valid: true },
-    ]));
+    engine.registerValidator('file-path', new StubValidator([{ reference: ref, valid: true }]));
 
     const results = await engine.validate([makeDoc([ref])]);
     expect(results.summary.total).toBe(1);
@@ -43,19 +41,17 @@ describe('ValidationEngine', () => {
 
   it('counts errors, warnings, and skipped correctly', async () => {
     const engine = new ValidationEngine(config);
-    const refs = [
-      makeRef('file-path', 'a.ts'),
-      makeRef('file-path', 'b.ts'),
-      makeRef('file-path', 'c.ts'),
-      makeRef('file-path', 'd.ts'),
-    ];
+    const refs = [makeRef('file-path', 'a.ts'), makeRef('file-path', 'b.ts'), makeRef('file-path', 'c.ts'), makeRef('file-path', 'd.ts')];
 
-    engine.registerValidator('file-path', new StubValidator([
-      { reference: refs[0], valid: true },
-      { reference: refs[1], valid: false, severity: 'error', message: 'not found' },
-      { reference: refs[2], valid: false, severity: 'warning', message: 'stale' },
-      { reference: refs[3], valid: true, skipped: true },
-    ]));
+    engine.registerValidator(
+      'file-path',
+      new StubValidator([
+        { reference: refs[0], valid: true },
+        { reference: refs[1], valid: false, severity: 'error', message: 'not found' },
+        { reference: refs[2], valid: false, severity: 'warning', message: 'stale' },
+        { reference: refs[3], valid: true, skipped: true },
+      ])
+    );
 
     const results = await engine.validate([makeDoc(refs)]);
     expect(results.summary).toMatchObject({ total: 4, valid: 1, errors: 1, warnings: 1, skipped: 1 });
@@ -82,7 +78,9 @@ describe('ValidationEngine', () => {
   it('handles validator errors gracefully', async () => {
     const engine = new ValidationEngine({ ...config, verbose: false });
     const failValidator: BaseValidator = {
-      async validateBatch() { throw new Error('validator crashed'); },
+      async validateBatch() {
+        throw new Error('validator crashed');
+      },
     };
     engine.registerValidator('file-path', failValidator);
 
@@ -93,9 +91,7 @@ describe('ValidationEngine', () => {
   it('treats info-level issues as valid', async () => {
     const engine = new ValidationEngine(config);
     const ref = makeRef('file-path', 'a.ts');
-    engine.registerValidator('file-path', new StubValidator([
-      { reference: ref, valid: false, severity: 'info', message: 'info only' },
-    ]));
+    engine.registerValidator('file-path', new StubValidator([{ reference: ref, valid: false, severity: 'info', message: 'info only' }]));
 
     const results = await engine.validate([makeDoc([ref])]);
     expect(results.summary.valid).toBe(1);

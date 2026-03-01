@@ -36,7 +36,8 @@ describe('UrlValidator', () => {
         makeRef('https://api.example.com/{{path}}/data'),
         makeRef('https://api.example.com/<% url %>'),
       ],
-      doc, enabledConfig,
+      doc,
+      enabledConfig
     );
     results.forEach((r) => {
       expect(r.skipped).toBe(true);
@@ -48,18 +49,14 @@ describe('UrlValidator', () => {
     const config: DocFreshnessConfig = { urlValidation: { enabled: true, skipDomains: ['example.com'] } };
     const results = await validator.validateBatch(
       [makeRef('https://example.com/path'), makeRef('https://api.example.com/path')],
-      doc, config,
+      doc,
+      config
     );
     results.forEach((r) => expect(r.skipped).toBe(true));
   });
 
   describe('SSRF protection - private hostnames', () => {
-    it.each([
-      'http://localhost:3000',
-      'http://127.0.0.1/admin',
-      'http://0.0.0.0/',
-      'http://[::1]/',
-    ])('skips %s', async (url) => {
+    it.each(['http://localhost:3000', 'http://127.0.0.1/admin', 'http://0.0.0.0/', 'http://[::1]/'])('skips %s', async (url) => {
       const results = await validator.validateBatch([makeRef(url)], doc, enabledConfig);
       expect(results[0].skipped).toBe(true);
     });
@@ -115,9 +112,7 @@ describe('UrlValidator', () => {
 
     it('uses GET directly for known GET-only domains', async () => {
       fetchMock.mockResponseOnce('', { status: 200 });
-      const results = await validator.validateBatch(
-        [makeRef('https://marketplace.visualstudio.com/items?q=test')], doc, enabledConfig,
-      );
+      const results = await validator.validateBatch([makeRef('https://marketplace.visualstudio.com/items?q=test')], doc, enabledConfig);
       expect(results[0].valid).toBe(true);
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(fetchMock.mock.calls[0][1]?.method).toBe('GET');
@@ -133,9 +128,7 @@ describe('UrlValidator', () => {
     it('treats GitHub 404 as potentially valid (private repo)', async () => {
       fetchMock.mockResponseOnce('', { status: 404 });
       fetchMock.mockResponseOnce('', { status: 404 });
-      const results = await validator.validateBatch(
-        [makeRef('https://github.com/owner/private-repo')], doc, enabledConfig,
-      );
+      const results = await validator.validateBatch([makeRef('https://github.com/owner/private-repo')], doc, enabledConfig);
       expect(results[0].valid).toBe(true);
       expect(results[0].message).toContain('private');
     });
@@ -231,7 +224,9 @@ describe('UrlValidator', () => {
       fetchMock.mockResponseOnce('', { status: 404 });
       fetchMock.mockResponseOnce('', { status: 404 });
       const results = await validator.validateBatch(
-        [makeRef('https://raw.githubusercontent.com/owner/repo/main/file.txt')], doc, enabledConfig,
+        [makeRef('https://raw.githubusercontent.com/owner/repo/main/file.txt')],
+        doc,
+        enabledConfig
       );
       expect(results[0].valid).toBe(true);
     });
@@ -239,9 +234,7 @@ describe('UrlValidator', () => {
     it('treats subdomain.github.com 404 as potentially valid', async () => {
       fetchMock.mockResponseOnce('', { status: 404 });
       fetchMock.mockResponseOnce('', { status: 404 });
-      const results = await validator.validateBatch(
-        [makeRef('https://docs.github.com/missing')], doc, enabledConfig,
-      );
+      const results = await validator.validateBatch([makeRef('https://docs.github.com/missing')], doc, enabledConfig);
       expect(results[0].valid).toBe(true);
     });
   });
@@ -267,10 +260,9 @@ describe('UrlValidator', () => {
       });
 
       fetchMock.mockResponseOnce('', { status: 200 });
-      const results = await validator.validateBatch(
-        [makeRef('https://expires.example.com/')], doc,
-        { urlValidation: { enabled: true, cacheSeconds: 1 } },
-      );
+      const results = await validator.validateBatch([makeRef('https://expires.example.com/')], doc, {
+        urlValidation: { enabled: true, cacheSeconds: 1 },
+      });
       expect(results[0].valid).toBe(true);
       expect(fetchMock).toHaveBeenCalledTimes(2);
     });
@@ -281,9 +273,7 @@ describe('UrlValidator', () => {
       vi.mocked(dns.lookup).mockImplementationOnce((async () => {
         return [{ address: '127.0.0.1', family: 4 }];
       }) as unknown as typeof dns.lookup);
-      const results = await validator.validateBatch(
-        [makeRef('https://public.example.com/api')], doc, enabledConfig,
-      );
+      const results = await validator.validateBatch([makeRef('https://public.example.com/api')], doc, enabledConfig);
       expect(results[0].skipped).toBe(true);
       expect(results[0].message).toContain('resolves to private');
     });
@@ -303,9 +293,7 @@ describe('UrlValidator', () => {
   describe('response body draining', () => {
     it('handles HEAD response with 200 ok', async () => {
       fetchMock.mockResponseOnce('body content', { status: 200 });
-      const results = await validator.validateBatch(
-        [makeRef('https://body-drain.example.com/')], doc, enabledConfig,
-      );
+      const results = await validator.validateBatch([makeRef('https://body-drain.example.com/')], doc, enabledConfig);
       expect(results[0].valid).toBe(true);
       expect(results[0].statusCode).toBe(200);
     });

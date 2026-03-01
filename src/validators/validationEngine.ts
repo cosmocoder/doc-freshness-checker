@@ -1,11 +1,4 @@
-import type {
-  BaseValidator,
-  DocFreshnessConfig,
-  Document,
-  DocumentIssues,
-  Reference,
-  ValidationResults,
-} from '../types.js';
+import type { BaseValidator, DocFreshnessConfig, Document, DocumentIssues, Reference, ValidationResults } from '../types.js';
 
 /**
  * Orchestrates validation of extracted references
@@ -118,10 +111,7 @@ export class ValidationEngine {
     return 'valid';
   }
 
-  private incrementSummary(
-    results: ValidationResults,
-    bucket: 'valid' | 'error' | 'warning' | 'skipped'
-  ): void {
+  private incrementSummary(results: ValidationResults, bucket: 'valid' | 'error' | 'warning' | 'skipped'): void {
     results.summary.total++;
     switch (bucket) {
       case 'valid':

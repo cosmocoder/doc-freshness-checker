@@ -86,11 +86,7 @@ export class FreshnessScorer {
   /**
    * Calculate score based on time difference between doc and code updates
    */
-  private calculateGitTimeDeltaScore(
-    doc: Document,
-    gitTracker: GitChangeTracker | null,
-    graph: CodeDocGraph | null
-  ): number {
+  private calculateGitTimeDeltaScore(doc: Document, gitTracker: GitChangeTracker | null, graph: CodeDocGraph | null): number {
     if (!gitTracker?.isGitRepo()) {
       return 75; // Default score for non-git repos
     }
@@ -133,11 +129,7 @@ export class FreshnessScorer {
   /**
    * Calculate score based on how frequently referenced code changes
    */
-  private calculateChangeFrequencyScore(
-    doc: Document,
-    gitTracker: GitChangeTracker | null,
-    graph: CodeDocGraph | null
-  ): number {
+  private calculateChangeFrequencyScore(doc: Document, gitTracker: GitChangeTracker | null, graph: CodeDocGraph | null): number {
     if (!gitTracker?.isGitRepo()) {
       return 75;
     }
@@ -161,9 +153,7 @@ export class FreshnessScorer {
       return 100;
     }
 
-    const docSymbols = new Set(
-      doc.references.filter((r) => r.type === 'code-pattern').map((r) => r.value)
-    );
+    const docSymbols = new Set(doc.references.filter((r) => r.type === 'code-pattern').map((r) => r.value));
 
     let totalSymbols = 0;
     let documentedSymbols = 0;
@@ -207,15 +197,10 @@ export class FreshnessScorer {
     gitTracker: GitChangeTracker | null,
     graph: CodeDocGraph | null
   ): ProjectScores {
-    const docScores = documents.map((doc) =>
-      this.calculateDocScore(doc, validationResults, gitTracker, graph)
-    );
+    const docScores = documents.map((doc) => this.calculateDocScore(doc, validationResults, gitTracker, graph));
 
     // Calculate overall project score
-    const avgScore =
-      docScores.length > 0
-        ? docScores.reduce((sum, d) => sum + d.totalScore, 0) / docScores.length
-        : 100;
+    const avgScore = docScores.length > 0 ? docScores.reduce((sum, d) => sum + d.totalScore, 0) / docScores.length : 100;
 
     return {
       projectScore: Math.round(avgScore),

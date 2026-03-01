@@ -60,10 +60,7 @@ export class VersionExtractor extends BaseExtractor {
     const techPattern = this.technologies.join('|');
 
     // Pattern: "Technology 19.x" or "Technology 19.2.3"
-    const pattern = new RegExp(
-      `\\b(${techPattern})\\s+v?(\\d+(?:\\.\\d+)?(?:\\.\\d+)?(?:\\.x)?)\\b`,
-      'gi'
-    );
+    const pattern = new RegExp(`\\b(${techPattern})\\s+v?(\\d+(?:\\.\\d+)?(?:\\.\\d+)?(?:\\.x)?)\\b`, 'gi');
 
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(document.content)) !== null) {

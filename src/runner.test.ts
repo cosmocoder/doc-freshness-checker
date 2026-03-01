@@ -64,7 +64,7 @@ describe('runner', () => {
 
   afterAll(async () => {
     await Promise.all(
-      transientCacheDirs.map((dir) => fs.promises.rm(path.join(process.cwd(), dir), { recursive: true, force: true }).catch(() => {})),
+      transientCacheDirs.map((dir) => fs.promises.rm(path.join(process.cwd(), dir), { recursive: true, force: true }).catch(() => {}))
     );
   });
 
@@ -91,7 +91,10 @@ describe('runner', () => {
       cache: { enabled: true, dir: '.doc-freshness-cache/runner-test' },
       clearCache: true,
     });
-    const exists = await fs.promises.access(cacheDir).then(() => true).catch(() => false);
+    const exists = await fs.promises
+      .access(cacheDir)
+      .then(() => true)
+      .catch(() => false);
     expect(exists).toBe(false);
   });
 
@@ -134,7 +137,9 @@ describe('runner', () => {
     it('logs cache cleared', async () => {
       const spy = captureLog();
       await run({
-        ...baseConfig, verbose: true, clearCache: true,
+        ...baseConfig,
+        verbose: true,
+        clearCache: true,
         cache: { enabled: true, dir: '.doc-freshness-cache/rv-clear' },
       });
       expect(spy.mock.calls.flat().join('\n')).toContain('Cache cleared');
@@ -151,7 +156,7 @@ describe('runner', () => {
     it('generates json to stdout without outputPath', async () => {
       const spy = captureLog();
       await run({ ...baseConfig, reporters: ['json'] });
-      const jsonStr = spy.mock.calls.flat().find(a => typeof a === 'string' && a.startsWith('{'));
+      const jsonStr = spy.mock.calls.flat().find((a) => typeof a === 'string' && a.startsWith('{'));
       expect(JSON.parse(jsonStr!)).toHaveProperty('summary');
     });
 
@@ -187,7 +192,11 @@ describe('runner', () => {
     it.each(['json', 'markdown', 'enhanced'] as ReporterType[])('logs output path for %s in verbose mode', async (reporter) => {
       await withOutputFile(cacheRoot, `test-v-${reporter}.out`, async (outputPath) => {
         const cfg: DocFreshnessConfig = {
-          ...baseConfig, reporters: [reporter], outputPath, verbose: true, cache: { enabled: false },
+          ...baseConfig,
+          reporters: [reporter],
+          outputPath,
+          verbose: true,
+          cache: { enabled: false },
         };
         if (reporter === 'enhanced') cfg.graph = { enabled: true };
         const spy = captureLog();
@@ -203,9 +212,10 @@ describe('runner', () => {
       const cacheDir = '.doc-freshness-cache/runner-graph';
       try {
         await run({ ...baseConfig, graph: { enabled: true }, cache: { enabled: true, dir: cacheDir } });
-        const exists = await fs.promises.access(
-          path.join(process.cwd(), cacheDir, 'graph-cache.json')
-        ).then(() => true).catch(() => false);
+        const exists = await fs.promises
+          .access(path.join(process.cwd(), cacheDir, 'graph-cache.json'))
+          .then(() => true)
+          .catch(() => false);
         expect(exists).toBe(true);
       } finally {
         await fs.promises.rm(path.join(process.cwd(), cacheDir), { recursive: true, force: true }).catch(() => {});
@@ -216,8 +226,12 @@ describe('runner', () => {
       await withOutputFile(cacheRoot, 'test-scored.json', async (outputPath) => {
         captureLog();
         await run({
-          ...baseConfig, reporters: ['json'], outputPath,
-          graph: { enabled: true }, freshnessScoring: { enabled: true }, cache: { enabled: false },
+          ...baseConfig,
+          reporters: ['json'],
+          outputPath,
+          graph: { enabled: true },
+          freshnessScoring: { enabled: true },
+          cache: { enabled: false },
         });
         expect(JSON.parse(await fs.promises.readFile(outputPath, 'utf-8'))).toHaveProperty('summary');
       });
@@ -227,8 +241,12 @@ describe('runner', () => {
       await withOutputFile(cacheRoot, 'test-scored.md', async (outputPath) => {
         captureLog();
         await run({
-          ...baseConfig, reporters: ['markdown'], outputPath,
-          graph: { enabled: true }, freshnessScoring: { enabled: true }, cache: { enabled: false },
+          ...baseConfig,
+          reporters: ['markdown'],
+          outputPath,
+          graph: { enabled: true },
+          freshnessScoring: { enabled: true },
+          cache: { enabled: false },
         });
         expect(await fs.promises.readFile(outputPath, 'utf-8')).toContain('Freshness Scores');
       });
@@ -238,8 +256,12 @@ describe('runner', () => {
       await withOutputFile(cacheRoot, 'test-enhanced-scored.md', async (outputPath) => {
         captureLog();
         await run({
-          ...baseConfig, reporters: ['enhanced'], outputPath,
-          graph: { enabled: true }, freshnessScoring: { enabled: true }, cache: { enabled: false },
+          ...baseConfig,
+          reporters: ['enhanced'],
+          outputPath,
+          graph: { enabled: true },
+          freshnessScoring: { enabled: true },
+          cache: { enabled: false },
         });
         expect(await fs.promises.readFile(outputPath, 'utf-8')).toContain('Documentation Freshness Scan Report');
       });
@@ -250,7 +272,9 @@ describe('runner', () => {
     it('filters changed files with verbose logging', async () => {
       const spy = captureLog();
       await run({
-        ...baseConfig, incremental: { enabled: true }, verbose: true,
+        ...baseConfig,
+        incremental: { enabled: true },
+        verbose: true,
         cache: { dir: '.doc-freshness-cache/runner-inc' },
       });
       expect(spy.mock.calls.flat().join('\n')).toContain('Incremental');
@@ -342,7 +366,7 @@ describe('runner', () => {
         freshnessScoring: { enabled: true },
         cache: { enabled: false },
       });
-      const jsonStr = spy.mock.calls.flat().find(a => typeof a === 'string' && a.startsWith('{'));
+      const jsonStr = spy.mock.calls.flat().find((a) => typeof a === 'string' && a.startsWith('{'));
       expect(JSON.parse(jsonStr!)).toHaveProperty('summary');
     });
 

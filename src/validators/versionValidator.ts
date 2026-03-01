@@ -180,11 +180,7 @@ export class VersionValidator {
     }
   }
 
-  async validateBatch(
-    references: Reference[],
-    _document: Document,
-    config: DocFreshnessConfig
-  ): Promise<ValidationResult[]> {
+  async validateBatch(references: Reference[], _document: Document, config: DocFreshnessConfig): Promise<ValidationResult[]> {
     await this.loadPackageVersions(config);
 
     const results: ValidationResult[] = [];

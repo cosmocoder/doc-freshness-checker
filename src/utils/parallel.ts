@@ -3,10 +3,7 @@
  * Individual task failures don't abort remaining tasks --
  * all rejections are collected and re-thrown via Promise.allSettled + Promise.all.
  */
-export async function runParallel<T>(
-  tasks: Array<() => Promise<T>>,
-  concurrency: number = 10
-): Promise<T[]> {
+export async function runParallel<T>(tasks: Array<() => Promise<T>>, concurrency: number = 10): Promise<T[]> {
   const results: Promise<T>[] = [];
   const executing: Set<Promise<void>> = new Set();
 
@@ -14,9 +11,14 @@ export async function runParallel<T>(
     const promise = task();
     results.push(promise);
 
-    const cleanup = promise.then(() => {}, () => {}).then(() => {
-      executing.delete(cleanup);
-    });
+    const cleanup = promise
+      .then(
+        () => {},
+        () => {}
+      )
+      .then(() => {
+        executing.delete(cleanup);
+      });
     executing.add(cleanup);
 
     if (executing.size >= concurrency) {

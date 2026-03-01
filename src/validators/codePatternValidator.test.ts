@@ -2,7 +2,16 @@ import { CodePatternValidator } from './codePatternValidator.js';
 import type { DocFreshnessConfig, Document, Reference } from '../types.js';
 
 function makeRef(value: string, overrides: Partial<Reference> = {}): Reference {
-  return { type: 'code-pattern', value, lineNumber: 1, raw: value, sourceFile: 'doc.md', kind: 'class', language: 'typescript', ...overrides };
+  return {
+    type: 'code-pattern',
+    value,
+    lineNumber: 1,
+    raw: value,
+    sourceFile: 'doc.md',
+    kind: 'class',
+    language: 'typescript',
+    ...overrides,
+  };
 }
 
 const doc: Document = { path: 'doc.md', absolutePath: '/project/doc.md', content: '', format: 'markdown', lines: [], references: [] };
@@ -16,43 +25,27 @@ describe('CodePatternValidator', () => {
 
   it('finds symbols that exist in source code', async () => {
     const validator = new CodePatternValidator();
-    const results = await validator.validateBatch(
-      [makeRef('CodePatternValidator')],
-      doc,
-      config
-    );
+    const results = await validator.validateBatch([makeRef('CodePatternValidator')], doc, config);
     expect(results[0].valid).toBe(true);
     expect(results[0].foundIn).toBeDefined();
   });
 
   it('reports missing symbols with suggestions', async () => {
     const validator = new CodePatternValidator();
-    const results = await validator.validateBatch(
-      [makeRef('CodePatternValidato')],
-      doc,
-      config
-    );
+    const results = await validator.validateBatch([makeRef('CodePatternValidato')], doc, config);
     expect(results[0].valid).toBe(false);
     expect(results[0].suggestion).toContain('CodePatternValidator');
   });
 
   it('skips illustrative symbols', async () => {
     const validator = new CodePatternValidator();
-    const results = await validator.validateBatch(
-      [makeRef('YourComponent'), makeRef('FooBar')],
-      doc,
-      config
-    );
+    const results = await validator.validateBatch([makeRef('YourComponent'), makeRef('FooBar')], doc, config);
     expect(results.every((r) => r.skipped)).toBe(true);
   });
 
   it('skips pre-marked illustrative references', async () => {
     const validator = new CodePatternValidator();
-    const results = await validator.validateBatch(
-      [makeRef('SomeRealName', { isIllustrative: true })],
-      doc,
-      config
-    );
+    const results = await validator.validateBatch([makeRef('SomeRealName', { isIllustrative: true })], doc, config);
     expect(results[0].skipped).toBe(true);
   });
 
@@ -83,10 +76,7 @@ describe('CodePatternValidator', () => {
 
   it('reports not-found symbol without suggestion when no similar exists', async () => {
     const validator = new CodePatternValidator();
-    const results = await validator.validateBatch(
-      [makeRef('ZzzVeryUniqueName12345')],
-      doc, config,
-    );
+    const results = await validator.validateBatch([makeRef('ZzzVeryUniqueName12345')], doc, config);
     expect(results[0].valid).toBe(false);
     expect(results[0].suggestion).toBeNull();
     expect(results[0].message).toContain('Code pattern not found');

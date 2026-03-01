@@ -137,9 +137,7 @@ describe('DirectoryValidator', () => {
 
   it('returns null suggestion when parent dir does not exist', async () => {
     const validator = new DirectoryValidator();
-    const results = await validator.validateBatch(
-      [makeRef('zzznope/xyzabc123/deep/child')], doc, config,
-    );
+    const results = await validator.validateBatch([makeRef('zzznope/xyzabc123/deep/child')], doc, config);
     expect(results[0].valid).toBe(false);
     expect(results[0].suggestion).toBeNull();
   });
@@ -150,9 +148,7 @@ describe('DirectoryValidator', () => {
       ...config,
       rules: { 'directory-structure': { enabled: true, skipIllustrative: false } },
     };
-    const results = await validator.validateBatch(
-      [makeRef('ExampleProject/nonexistent-file-zzz.ts')], doc, noSkipConfig,
-    );
+    const results = await validator.validateBatch([makeRef('ExampleProject/nonexistent-file-zzz.ts')], doc, noSkipConfig);
     expect(results[0].valid).toBe(false);
     expect(results[0].message).toContain('illustrative');
   });
@@ -163,9 +159,7 @@ describe('DirectoryValidator', () => {
       ...config,
       rules: { 'directory-structure': { enabled: true, skipIllustrative: false } },
     };
-    const results = await validator.validateBatch(
-      [makeRef('../../../../etc/YourProject')], doc, noSkipConfig,
-    );
+    const results = await validator.validateBatch([makeRef('../../../../etc/YourProject')], doc, noSkipConfig);
     expect(results[0].valid).toBe(false);
     expect(results[0].message).toContain('escapes project root');
   });

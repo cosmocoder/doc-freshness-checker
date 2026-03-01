@@ -11,30 +11,11 @@ export { DEFAULT_CONFIG };
 // Create a require function for loading CJS modules
 const require = createRequire(import.meta.url);
 
-const MANIFEST_CANDIDATES = [
-  'package.json',
-  'requirements.txt',
-  'pyproject.toml',
-  'go.mod',
-  'Cargo.toml',
-  'pom.xml',
-  'build.gradle',
-];
+const MANIFEST_CANDIDATES = ['package.json', 'requirements.txt', 'pyproject.toml', 'go.mod', 'Cargo.toml', 'pom.xml', 'build.gradle'];
 
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.java'];
 const SOURCE_GLOB = `**/*.{${SOURCE_EXTENSIONS.map((ext) => ext.slice(1)).join(',')}}`;
-const SKIP_DIRS = new Set([
-  'node_modules',
-  '.git',
-  'dist',
-  'build',
-  'coverage',
-  '.next',
-  '.nuxt',
-  '__pycache__',
-  'vendor',
-  'target',
-]);
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.nuxt', '__pycache__', 'vendor', 'target']);
 
 /**
  * Load and merge configuration
@@ -61,9 +42,7 @@ export async function loadConfig(configPath?: string): Promise<DocFreshnessConfi
       userConfig = loadCjsConfig(fullPath);
     } else {
       const content = await fs.promises.readFile(fullPath, 'utf-8');
-      userConfig = detectModuleType(content, fullPath)
-        ? await loadESMConfig(content, fullPath)
-        : loadCjsConfig(fullPath);
+      userConfig = detectModuleType(content, fullPath) ? await loadESMConfig(content, fullPath) : loadCjsConfig(fullPath);
     }
 
     const merged = mergeConfig(DEFAULT_CONFIG, userConfig);
@@ -87,10 +66,7 @@ async function loadESMConfig(content: string, filePath: string): Promise<DocFres
   const transformedContent = transformConfigContent(content);
 
   const tempDir = path.join(path.dirname(filePath), '.doc-freshness-cache');
-  const tempFile = path.join(
-    tempDir,
-    `temp-config-${Date.now()}-${crypto.randomUUID()}.mjs`
-  );
+  const tempFile = path.join(tempDir, `temp-config-${Date.now()}-${crypto.randomUUID()}.mjs`);
 
   try {
     await fs.promises.mkdir(tempDir, { recursive: true });
@@ -127,18 +103,18 @@ function detectModuleType(content: string, filePath: string): boolean {
 
   // Check for ESM syntax indicators
   const esmPatterns = [
-    /^\s*export\s+default\s/m,           // export default
-    /^\s*export\s+\{/m,                   // export { ... }
-    /^\s*export\s+(const|let|var|function|class)\s/m,  // export const/let/var/function/class
-    /^\s*import\s+.*\s+from\s+['"].*['"]/m,  // import ... from '...'
-    /^\s*import\s+['"].*['"]/m,           // import '...'
+    /^\s*export\s+default\s/m, // export default
+    /^\s*export\s+\{/m, // export { ... }
+    /^\s*export\s+(const|let|var|function|class)\s/m, // export const/let/var/function/class
+    /^\s*import\s+.*\s+from\s+['"].*['"]/m, // import ... from '...'
+    /^\s*import\s+['"].*['"]/m, // import '...'
   ];
 
   // Check for CommonJS syntax indicators
   const cjsPatterns = [
-    /\bmodule\.exports\s*=/,              // module.exports =
-    /\bexports\.\w+\s*=/,                 // exports.foo =
-    /\brequire\s*\(\s*['"].*['"]\s*\)/,   // require('...')
+    /\bmodule\.exports\s*=/, // module.exports =
+    /\bexports\.\w+\s*=/, // exports.foo =
+    /\brequire\s*\(\s*['"].*['"]\s*\)/, // require('...')
   ];
 
   const hasESM = esmPatterns.some((pattern) => pattern.test(content));
@@ -170,12 +146,7 @@ function detectModuleType(content: string, filePath: string): boolean {
  * Find configuration file in common locations
  */
 function findConfigFile(): string | null {
-  const candidates = [
-    '.doc-freshness.config.js',
-    '.doc-freshness.config.json',
-    'doc-freshness.config.js',
-    'doc-freshness.config.json',
-  ];
+  const candidates = ['.doc-freshness.config.js', '.doc-freshness.config.json', 'doc-freshness.config.js', 'doc-freshness.config.json'];
 
   for (const candidate of candidates) {
     if (fs.existsSync(path.resolve(process.cwd(), candidate))) {
@@ -255,8 +226,7 @@ function detectSourcePatterns(rootDir: string): string[] {
  * Check if a directory contains source files (non-recursively, just top level or one level deep)
  */
 function containsSourceFiles(dirPath: string, extensions: string[]): boolean {
-  const isSourceExt = (name: string) =>
-    extensions.includes(path.extname(name).toLowerCase());
+  const isSourceExt = (name: string) => extensions.includes(path.extname(name).toLowerCase());
 
   try {
     const entries = fs.readdirSync(dirPath, { withFileTypes: true });
@@ -300,10 +270,7 @@ function mergeConfig(defaults: DocFreshnessConfig, user: DocFreshnessConfig): Do
       typeof defaultValue === 'object' &&
       defaultValue !== null
     ) {
-      result[key] = mergeConfig(
-        defaultValue as DocFreshnessConfig,
-        userValue as DocFreshnessConfig
-      );
+      result[key] = mergeConfig(defaultValue as DocFreshnessConfig, userValue as DocFreshnessConfig);
     } else {
       result[key] = userValue;
     }

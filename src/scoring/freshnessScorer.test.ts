@@ -87,10 +87,12 @@ describe('FreshnessScorer', () => {
     it('only counts error-severity issues as invalid (ignores warnings)', () => {
       const doc = makeDoc('doc.md', [makeRef('file-path', 'a'), makeRef('file-path', 'b')]);
       const results: ValidationResults = {
-        documents: [{
-          path: 'doc.md',
-          issues: [{ reference: makeRef('file-path', 'b'), valid: false, severity: 'warning', message: 'stale' }],
-        }],
+        documents: [
+          {
+            path: 'doc.md',
+            issues: [{ reference: makeRef('file-path', 'b'), valid: false, severity: 'warning', message: 'stale' }],
+          },
+        ],
         summary: { total: 2, valid: 1, errors: 0, warnings: 1, skipped: 0 },
       };
       const score = scorer.calculateDocScore(doc, results, null, null);
@@ -100,13 +102,15 @@ describe('FreshnessScorer', () => {
     it('returns 0 when all references are errors', () => {
       const doc = makeDoc('doc.md', [makeRef('file-path', 'a'), makeRef('file-path', 'b')]);
       const results: ValidationResults = {
-        documents: [{
-          path: 'doc.md',
-          issues: [
-            { reference: makeRef('file-path', 'a'), valid: false, severity: 'error', message: 'missing' },
-            { reference: makeRef('file-path', 'b'), valid: false, severity: 'error', message: 'missing' },
-          ],
-        }],
+        documents: [
+          {
+            path: 'doc.md',
+            issues: [
+              { reference: makeRef('file-path', 'a'), valid: false, severity: 'error', message: 'missing' },
+              { reference: makeRef('file-path', 'b'), valid: false, severity: 'error', message: 'missing' },
+            ],
+          },
+        ],
         summary: { total: 2, valid: 0, errors: 2, warnings: 0, skipped: 0 },
       };
       const score = scorer.calculateDocScore(doc, results, null, null);
@@ -117,13 +121,15 @@ describe('FreshnessScorer', () => {
     it('handles mixed errors and warnings', () => {
       const doc = makeDoc('doc.md', [makeRef('file-path', 'a'), makeRef('file-path', 'b'), makeRef('file-path', 'c')]);
       const results: ValidationResults = {
-        documents: [{
-          path: 'doc.md',
-          issues: [
-            { reference: makeRef('file-path', 'a'), valid: false, severity: 'error', message: 'missing' },
-            { reference: makeRef('file-path', 'b'), valid: false, severity: 'warning', message: 'stale' },
-          ],
-        }],
+        documents: [
+          {
+            path: 'doc.md',
+            issues: [
+              { reference: makeRef('file-path', 'a'), valid: false, severity: 'error', message: 'missing' },
+              { reference: makeRef('file-path', 'b'), valid: false, severity: 'warning', message: 'stale' },
+            ],
+          },
+        ],
         summary: { total: 3, valid: 1, errors: 1, warnings: 1, skipped: 0 },
       };
       const score = scorer.calculateDocScore(doc, results, null, null);
@@ -167,8 +173,7 @@ describe('FreshnessScorer', () => {
 
     it('returns 75 when referenced code files are not in git', () => {
       const tracker = makeMockGitTracker({
-        getFileCommitInfo: (filePath: string) =>
-          filePath === 'doc.md' ? { hash: 'abc', timestamp: Date.now(), message: 'update' } : null,
+        getFileCommitInfo: (filePath: string) => (filePath === 'doc.md' ? { hash: 'abc', timestamp: Date.now(), message: 'update' } : null),
       });
       const graph = new CodeDocGraph();
       graph.addReference('doc.md', 'src/a.ts', makeRef('file-path', 'a.ts'));
@@ -350,7 +355,10 @@ describe('FreshnessScorer', () => {
       const refs = Array.from({ length: totalRefs }, (_, i) => makeRef('file-path', `f${i}`));
       const doc = makeDoc('doc.md', refs);
       const errorIssues = refs.slice(validRefs).map((r) => ({
-        reference: r, valid: false as const, severity: 'error' as const, message: 'missing',
+        reference: r,
+        valid: false as const,
+        severity: 'error' as const,
+        message: 'missing',
       }));
       const results: ValidationResults = {
         documents: errorIssues.length > 0 ? [{ path: 'doc.md', issues: errorIssues }] : [],
@@ -360,13 +368,13 @@ describe('FreshnessScorer', () => {
     }
 
     it.each([
-      [10, 10, 'A'],   // 100%
-      [9, 10, 'A'],    // 90%
-      [8, 10, 'B'],    // 80%
-      [7, 10, 'C'],    // 70%
-      [6, 10, 'D'],    // 60%
-      [5, 10, 'F'],    // 50%
-      [0, 10, 'F'],    // 0%
+      [10, 10, 'A'], // 100%
+      [9, 10, 'A'], // 90%
+      [8, 10, 'B'], // 80%
+      [7, 10, 'C'], // 70%
+      [6, 10, 'D'], // 60%
+      [5, 10, 'F'], // 50%
+      [0, 10, 'F'], // 0%
     ])('%d/%d valid → grade %s', (valid, total, expectedGrade) => {
       expect(gradeFor(valid, total)).toBe(expectedGrade);
     });
@@ -391,10 +399,12 @@ describe('FreshnessScorer', () => {
       const goodDoc = makeDoc('good.md', [makeRef('file-path', 'a')]);
       const badDoc = makeDoc('bad.md', [makeRef('file-path', 'a')]);
       const results: ValidationResults = {
-        documents: [{
-          path: 'bad.md',
-          issues: [{ reference: makeRef('file-path', 'a'), valid: false, severity: 'error', message: 'missing' }],
-        }],
+        documents: [
+          {
+            path: 'bad.md',
+            issues: [{ reference: makeRef('file-path', 'a'), valid: false, severity: 'error', message: 'missing' }],
+          },
+        ],
         summary: { total: 2, valid: 1, errors: 1, warnings: 0, skipped: 0 },
       };
       const scores = scorer.calculateProjectScores([goodDoc, badDoc], results, null, null);
@@ -415,10 +425,12 @@ describe('FreshnessScorer', () => {
     it('produces correct document-level detail', () => {
       const doc = makeDoc('x.md', [makeRef('file-path', 'f1'), makeRef('file-path', 'f2')]);
       const results: ValidationResults = {
-        documents: [{
-          path: 'x.md',
-          issues: [{ reference: makeRef('file-path', 'f1'), valid: false, severity: 'error', message: 'missing' }],
-        }],
+        documents: [
+          {
+            path: 'x.md',
+            issues: [{ reference: makeRef('file-path', 'f1'), valid: false, severity: 'error', message: 'missing' }],
+          },
+        ],
         summary: { total: 2, valid: 1, errors: 1, warnings: 0, skipped: 0 },
       };
       const scores = scorer.calculateProjectScores([doc], results, null, null);
