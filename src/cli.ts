@@ -22,7 +22,6 @@ export interface CLIOptions {
   reporter?: string;
   output?: string;
   verbose?: boolean;
-  fix?: boolean;
   only?: string;
   skipUrls?: boolean;
   files?: string;
@@ -56,7 +55,6 @@ export function createProgram(): Command {
     .option('-r, --reporter <type>', 'Reporter type (console, json, markdown)', 'console')
     .option('-o, --output <path>', 'Output file path for reports')
     .option('-v, --verbose', 'Enable verbose logging')
-    .option('--fix', 'Show fix suggestions')
     .option('--only <types>', 'Only check specific reference types (comma-separated)')
     .option('--skip-urls', 'Skip URL validation')
     .option('--files <patterns>', 'Only check specific files (comma-separated glob patterns)')
