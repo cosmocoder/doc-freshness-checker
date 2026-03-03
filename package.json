@@ -78,10 +78,20 @@
     "globals": "17.3.0",
     "husky": "9.1.7",
     "jiti": "2.6.1",
+    "lint-staged": "16.3.2",
     "prettier": "3.8.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.54.0",
     "vitest": "4.0.18",
     "vitest-fetch-mock": "0.4.5"
+  },
+  "lint-staged": {
+    "src/**/*.md": [
+      "npm run prettier"
+    ],
+    "src/**/*.{js,ts}": [
+      "npm run lint:fix",
+      "npm run prettier"
+    ]
   }
 }
