@@ -89,23 +89,101 @@ npm run docs:check
 - Update documentation when CLI/config behavior changes.
 - Include a short test plan in the PR description.
 
-## Commit Message Style
+## Commit Conventions
 
-Conventional Commit style is recommended to match existing history:
+This project uses [semantic-release](https://semantic-release.gitbook.io/) for automated versioning and release notes generation. Your commit messages directly impact the changelog and version bumps, so please follow these conventions carefully.
 
-- `feat: ...`
-- `fix: ...`
-- `refactor: ...`
-- `test: ...`
-- `chore: ...`
+### Commit Message Format
 
-This style is recommended but not enforced by commit hooks.
+We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
 
-## CI Notes
+```
+<type>(<scope>): <subject>
 
-This repository includes a GitHub Actions workflow focused on documentation freshness reporting. It helps surface issues in PRs and scheduled runs.
+<body>
 
-If your change affects runtime behavior, still run tests/lint/typecheck locally even when CI is not enforcing all of them yet.
+<footer>
+```
+
+- **type**: The type of change (see below)
+- **scope**: Optional, the area of the codebase affected
+- **subject**: A short description of the change (imperative mood, no period)
+- **body**: Optional, detailed description of the change
+- **footer**: Optional, for breaking changes or issue references
+
+### Commit Types and Release Impact
+
+| Type | Description | Release Impact |
+|------|-------------|----------------|
+| `feat` | A new feature | **Minor** version bump (1.x.0) |
+| `fix` | A bug fix | **Patch** version bump (1.0.x) |
+| `perf` | Performance improvement | **Patch** version bump |
+| `docs` | Documentation only | No release |
+| `style` | Code style (formatting, etc.) | No release |
+| `refactor` | Code change that neither fixes nor adds | No release |
+| `test` | Adding or updating tests | No release |
+| `chore` | Maintenance tasks | No release |
+| `ci` | CI/CD changes | No release |
+| `build` | Build system changes | No release |
+
+### Commit Strategy for Pull Requests
+
+**For feature PRs:**
+
+1. **Primary commit** — Use `feat` prefix for the main feature:
+   ```
+   feat(checker): add custom rule support for freshness checks
+   ```
+
+2. **Follow-up fixes within the same PR** — Use `chore` or `refactor` for bug fixes or improvements to your new feature:
+   ```
+   chore(checker): fix typo in rule validation logic
+   refactor(checker): simplify rule matching
+   ```
+
+   This ensures only the main feature appears in release notes, not every small fix you made while developing it.
+
+3. **Unrelated bug fixes** — If you discover and fix a bug unrelated to your feature, use `fix`:
+   ```
+   fix(cli): handle missing config file gracefully
+   ```
+
+**For bug fix PRs:**
+
+- Use `fix` prefix for the primary commit:
+  ```
+  fix(reporter): correct line number offset in JSON output
+  ```
+
+**For documentation/maintenance PRs:**
+
+- Use `docs`, `chore`, `refactor`, etc. as appropriate
+
+### Writing Good Commit Bodies
+
+The commit body is included in release notes, so write it for your users! Use it to explain:
+- What the change does and why
+- Any important details or caveats
+- Sub-features or components (use `-` for bullet points)
+
+### Breaking Changes
+
+For breaking changes, add `BREAKING CHANGE:` in the commit footer:
+
+```
+feat(cli): change default output format
+
+BREAKING CHANGE: The default reporter is now JSON instead of text.
+Update scripts that parse stdout to handle the new format.
+```
+
+This triggers a **major** version bump (x.0.0).
+
+## CI and Release Notes
+
+The GitHub Actions workflow runs linting, type checking, tests, and builds on every push. The release job runs only on `main` and `beta` branches, publishing to npm via semantic-release with npm provenance enabled.
+
+If your change affects runtime behavior, run tests/lint/typecheck locally before pushing.
 
 ## Editor Recommendations
 
