@@ -59,8 +59,9 @@
     "devops"
   ],
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.19.0"
   },
+  "engine-strict": true,
   "dependencies": {
     "commander": "12.0.0",
     "fastembed": "2.1.0",
