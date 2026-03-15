@@ -1,6 +1,7 @@
 import type { ProjectScores, ValidationResults } from '../types.js';
 import type { CodeDocGraph } from '../graph/codeDocGraph.js';
 import type { GitChangeTracker } from '../git/changeTracker.js';
+import { escapeMarkdownTableCell } from '../utils/escapeMarkdownTableCell.js';
 
 /**
  * Enhanced reporter with DeepDocs-style output
@@ -68,8 +69,8 @@ export class EnhancedReporter {
 
         for (const issue of doc.issues) {
           const severity = issue.severity === 'error' ? '❌' : '⚠️';
-          const suggestion = issue.suggestion || '-';
-          const message = (issue.message || '').replace(/\|/g, '\\|');
+          const suggestion = escapeMarkdownTableCell(issue.suggestion || '-');
+          const message = escapeMarkdownTableCell(issue.message || '');
           report += `| ${issue.reference.lineNumber} | ${severity} ${issue.reference.type} | ${message} | ${suggestion} |\n`;
         }
 

@@ -1,4 +1,5 @@
 import type { ProjectScores, ValidationResults } from '../types.js';
+import { escapeMarkdownTableCell } from '../utils/escapeMarkdownTableCell.js';
 
 /**
  * Markdown reporter for documentation-friendly output
@@ -34,8 +35,8 @@ export class MarkdownReporter {
 
       for (const issue of doc.issues) {
         const severity = issue.severity === 'error' ? '❌ Error' : '⚠️ Warning';
-        const suggestion = issue.suggestion || '-';
-        const message = (issue.message || '').replace(/\|/g, '\\|');
+        const suggestion = escapeMarkdownTableCell(issue.suggestion || '-');
+        const message = escapeMarkdownTableCell(issue.message || '');
         md += `| ${issue.reference.lineNumber} | ${severity} | ${message} | ${suggestion} |\n`;
       }
 
