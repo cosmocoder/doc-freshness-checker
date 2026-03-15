@@ -51,6 +51,8 @@ jobs:
   lint-typeCheck:
     name: Code linting and type checking
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: [deps]
     strategy:
       matrix:
@@ -78,6 +80,7 @@ jobs:
   lint-typeCheck-report:
     name: Code linting and type checking Report
     runs-on: ubuntu-latest
+    permissions: {}
     needs: [lint-typeCheck]
     if: ${{ always() }}
     steps:
@@ -88,6 +91,8 @@ jobs:
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: [deps]
     strategy:
       matrix:
@@ -114,6 +119,7 @@ jobs:
   test-report:
     name: Unit Tests Report
     runs-on: ubuntu-latest
+    permissions: {}
     needs: [test]
     if: ${{ always() }}
     steps:
@@ -126,6 +132,8 @@ jobs:
     needs: [deps]
     name: Build package
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6
