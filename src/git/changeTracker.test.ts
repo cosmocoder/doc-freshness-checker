@@ -110,6 +110,48 @@ describe('GitChangeTracker', () => {
     });
   });
 
+  describe('getFileCommitCount', () => {
+    it('returns number of commits since the given timestamp', () => {
+      mockExecFileSync.mockReturnValueOnce('.git\n').mockReturnValueOnce('abc Fix foo\ndef Update bar\nghi Refactor\n');
+      const sinceMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      expect(new GitChangeTracker(config).getFileCommitCount('src/a.ts', sinceMs)).toBe(3);
+    });
+
+    it('returns 0 when file has no commits since the timestamp', () => {
+      mockExecFileSync.mockReturnValueOnce('.git\n').mockReturnValueOnce('\n');
+      expect(new GitChangeTracker(config).getFileCommitCount('src/a.ts', Date.now())).toBe(0);
+    });
+
+    it('returns 0 for non-git repos', () => {
+      mockExecFileSync.mockImplementation(() => {
+        throw new Error();
+      });
+      expect(new GitChangeTracker(config).getFileCommitCount('src/a.ts', Date.now())).toBe(0);
+    });
+
+    it('returns 0 when git log fails', () => {
+      mockExecFileSync.mockReturnValueOnce('.git\n').mockImplementationOnce(() => {
+        throw new Error('log failed');
+      });
+      expect(new GitChangeTracker(config).getFileCommitCount('src/a.ts', Date.now())).toBe(0);
+    });
+
+    it('passes correct --since flag from epoch ms', () => {
+      mockExecFileSync.mockReturnValueOnce('.git\n').mockReturnValueOnce('\n');
+      const sinceMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      new GitChangeTracker(config).getFileCommitCount('src/a.ts', sinceMs);
+      const call = mockExecFileSync.mock.calls[1];
+      expect(call[0]).toBe('git');
+      expect(call[1]).toContain('--oneline');
+      const sinceArg = (call[1] as string[]).find((a: string) => a.startsWith('--since='));
+      expect(sinceArg).toBeDefined();
+      const sinceDate = new Date(sinceArg!.replace('--since=', ''));
+      // Should match the provided epoch ms within 1 second tolerance
+      expect(sinceDate.getTime()).toBeGreaterThanOrEqual(sinceMs - 1000);
+      expect(sinceDate.getTime()).toBeLessThanOrEqual(sinceMs + 1000);
+    });
+  });
+
   describe('getFileLastModified', () => {
     it('returns timestamp in milliseconds', () => {
       const ts = Math.floor(Date.now() / 1000);

@@ -21,6 +21,7 @@ function makeMockGitTracker(overrides: Partial<GitChangeTracker> = {}): GitChang
     isGitRepo: () => true,
     getCurrentCommit: () => 'abc123',
     getFileCommitInfo: () => null,
+    getFileCommitCount: () => 0,
     getFileLastModified: () => null,
     getChangedFiles: () => [],
     getChangedFilesSince: () => [],
@@ -254,6 +255,9 @@ describe('FreshnessScorer', () => {
       },
     });
 
+    const docTimestamp = Date.now() - 7 * 24 * 60 * 60 * 1000; // 7 days ago
+    const docCommit = { hash: 'doc1', timestamp: docTimestamp, message: 'update docs' };
+
     it('returns 75 when not a git repo', () => {
       const tracker = makeMockGitTracker({ isGitRepo: () => false });
       const score = scorer.calculateDocScore(makeDoc('doc.md'), emptyResults, tracker, null);
@@ -261,18 +265,82 @@ describe('FreshnessScorer', () => {
     });
 
     it('returns 100 when doc has no code references', () => {
-      const tracker = makeMockGitTracker();
+      const tracker = makeMockGitTracker({ getFileCommitInfo: () => docCommit });
       const graph = new CodeDocGraph();
       const score = scorer.calculateDocScore(makeDoc('doc.md'), emptyResults, tracker, graph);
       expect(score.factors.codeChangeFrequency).toBe(100);
     });
 
-    it('returns 75 (placeholder) when doc has code references', () => {
-      const tracker = makeMockGitTracker();
+    it('returns 50 when doc is not tracked by git', () => {
+      const tracker = makeMockGitTracker({ getFileCommitInfo: () => null });
       const graph = new CodeDocGraph();
       graph.addReference('doc.md', 'src/a.ts', makeRef('file-path', 'a.ts'));
       const score = scorer.calculateDocScore(makeDoc('doc.md'), emptyResults, tracker, graph);
-      expect(score.factors.codeChangeFrequency).toBe(75);
+      expect(score.factors.codeChangeFrequency).toBe(50);
+    });
+
+    it('returns 100 when no code commits happened after the doc was updated', () => {
+      const tracker = makeMockGitTracker({
+        getFileCommitInfo: () => docCommit,
+        getFileCommitCount: () => 0,
+      });
+      const graph = new CodeDocGraph();
+      graph.addReference('doc.md', 'src/a.ts', makeRef('file-path', 'a.ts'));
+      const score = scorer.calculateDocScore(makeDoc('doc.md'), emptyResults, tracker, graph);
+      expect(score.factors.codeChangeFrequency).toBe(100);
+    });
+
+    it('returns high score for few post-doc commits (gentle risk signal)', () => {
+      const tracker = makeMockGitTracker({
+        getFileCommitInfo: () => docCommit,
+        getFileCommitCount: () => 5,
+      });
+      const graph = new CodeDocGraph();
+      graph.addReference('doc.md', 'src/a.ts', makeRef('file-path', 'a.ts'));
+      const score = scorer.calculateDocScore(makeDoc('doc.md'), emptyResults, tracker, graph);
+      // 40 + 60 * exp(-0.03 * 5) ≈ 92
+      expect(score.factors.codeChangeFrequency).toBeGreaterThan(88);
+      expect(score.factors.codeChangeFrequency).toBeLessThan(96);
+    });
+
+    it('returns moderate score for medium post-doc churn', () => {
+      const tracker = makeMockGitTracker({
+        getFileCommitInfo: () => docCommit,
+        getFileCommitCount: () => 20,
+      });
+      const graph = new CodeDocGraph();
+      graph.addReference('doc.md', 'src/a.ts', makeRef('file-path', 'a.ts'));
+      const score = scorer.calculateDocScore(makeDoc('doc.md'), emptyResults, tracker, graph);
+      // 40 + 60 * exp(-0.03 * 20) ≈ 73
+      expect(score.factors.codeChangeFrequency).toBeGreaterThan(68);
+      expect(score.factors.codeChangeFrequency).toBeLessThan(78);
+    });
+
+    it('never drops below the floor (40) even for extreme churn', () => {
+      const tracker = makeMockGitTracker({
+        getFileCommitInfo: () => docCommit,
+        getFileCommitCount: () => 200,
+      });
+      const graph = new CodeDocGraph();
+      graph.addReference('doc.md', 'src/a.ts', makeRef('file-path', 'a.ts'));
+      const score = scorer.calculateDocScore(makeDoc('doc.md'), emptyResults, tracker, graph);
+      // 40 + 60 * exp(-0.03 * 200) ≈ 40 + 0.15 ≈ 40
+      expect(score.factors.codeChangeFrequency).toBeGreaterThanOrEqual(40);
+      expect(score.factors.codeChangeFrequency).toBeLessThan(45);
+    });
+
+    it('uses the max post-doc commit count across multiple referenced files', () => {
+      const tracker = makeMockGitTracker({
+        getFileCommitInfo: () => docCommit,
+        getFileCommitCount: (filePath: string) => (filePath === 'src/hot.ts' ? 20 : 1),
+      });
+      const graph = new CodeDocGraph();
+      graph.addReference('doc.md', 'src/stable.ts', makeRef('file-path', 'stable.ts'));
+      graph.addReference('doc.md', 'src/hot.ts', makeRef('file-path', 'hot.ts'));
+      const score = scorer.calculateDocScore(makeDoc('doc.md'), emptyResults, tracker, graph);
+      // Max is 20 → 40 + 60 * exp(-0.03 * 20) ≈ 73
+      expect(score.factors.codeChangeFrequency).toBeGreaterThan(68);
+      expect(score.factors.codeChangeFrequency).toBeLessThan(78);
     });
   });
 
