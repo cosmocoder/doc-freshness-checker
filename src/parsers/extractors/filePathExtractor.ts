@@ -26,9 +26,9 @@ export class FilePathExtractor extends BaseExtractor {
 
     // Format-specific patterns
     const patterns: PatternMap = {
-      markdown: /\[([^\]]*)\]\((\.\.[/\\][^)]+|\.\/[^)]+|[a-zA-Z0-9_\-/\\]+\.[a-zA-Z]{1,10})\)/g,
-      restructuredtext: /`([^`]+)\s+<([^>]+)>`_/g,
-      asciidoc: /link:([^[]+)\[([^\]]*)\]/g,
+      markdown: /\[([^\][]*)\]\(([^()\s[\]]+)\)/g,
+      restructuredtext: /`([^`]+)[ \t]+<([^<>]+)>`_/g,
+      asciidoc: /link:([^[\s]+)\[([^\][]*)\]/g,
     };
 
     const pattern = patterns[document.format] || patterns.markdown;
@@ -45,6 +45,15 @@ export class FilePathExtractor extends BaseExtractor {
       // Skip anchors
       if (refPath.startsWith('#')) {
         continue;
+      }
+
+      // For markdown, only accept relative paths or paths with file extensions
+      if (document.format !== 'asciidoc' && document.format !== 'restructuredtext') {
+        const isRelative = refPath.startsWith('../') || refPath.startsWith('.\\') || refPath.startsWith('./');
+        const hasExtension = /^[a-zA-Z0-9_\-/\\]+\.[a-zA-Z]{1,10}$/.test(refPath);
+        if (!isRelative && !hasExtension) {
+          continue;
+        }
       }
 
       // Extract and strip line number suffixes

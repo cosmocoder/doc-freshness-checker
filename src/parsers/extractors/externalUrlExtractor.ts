@@ -32,6 +32,8 @@ export class ExternalUrlExtractor extends BaseExtractor {
     return references;
   }
 
+  private static readonly TRAILING_PUNCTUATION = new Set(['.', ',', ';', ':', '!', '?', '>', '}', ']', "'", '"']);
+
   /**
    * Strip trailing punctuation while preserving balanced parentheses
    * (handles Wikipedia-style URLs like .../Example_(disambiguation))
@@ -50,7 +52,7 @@ export class ExternalUrlExtractor extends BaseExtractor {
         break;
       }
 
-      if (/[.,;:!?>}\]'"]+$/.test(last)) {
+      if (ExternalUrlExtractor.TRAILING_PUNCTUATION.has(last)) {
         url = url.slice(0, -1);
         continue;
       }

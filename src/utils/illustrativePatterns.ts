@@ -17,11 +17,11 @@ export const ILLUSTRATIVE_PATH_PATTERNS: RegExp[] = [
   // Very short generic names without extensions
   /^(?:foo|bar|baz|qux|quux)$/i,
   // Paths containing angle brackets or curly braces (template syntax)
-  /<[^>]+>/,
-  /\{[^}]+\}/,
+  /<[^<>]+>/,
+  /\{[^{}]+\}/,
   // Paths with obvious placeholder segments
   /\/(?:your|my|example|sample)-/i,
-  /\/\[.*\]\//,
+  /\/\[[^\][]*\]\//,
 ];
 
 /**
