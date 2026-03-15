@@ -444,7 +444,7 @@ export class VectorSearch {
    */
   private splitIntoSections(content: string): Section[] {
     const sections: Section[] = [];
-    const headingPattern = /^(#{1,6})\s+(.+)$/gm;
+    const headingPattern = /^(#{1,6})[ \t]+(\S.*)$/gm;
 
     let lastIndex = 0;
     let lastHeading = 'Introduction';
