@@ -127,7 +127,27 @@ export class FreshnessScorer {
   }
 
   /**
-   * Calculate score based on how frequently referenced code changes
+   * Calculate score based on how frequently referenced code changed
+   * **since the doc was last updated**.
+   *
+   * This is a soft risk signal, not a hard penalty.  Many commits to a
+   * referenced file don't necessarily mean the doc is wrong — the
+   * specific symbols / paths it references may be untouched.  Actual
+   * reference breakage is caught by `referenceValidity` (0.4 weight).
+   *
+   * Only commits that occurred *after* the doc's last commit are
+   * counted, so updating the doc resets the counter to zero.  The score
+   * uses a gentle exponential decay with a floor of 40:
+   *
+   *   score = FLOOR + (100 − FLOOR) × e^(−DECAY × postDocCommits)
+   *
+   * With FLOOR=40, DECAY=0.03:
+   *    0 post-doc commits → 100   (doc is up-to-date)
+   *    5  → ~92
+   *   10  → ~84
+   *   20  → ~73
+   *   40  → ~58
+   *  100  → ~43
    */
   private calculateChangeFrequencyScore(doc: Document, gitTracker: GitChangeTracker | null, graph: CodeDocGraph | null): number {
     if (!gitTracker?.isGitRepo()) {
@@ -139,9 +159,31 @@ export class FreshnessScorer {
       return 100;
     }
 
-    // High-churn code is harder to keep documented
-    // This is informational - not a penalty
-    return 75; // Placeholder - would need git log analysis
+    // Find when the doc was last committed
+    const docCommitInfo = gitTracker.getFileCommitInfo(doc.path);
+    if (!docCommitInfo) {
+      return 50; // Doc not in git — uncertain
+    }
+
+    const FLOOR = 40;
+    const DECAY_RATE = 0.03;
+
+    // Count commits to each referenced code file that happened AFTER the doc commit
+    let maxPostDocCommits = 0;
+    for (const codeFile of referencedFiles) {
+      const commits = gitTracker.getFileCommitCount(codeFile, docCommitInfo.timestamp);
+      if (commits > maxPostDocCommits) {
+        maxPostDocCommits = commits;
+      }
+    }
+
+    // No post-doc commits → code hasn't changed since doc was updated
+    if (maxPostDocCommits === 0) {
+      return 100;
+    }
+
+    // Gentle decay with floor: high churn is a risk signal, not a certainty of staleness
+    return Math.max(FLOOR, Math.round(FLOOR + (100 - FLOOR) * Math.exp(-DECAY_RATE * maxPostDocCommits)));
   }
 
   /**

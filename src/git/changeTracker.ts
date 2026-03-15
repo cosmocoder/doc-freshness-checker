@@ -84,6 +84,25 @@ export class GitChangeTracker {
   }
 
   /**
+   * Count the number of commits touching a file since a given point in time.
+   * @param filePath  Relative path to the file
+   * @param sinceMs   Epoch milliseconds – only commits strictly after this point are counted
+   * Returns 0 when the file has no commits in that window or git is unavailable.
+   */
+  getFileCommitCount(filePath: string, sinceMs: number): number {
+    if (!this.isGitRepo()) return 0;
+
+    try {
+      const sinceDate = new Date(sinceMs).toISOString();
+      const output = this.git(['log', '--oneline', `--since=${sinceDate}`, '--', filePath]);
+      if (!output) return 0;
+      return output.split('\n').filter(Boolean).length;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
    * Get the last modification time of a file from git
    */
   getFileLastModified(filePath: string): number | null {
