@@ -57,7 +57,8 @@ flowchart TD
   - external URLs
   - versions
   - directory structures
-  - code patterns
+  - code patterns (symbol definitions in code blocks)
+  - code snippets (imports, function calls, config objects in code blocks)
   - dependencies
 
 These extracted references are attached to each parsed document before validation.
@@ -71,6 +72,7 @@ These extracted references are attached to each parsed document before validatio
 - `version` -> `VersionValidator`
 - `directory-structure` -> `DirectoryValidator`
 - `code-pattern` -> `CodePatternValidator`
+- `code-snippet` -> `CodeSnippetValidator`
 - `dependency` -> `DependencyValidator`
 
 Custom extractors and validators can be registered from config.

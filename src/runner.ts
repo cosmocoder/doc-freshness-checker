@@ -7,6 +7,7 @@ import { DirectoryStructureExtractor } from './parsers/extractors/directoryStruc
 import { CodePatternExtractor } from './parsers/extractors/codePatternExtractor.js';
 import { ExternalUrlExtractor } from './parsers/extractors/externalUrlExtractor.js';
 import { DependencyExtractor } from './parsers/extractors/dependencyExtractor.js';
+import { CodeSnippetExtractor } from './parsers/extractors/codeSnippetExtractor.js';
 import { ValidationEngine } from './validators/validationEngine.js';
 import { FileValidator } from './validators/fileValidator.js';
 import { UrlValidator } from './validators/urlValidator.js';
@@ -14,6 +15,7 @@ import { VersionValidator } from './validators/versionValidator.js';
 import { DirectoryValidator } from './validators/directoryValidator.js';
 import { CodePatternValidator } from './validators/codePatternValidator.js';
 import { DependencyValidator } from './validators/dependencyValidator.js';
+import { CodeSnippetValidator } from './validators/codeSnippetValidator.js';
 import { ConsoleReporter } from './reporters/consoleReporter.js';
 import { JsonReporter } from './reporters/jsonReporter.js';
 import { MarkdownReporter } from './reporters/markdownReporter.js';
@@ -64,6 +66,7 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
   parser.registerExtractor(new CodePatternExtractor(config));
   parser.registerExtractor(new ExternalUrlExtractor());
   parser.registerExtractor(new DependencyExtractor(config));
+  parser.registerExtractor(new CodeSnippetExtractor());
 
   // Register custom extractors
   if (config.customExtractors) {
@@ -82,6 +85,7 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
   validationEngine.registerValidator('directory-structure', new DirectoryValidator());
   validationEngine.registerValidator('code-pattern', codePatternValidator);
   validationEngine.registerValidator('dependency', new DependencyValidator());
+  validationEngine.registerValidator('code-snippet', new CodeSnippetValidator());
 
   // Register custom validators
   if (config.customValidators) {
