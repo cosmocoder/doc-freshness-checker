@@ -30,12 +30,14 @@ Validate documentation against your codebase to catch stale references before th
 - Catch broken file links and dead external URLs.
 - Detect version mismatches between docs and manifests.
 - Surface code symbols mentioned in docs that no longer exist.
+- Detect stale code examples — wrong imports, changed function signatures, outdated config keys.
 - Run in CI as a quality gate or reporting step.
 
 ## Features
 
 - **Documentation formats:** Markdown (`.md`, `.markdown`), reStructuredText (`.rst`), AsciiDoc (`.adoc`, `.asciidoc`), plaintext (`.txt`).
 - **Source indexing for symbol validation:** JavaScript, TypeScript, Python, Go, Rust, Java.
+- **Code snippet validation:** verifies import paths resolve, imported symbols are exported, function call signatures still match example placeholders, and config object keys match type/interface definitions.
 - **Manifest parsing for version/dependency checks:** `package.json`, `requirements.txt`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `pom.xml`.
 - **Reporters:** `console`, `json`, `markdown`, `enhanced`.
 - **Advanced modes:** incremental checking, freshness scoring, graph linking, semantic vector search.
@@ -158,14 +160,15 @@ doc-freshness --score --incremental
 
 ## What Gets Validated
 
-| Reference type        | What is checked                                           |
-| --------------------- | --------------------------------------------------------- |
-| `file-path`           | Referenced files/directories exist                        |
-| `external-url`        | External URLs are reachable (with caching and skip rules) |
-| `version`             | Mentioned versions compared to parsed manifests           |
-| `directory-structure` | Tree snippets align with actual structure                 |
-| `code-pattern`        | Mentioned symbols exist in indexed source                 |
-| `dependency`          | Mentioned packages exist in manifest dependencies         |
+| Reference type        | What is checked                                                                   |
+| --------------------- | --------------------------------------------------------------------------------- |
+| `file-path`           | Referenced files/directories exist                                                |
+| `external-url`        | External URLs are reachable (with caching and skip rules)                         |
+| `version`             | Mentioned versions compared to parsed manifests                                   |
+| `directory-structure` | Tree snippets align with actual structure                                         |
+| `code-pattern`        | Mentioned symbols exist in indexed source                                         |
+| `code-snippet`        | Import paths resolve, exported symbols exist, function signatures still match, config keys valid |
+| `dependency`          | Mentioned packages exist in manifest dependencies                                 |
 
 ### URL Validation Behavior
 
@@ -175,6 +178,75 @@ doc-freshness --score --incremental
 - Treats auth-required responses (`401`/`403`) as valid-with-note.
 - Handles GitHub `404` private-repo behavior conservatively.
 - Caches URL results to reduce repeated checks.
+
+### Code Snippet Validation
+
+Fenced code blocks in documentation go stale just as quickly as any other reference. The `code-snippet` rule validates three aspects of code examples:
+
+**Import statements** — verifies that the module path resolves to an actual source file and that each imported symbol is exported from it. Only relative imports are checked; bare npm/package imports are skipped.
+
+If your docs contain:
+
+````markdown
+```typescript
+import { createUser, sendWelcomeEmail } from './services/userService';
+```
+````
+
+The checker resolves `./services/userService` against the project source tree (trying common extensions and index files) and confirms that `createUser` and `sendWelcomeEmail` are exported. If `sendWelcomeEmail` was renamed to `sendOnboardingEmail`, the report shows:
+
+```
+⚠️  Line 12: Symbol(s) not exported from src/services/userService.ts: sendWelcomeEmail
+   💡 Did you mean: sendOnboardingEmail?
+```
+
+**Function signatures** — checks that the number of arguments shown in a code example matches the function's current signature, accounting for optional and rest parameters. When an example uses simple placeholder identifiers like `name, email`, those are also compared to the current parameter names to catch renamed positional parameters.
+
+````markdown
+```typescript
+const user = createUser(name, email, role, department);
+```
+````
+
+If `createUser` now takes only `(name, email, role?)`, the report shows:
+
+```
+⚠️  Line 18: Function createUser called with 4 arg(s) but expects 2–3
+   💡 Current signature: createUser(name, email, role)
+```
+
+**Config object keys** — when a code example assigns an object with an explicit type annotation, each key is checked against the type/interface definition in source.
+
+````markdown
+```typescript
+const opts: ServerConfig = {
+  port: 3000,
+  hostname: 'localhost',
+  maxRetries: 5,
+};
+```
+````
+
+If `ServerConfig` no longer has a `hostname` property (renamed to `host`):
+
+```
+⚠️  Line 24: Config key(s) not found in ServerConfig: hostname
+   💡 Did you mean: hostname → host?
+```
+
+Each sub-check can be toggled independently:
+
+```js
+rules: {
+  'code-snippet': {
+    enabled: true,
+    severity: 'warning',
+    validateImports: true,
+    validateFunctionCalls: true,
+    validateConfigKeys: true,
+  },
+},
+```
 
 ### False Positive Reduction
 
@@ -239,6 +311,7 @@ export default {
     version: { enabled: true, severity: 'warning' },
     'directory-structure': { enabled: true, severity: 'warning' },
     'code-pattern': { enabled: true, severity: 'warning' },
+    'code-snippet': { enabled: true, severity: 'warning' },
     dependency: { enabled: true, severity: 'info' },
   },
 
@@ -284,6 +357,7 @@ Key exports:
 | `run`, `runWithConfig`                                                    | Execute the checker programmatically                 |
 | `loadConfig`, `defineConfig`                                              | Load/merge configuration and type-safe config helper |
 | `DocumentParser`                                                          | Parse documentation files and extract references     |
+| `CodeSnippetExtractor`, `CodeSnippetValidator`                            | Code example validation (imports, calls, config)     |
 | `ValidationEngine`                                                        | Dispatch references to validators                    |
 | `ConsoleReporter`, `JsonReporter`, `MarkdownReporter`, `EnhancedReporter` | Reporter classes                                     |
 | `GraphBuilder`, `FreshnessScorer`, `VectorSearch`                         | Advanced analysis modules                            |

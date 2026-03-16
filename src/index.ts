@@ -17,12 +17,14 @@ export { DirectoryStructureExtractor } from './parsers/extractors/directoryStruc
 export { CodePatternExtractor } from './parsers/extractors/codePatternExtractor.js';
 export { ExternalUrlExtractor } from './parsers/extractors/externalUrlExtractor.js';
 export { DependencyExtractor } from './parsers/extractors/dependencyExtractor.js';
+export { CodeSnippetExtractor } from './parsers/extractors/codeSnippetExtractor.js';
 export { FileValidator } from './validators/fileValidator.js';
 export { UrlValidator } from './validators/urlValidator.js';
 export { VersionValidator } from './validators/versionValidator.js';
 export { DirectoryValidator } from './validators/directoryValidator.js';
 export { CodePatternValidator } from './validators/codePatternValidator.js';
 export { DependencyValidator } from './validators/dependencyValidator.js';
+export { CodeSnippetValidator } from './validators/codeSnippetValidator.js';
 export { ConsoleReporter } from './reporters/consoleReporter.js';
 export { JsonReporter } from './reporters/jsonReporter.js';
 export { MarkdownReporter } from './reporters/markdownReporter.js';
@@ -71,6 +73,7 @@ export type {
   SymbolLocation,
   SourceFileData,
   CodeFile,
+  CodeSnippetRuleConfig,
   BaseExtractor as BaseExtractorType,
   BaseValidator,
 } from './types.js';

@@ -39,6 +39,14 @@ export interface DirectoryStructureRuleConfig extends RuleConfig {
   skipIllustrative?: boolean;
 }
 
+export interface CodeSnippetRuleConfig extends RuleConfig {
+  validateImports?: boolean;
+  validateFunctionCalls?: boolean;
+  validateConfigKeys?: boolean;
+  illustrativePatterns?: string[];
+  skipIllustrative?: boolean;
+}
+
 export interface VersionRuleConfig extends RuleConfig {
   allowMinorDrift?: boolean;
 }
@@ -49,8 +57,9 @@ export interface RulesConfig {
   version?: VersionRuleConfig;
   'directory-structure'?: DirectoryStructureRuleConfig;
   'code-pattern'?: RuleConfig;
+  'code-snippet'?: CodeSnippetRuleConfig;
   dependency?: RuleConfig;
-  [key: string]: RuleConfig | VersionRuleConfig | FilePathRuleConfig | DirectoryStructureRuleConfig | undefined;
+  [key: string]: RuleConfig | VersionRuleConfig | FilePathRuleConfig | DirectoryStructureRuleConfig | CodeSnippetRuleConfig | undefined;
 }
 
 export interface UrlValidationConfig {
@@ -157,6 +166,8 @@ export interface Reference {
   sourceFile: string;
   // Optional properties for specific reference types
   linkText?: string;
+  importSpecifiers?: string[];
+  argumentNames?: string[];
   technology?: string;
   version?: string;
   kind?: string;
