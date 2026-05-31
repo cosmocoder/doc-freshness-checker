@@ -6,7 +6,7 @@ This guide covers the current workflow used in this repository.
 
 ## Prerequisites
 
-- Node.js `>=22.19.0`
+- Node.js `>=24.15.0`
 - npm
 
 The repo enforces Node engine compatibility (`engine-strict=true`), so installs fail on unsupported Node versions.
