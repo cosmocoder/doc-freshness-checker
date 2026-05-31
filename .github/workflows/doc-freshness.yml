@@ -51,6 +51,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build
+        run: npm run build
+
       - name: Cache URL Validation Results
         uses: actions/cache@v5
         with:
@@ -70,12 +73,12 @@ jobs:
             EXTRA_ARGS="$EXTRA_ARGS --verbose"
           fi
 
-          npx doc-freshness \
+          node dist/cli.js \
             --reporter markdown \
             --output .doc-freshness-reports/report.md \
             $EXTRA_ARGS || echo "has_issues=true" >> $GITHUB_OUTPUT
 
-          npx doc-freshness \
+          node dist/cli.js \
             --reporter json \
             --output .doc-freshness-reports/report.json \
             $EXTRA_ARGS || true
