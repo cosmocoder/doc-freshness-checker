@@ -62,6 +62,9 @@
   "engines": {
     "node": ">=22.19.0"
   },
+  "volta": {
+    "node": "24.15.0"
+  },
   "engine-strict": true,
   "dependencies": {
     "commander": "14.0.3",
@@ -73,7 +76,7 @@
     "@commitlint/cli": "20.5.3",
     "@commitlint/config-conventional": "20.5.3",
     "@eslint/js": "9.39.2",
-    "@types/node": "25.9.1",
+    "@types/node": "24.12.4",
     "@semantic-release/commit-analyzer": "13.0.1",
     "@semantic-release/github": "12.0.8",
     "@semantic-release/npm": "13.1.5",
