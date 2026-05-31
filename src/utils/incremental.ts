@@ -28,7 +28,8 @@ export class IncrementalChecker {
       const data = await fs.promises.readFile(this.stateFile, 'utf-8');
       const parsed = JSON.parse(data) as Record<string, string>;
       this.previousHashes = new Map(Object.entries(parsed));
-    } catch {
+    }
+    catch {
       // No previous state
     }
   }
@@ -60,7 +61,8 @@ export class IncrementalChecker {
 
       const previousHash = this.previousHashes.get(filePath);
       return hash !== previousHash;
-    } catch {
+    }
+    catch {
       // File read error - should check
       return true;
     }

@@ -2,8 +2,12 @@
  * Keep only the newest maxEntries items by removing oldest insertions.
  */
 export function pruneOldestEntries<K, V>(map: Map<K, V>, maxEntries: number): void {
-  if (maxEntries < 0) return;
-  if (map.size <= maxEntries) return;
+  if (maxEntries < 0) {
+    return;
+  }
+  if (map.size <= maxEntries) {
+    return;
+  }
 
   const overflow = map.size - maxEntries;
   const keys = Array.from(map.keys());

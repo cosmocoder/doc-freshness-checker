@@ -38,7 +38,8 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
   if (config.verbose) {
     if (config._configFile) {
       console.log(`Using config file: ${config._configFile}`);
-    } else if (config._noConfigFile) {
+    }
+    else if (config._noConfigFile) {
       console.log('No config file found, using defaults with auto-detection');
     }
     if (config.sourcePatterns) {
@@ -275,7 +276,8 @@ async function generateReports(
         const reporter = new ConsoleReporter();
         if (freshnessScores) {
           reporter.generateWithScores(results, freshnessScores);
-        } else {
+        }
+        else {
           reporter.generate(results);
         }
         break;

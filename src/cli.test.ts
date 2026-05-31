@@ -212,7 +212,8 @@ describe('isDirectCliInvocation', () => {
 
     try {
       expect(isDirectCliInvocation(['node', linkPath])).toBe(true);
-    } finally {
+    }
+    finally {
       await rm(tempDir, { recursive: true, force: true });
     }
   });

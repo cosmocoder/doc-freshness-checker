@@ -10,7 +10,9 @@ let embedCallCount = 0;
 vi.mock('fastembed', () => {
   const makeEmbedding = (seed: number) => {
     const arr = new Float32Array(384);
-    for (let i = 0; i < 384; i++) arr[i] = Math.sin(seed + i * 0.1);
+    for (let i = 0; i < 384; i++) {
+      arr[i] = Math.sin(seed + i * 0.1);
+    }
     return arr;
   };
 
@@ -32,7 +34,9 @@ vi.mock('fastembed', () => {
         queryEmbed: vi.fn().mockResolvedValue(
           (() => {
             const arr = new Float32Array(384);
-            for (let i = 0; i < 384; i++) arr[i] = Math.sin(42 + i * 0.1);
+            for (let i = 0; i < 384; i++) {
+              arr[i] = Math.sin(42 + i * 0.1);
+            }
             return arr;
           })()
         ),
@@ -716,7 +720,8 @@ describe('VectorSearch', () => {
         expect(result).toBe(false);
         const warns = warnSpy.mock.calls.flat().join(' ');
         expect(warns).toContain('initialization failed');
-      } finally {
+      }
+      finally {
         vi.useRealTimers();
       }
     });

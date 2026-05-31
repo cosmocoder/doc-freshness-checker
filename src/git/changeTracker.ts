@@ -33,7 +33,8 @@ export class GitChangeTracker {
     try {
       this.git(['rev-parse', '--git-dir']);
       this._isGitRepo = true;
-    } catch {
+    }
+    catch {
       this._isGitRepo = false;
     }
 
@@ -44,11 +45,14 @@ export class GitChangeTracker {
    * Get the current git commit hash
    */
   getCurrentCommit(): string | null {
-    if (!this.isGitRepo()) return null;
+    if (!this.isGitRepo()) {
+      return null;
+    }
 
     try {
       return this.git(['rev-parse', 'HEAD']);
-    } catch {
+    }
+    catch {
       return null;
     }
   }
@@ -57,12 +61,15 @@ export class GitChangeTracker {
    * Get files changed between two commits
    */
   getChangedFiles(fromCommit: string, toCommit: string = 'HEAD'): string[] {
-    if (!this.isGitRepo()) return [];
+    if (!this.isGitRepo()) {
+      return [];
+    }
 
     try {
       const output = this.git(['diff', '--name-only', `${fromCommit}..${toCommit}`]);
       return output.split('\n').filter(Boolean);
-    } catch {
+    }
+    catch {
       return [];
     }
   }
@@ -71,14 +78,17 @@ export class GitChangeTracker {
    * Get files changed since a timestamp
    */
   getChangedFilesSince(timestamp: number): string[] {
-    if (!this.isGitRepo()) return [];
+    if (!this.isGitRepo()) {
+      return [];
+    }
 
     try {
       const isoDate = new Date(timestamp).toISOString();
       const output = this.git(['log', `--since=${isoDate}`, '--name-only', '--pretty=format:']);
       const files = [...new Set(output.split('\n').filter(Boolean))];
       return files;
-    } catch {
+    }
+    catch {
       return [];
     }
   }
@@ -90,14 +100,19 @@ export class GitChangeTracker {
    * Returns 0 when the file has no commits in that window or git is unavailable.
    */
   getFileCommitCount(filePath: string, sinceMs: number): number {
-    if (!this.isGitRepo()) return 0;
+    if (!this.isGitRepo()) {
+      return 0;
+    }
 
     try {
       const sinceDate = new Date(sinceMs).toISOString();
       const output = this.git(['log', '--oneline', `--since=${sinceDate}`, '--', filePath]);
-      if (!output) return 0;
+      if (!output) {
+        return 0;
+      }
       return output.split('\n').filter(Boolean).length;
-    } catch {
+    }
+    catch {
       return 0;
     }
   }
@@ -106,13 +121,16 @@ export class GitChangeTracker {
    * Get the last modification time of a file from git
    */
   getFileLastModified(filePath: string): number | null {
-    if (!this.isGitRepo()) return null;
+    if (!this.isGitRepo()) {
+      return null;
+    }
 
     try {
       const output = this.git(['log', '-1', '--format=%ct', '--', filePath]);
       const timestamp = parseInt(output, 10);
       return timestamp ? timestamp * 1000 : null;
-    } catch {
+    }
+    catch {
       return null;
     }
   }
@@ -122,22 +140,29 @@ export class GitChangeTracker {
    * Uses NUL byte as separator to safely handle commit messages containing |
    */
   getFileCommitInfo(filePath: string): CommitInfo | null {
-    if (!this.isGitRepo()) return null;
+    if (!this.isGitRepo()) {
+      return null;
+    }
 
     try {
       const output = this.git(['log', '-1', '--format=%H%x00%ct%x00%s', '--', filePath]);
 
-      if (!output) return null;
+      if (!output) {
+        return null;
+      }
 
       const parts = output.split('\0');
-      if (parts.length < 3) return null;
+      if (parts.length < 3) {
+        return null;
+      }
 
       return {
         hash: parts[0],
         timestamp: parseInt(parts[1], 10) * 1000,
         message: parts.slice(2).join('\0'),
       };
-    } catch {
+    }
+    catch {
       return null;
     }
   }

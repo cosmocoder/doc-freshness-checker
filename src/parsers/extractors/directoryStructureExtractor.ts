@@ -79,7 +79,9 @@ export class DirectoryStructureExtractor extends BaseExtractor {
     const pathStack: Array<{ depth: number; name: string }> = [];
 
     for (const line of lines) {
-      if (!line.trim()) continue;
+      if (!line.trim()) {
+        continue;
+      }
 
       // Calculate depth based on leading characters
       const depth = this.calculateDepth(line);
@@ -87,10 +89,14 @@ export class DirectoryStructureExtractor extends BaseExtractor {
       // Extract the file/folder name
       const name = this.extractName(line);
 
-      if (!name) continue;
+      if (!name) {
+        continue;
+      }
 
       // Skip common non-path entries
-      if (this.shouldSkipEntry(name)) continue;
+      if (this.shouldSkipEntry(name)) {
+        continue;
+      }
 
       // Pop stack entries that are at same or deeper level
       while (pathStack.length > 0 && pathStack[pathStack.length - 1].depth >= depth) {
@@ -126,10 +132,12 @@ export class DirectoryStructureExtractor extends BaseExtractor {
       if (char === ' ' || char === '\t') {
         depth += char === '\t' ? 4 : 1;
         i++;
-      } else if (char === '│' || char === '|') {
+      }
+      else if (char === '│' || char === '|') {
         depth += 4;
         i++;
-      } else if (char === '├' || char === '└' || char === '+' || char === '`') {
+      }
+      else if (char === '├' || char === '└' || char === '+' || char === '`') {
         depth += 4;
         // Skip the rest of the tree characters (─, --, etc.)
         i++;
@@ -137,7 +145,8 @@ export class DirectoryStructureExtractor extends BaseExtractor {
           i++;
         }
         break;
-      } else {
+      }
+      else {
         break;
       }
     }
@@ -167,14 +176,29 @@ export class DirectoryStructureExtractor extends BaseExtractor {
    */
   private shouldSkipEntry(name: string): boolean {
     // Skip comments, ellipsis, separators, etc.
-    if (name.startsWith('#')) return true;
-    if (name === '...') return true;
-    if (name === '-') return true;
-    if (name === '---') return true;
-    if (/^-+$/.test(name)) return true; // Any number of dashes
-    if (name.length === 0) return true;
+    if (name.startsWith('#')) {
+      return true;
+    }
+    if (name === '...') {
+      return true;
+    }
+    if (name === '-') {
+      return true;
+    }
+    if (name === '---') {
+      return true;
+    }
+    if (/^-+$/.test(name)) {
+      return true;
+    }
+    // Any number of dashes
+    if (name.length === 0) {
+      return true;
+    }
     // Skip entries that look like markdown/asciidoc separators
-    if (/^[=\-_~]+$/.test(name)) return true;
+    if (/^[=\-_~]+$/.test(name)) {
+      return true;
+    }
 
     return false;
   }
@@ -184,7 +208,9 @@ export class DirectoryStructureExtractor extends BaseExtractor {
    */
   private isValidPath(fullPath: string): boolean {
     // Skip very short single-segment paths that are too generic
-    if (!fullPath.includes('/') && fullPath.length < 3) return false;
+    if (!fullPath.includes('/') && fullPath.length < 3) {
+      return false;
+    }
 
     return true;
   }

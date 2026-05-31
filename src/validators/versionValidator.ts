@@ -35,9 +35,13 @@ const manifestParsers: Record<string, ManifestParser> = {
 
     for (const line of content.split('\n')) {
       const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) continue;
+      if (!trimmed || trimmed.startsWith('#')) {
+        continue;
+      }
       const match = trimmed.match(/^([a-zA-Z0-9\-_]+)([<>=!]+)?(.+)?$/);
-      if (!match) continue;
+      if (!match) {
+        continue;
+      }
       versions.set(match[1].toLowerCase(), match[3] ? normalizeVersion(match[3]) : 'any');
     }
 
@@ -79,7 +83,9 @@ const manifestParsers: Record<string, ManifestParser> = {
     if (requireMatch) {
       for (const line of requireMatch[1].split('\n')) {
         const match = line.trim().match(/^([^\s]+)\s+v?([^\s]+)/);
-        if (!match) continue;
+        if (!match) {
+          continue;
+        }
         versions.set(match[1], normalizeVersion(match[2]));
       }
     }
@@ -96,7 +102,9 @@ const manifestParsers: Record<string, ManifestParser> = {
     if (depsMatch) {
       for (const line of depsMatch[1].split('\n')) {
         const match = line.match(/^([a-zA-Z0-9\-_]+)\s*=\s*"?([^"\n]+)"?/);
-        if (!match) continue;
+        if (!match) {
+          continue;
+        }
         versions.set(match[1].toLowerCase(), normalizeVersion(match[2]));
       }
     }
@@ -125,7 +133,9 @@ const manifestParsers: Record<string, ManifestParser> = {
 };
 
 function normalizeVersion(version: string): string {
-  if (!version) return 'any';
+  if (!version) {
+    return 'any';
+  }
   return version.replace(/^[\^~>=<]+/, '').replace(/\.x$/i, '.0');
 }
 
@@ -157,7 +167,9 @@ export class VersionValidator {
     const manifestFiles = config.manifestFiles || ['package.json'];
     const configKey = `${rootDir}::${manifestFiles.join('|')}`;
 
-    if (this.packageVersions && this.loadedFromKey === configKey) return;
+    if (this.packageVersions && this.loadedFromKey === configKey) {
+      return;
+    }
 
     this.packageVersions = new Map();
     this.loadedFromKey = configKey;
@@ -167,14 +179,17 @@ export class VersionValidator {
       const fileName = path.basename(manifestPath);
       const parser = manifestParsers[fileName];
 
-      if (!parser) continue;
+      if (!parser) {
+        continue;
+      }
 
       try {
         const versions = await parser(fullPath);
         for (const [name, version] of versions) {
           this.packageVersions.set(name, version);
         }
-      } catch {
+      }
+      catch {
         // Manifest file not found or parse error
       }
     }
@@ -226,7 +241,8 @@ export class VersionValidator {
           message: `Version mismatch: doc says ${ref.technology} ${docVersion}, actual is ${actualVersion}`,
           suggestion: `Update to ${ref.technology} ${actualVersion}`,
         });
-      } else {
+      }
+      else {
         results.push({
           reference: ref,
           valid: true,

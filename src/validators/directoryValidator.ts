@@ -136,7 +136,8 @@ export class DirectoryValidator {
     try {
       await fs.promises.access(fullPath);
       return true;
-    } catch {
+    }
+    catch {
       return false;
     }
   }
@@ -190,7 +191,8 @@ export class DirectoryValidator {
       if (bestMatch) {
         return `${parentPath}/${bestMatch}`;
       }
-    } catch {
+    }
+    catch {
       // Parent directory read failed
     }
 
@@ -205,13 +207,19 @@ export class DirectoryValidator {
     const aBase = a.replace(/\.[^.]+$/, '');
     const bBase = b.replace(/\.[^.]+$/, '');
 
-    if (aBase === bBase) return 1;
+    if (aBase === bBase) {
+      return 1;
+    }
 
     // Check for singular/plural by removing common plural suffixes
     const aSingular = this.toSingular(aBase);
     const bSingular = this.toSingular(bBase);
-    if (aSingular === bSingular) return 0.95;
-    if (aSingular === bBase || aBase === bSingular) return 0.95;
+    if (aSingular === bSingular) {
+      return 0.95;
+    }
+    if (aSingular === bBase || aBase === bSingular) {
+      return 0.95;
+    }
 
     return similarityRatio(aBase, bBase);
   }

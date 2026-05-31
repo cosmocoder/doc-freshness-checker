@@ -189,7 +189,9 @@ export class CodeSnippetExtractor extends BaseExtractor {
     while ((blockMatch = codeBlockPattern.exec(document.content)) !== null) {
       const langTag = blockMatch[1].toLowerCase();
       const lang = this.normalizeLanguage(langTag);
-      if (!lang) continue;
+      if (!lang) {
+        continue;
+      }
 
       const blockContent = blockMatch[2];
       const blockLine = this.findLineNumber(document.content, blockMatch.index);
@@ -204,7 +206,9 @@ export class CodeSnippetExtractor extends BaseExtractor {
 
   private normalizeLanguage(tag: string): string | null {
     for (const [lang, aliases] of Object.entries(LANGUAGE_ALIASES)) {
-      if (aliases.includes(tag)) return lang;
+      if (aliases.includes(tag)) {
+        return lang;
+      }
     }
     return null;
   }
@@ -218,9 +222,11 @@ export class CodeSnippetExtractor extends BaseExtractor {
 
     if (lang === 'javascript' || lang === 'typescript') {
       this.extractJsImports(content, lang, blockLine, doc, refs);
-    } else if (lang === 'python') {
+    }
+    else if (lang === 'python') {
       this.extractPythonImports(content, lang, blockLine, doc, refs);
-    } else if (lang === 'go') {
+    }
+    else if (lang === 'go') {
       this.extractGoImports(content, lang, blockLine, doc, refs);
     }
 
@@ -233,7 +239,9 @@ export class CodeSnippetExtractor extends BaseExtractor {
     let match: RegExpExecArray | null;
     while ((match = importPattern.exec(content)) !== null) {
       const modulePath = match[2];
-      if (!modulePath.startsWith('.') && !modulePath.startsWith('/')) continue;
+      if (!modulePath.startsWith('.') && !modulePath.startsWith('/')) {
+        continue;
+      }
 
       const { importedSymbols, importSpecifiers } = this.parseJsImportSpecifiers(match[1]);
 
@@ -256,7 +264,9 @@ export class CodeSnippetExtractor extends BaseExtractor {
     const requirePattern = /(?:const|let|var)[ \t]+(?:\{([^{}]*)\}|(\w+))[ \t]*=[ \t]*require\([ \t]*['"]([^'"]+)['"][ \t]*\)/g;
     while ((match = requirePattern.exec(content)) !== null) {
       const modulePath = match[3];
-      if (!modulePath.startsWith('.') && !modulePath.startsWith('/')) continue;
+      if (!modulePath.startsWith('.') && !modulePath.startsWith('/')) {
+        continue;
+      }
 
       const symbols = match[1]
         ? match[1]
@@ -363,17 +373,25 @@ export class CodeSnippetExtractor extends BaseExtractor {
 
       while ((match = callPattern.exec(line)) !== null) {
         const funcName = match[1];
-        if (SKIP_IDENTIFIERS.has(funcName)) continue;
+        if (SKIP_IDENTIFIERS.has(funcName)) {
+          continue;
+        }
 
         // Skip method calls (preceded by dot)
-        if (match.index > 0 && line[match.index - 1] === '.') continue;
+        if (match.index > 0 && line[match.index - 1] === '.') {
+          continue;
+        }
 
         // Skip definitions and constructors
         const before = line.substring(Math.max(0, match.index - 20), match.index);
-        if (/\b(?:function|def|class|new|typeof|interface|type)\s*$/.test(before)) continue;
+        if (/\b(?:function|def|class|new|typeof|interface|type)\s*$/.test(before)) {
+          continue;
+        }
 
         const arity = this.countArguments(line, match.index + match[0].length - 1, lines, i);
-        if (arity === null) continue;
+        if (arity === null) {
+          continue;
+        }
         const argumentNames = this.extractArgumentNames(line, match.index + match[0].length - 1, lines, i);
 
         refs.push({
@@ -406,11 +424,17 @@ export class CodeSnippetExtractor extends BaseExtractor {
       text += '\n' + lines[lineIdx + lineOffset];
     }
 
-    if (!this.hasClosingParen(text)) return null;
+    if (!this.hasClosingParen(text)) {
+      return null;
+    }
 
     const inner = this.extractParenContent(text);
-    if (inner === null) return null;
-    if (inner.trim() === '') return 0;
+    if (inner === null) {
+      return null;
+    }
+    if (inner.trim() === '') {
+      return 0;
+    }
 
     return this.splitTopLevel(inner, ',').length;
   }
@@ -418,23 +442,33 @@ export class CodeSnippetExtractor extends BaseExtractor {
   private hasClosingParen(text: string): boolean {
     let depth = 0;
     for (const ch of text) {
-      if (ch === '(') depth++;
+      if (ch === '(') {
+        depth++;
+      }
       else if (ch === ')') {
         depth--;
-        if (depth === 0) return true;
+        if (depth === 0) {
+          return true;
+        }
       }
     }
     return false;
   }
 
   private extractParenContent(text: string): string | null {
-    if (text[0] !== '(') return null;
+    if (text[0] !== '(') {
+      return null;
+    }
     let depth = 0;
     for (let i = 0; i < text.length; i++) {
-      if (text[i] === '(') depth++;
+      if (text[i] === '(') {
+        depth++;
+      }
       else if (text[i] === ')') {
         depth--;
-        if (depth === 0) return text.substring(1, i);
+        if (depth === 0) {
+          return text.substring(1, i);
+        }
       }
     }
     return null;
@@ -446,20 +480,29 @@ export class CodeSnippetExtractor extends BaseExtractor {
     let current = '';
 
     for (const ch of content) {
-      if ('([{'.includes(ch)) depth++;
-      else if (')]}'.includes(ch)) depth--;
+      if ('([{'.includes(ch)) {
+        depth++;
+      }
+      else if (')]}'.includes(ch)) {
+        depth--;
+      }
 
       if (ch === delimiter && depth === 0) {
         const trimmed = current.trim();
-        if (trimmed) parts.push(trimmed);
+        if (trimmed) {
+          parts.push(trimmed);
+        }
         current = '';
-      } else {
+      }
+      else {
         current += ch;
       }
     }
 
     const trimmed = current.trim();
-    if (trimmed) parts.push(trimmed);
+    if (trimmed) {
+      parts.push(trimmed);
+    }
     return parts;
   }
 
@@ -496,7 +539,8 @@ export class CodeSnippetExtractor extends BaseExtractor {
       // Split "defaultImport, { named }" into default and named parts
       defaultPart = trimmed.substring(0, braceIdx).trim().replace(/,$/, '').trim();
       namedPart = trimmed.substring(braceIdx);
-    } else {
+    }
+    else {
       defaultPart = trimmed;
     }
     const importedSymbols = defaultPart ? [defaultPart.trim()] : [];
@@ -513,7 +557,9 @@ export class CodeSnippetExtractor extends BaseExtractor {
 
   private parseNamedImportList(namedPart: string): string[] {
     const body = namedPart.trim().replace(/^\{/, '').replace(/\}$/, '').trim();
-    if (!body) return [];
+    if (!body) {
+      return [];
+    }
 
     return body
       .split(',')
@@ -530,10 +576,14 @@ export class CodeSnippetExtractor extends BaseExtractor {
       text += '\n' + lines[lineIdx + lineOffset];
     }
 
-    if (!this.hasClosingParen(text)) return undefined;
+    if (!this.hasClosingParen(text)) {
+      return undefined;
+    }
 
     const inner = this.extractParenContent(text);
-    if (inner === null || inner.trim() === '') return [];
+    if (inner === null || inner.trim() === '') {
+      return [];
+    }
 
     const parts = this.splitTopLevel(inner, ',');
     const names = parts.map((part) => this.extractArgumentName(part));
@@ -543,7 +593,9 @@ export class CodeSnippetExtractor extends BaseExtractor {
 
   private extractArgumentName(argument: string): string | null {
     const trimmed = argument.trim();
-    if (!trimmed) return null;
+    if (!trimmed) {
+      return null;
+    }
 
     const identifierMatch = trimmed.match(/^(?:\.\.\.)?([a-zA-Z_]\w*)$/);
     return identifierMatch ? identifierMatch[1] : null;
@@ -554,7 +606,9 @@ export class CodeSnippetExtractor extends BaseExtractor {
   // ---------------------------------------------------------------------------
 
   private extractConfigKeys(content: string, lang: string, blockLine: number, doc: Document): Reference[] {
-    if (lang !== 'javascript' && lang !== 'typescript') return [];
+    if (lang !== 'javascript' && lang !== 'typescript') {
+      return [];
+    }
 
     const refs: Reference[] = [];
 
@@ -565,10 +619,14 @@ export class CodeSnippetExtractor extends BaseExtractor {
       const typeName = match[1];
       const braceStart = match.index + match[0].length - 1;
       const body = this.extractBraceContent(content, braceStart);
-      if (!body) continue;
+      if (!body) {
+        continue;
+      }
 
       const keys = this.extractObjectKeys(body);
-      if (keys.length === 0) continue;
+      if (keys.length === 0) {
+        continue;
+      }
 
       const lineInBlock = content.substring(0, match.index).split('\n').length - 1;
 
@@ -590,10 +648,14 @@ export class CodeSnippetExtractor extends BaseExtractor {
       const typeName = match[2];
       const braceStart = match.index + match[0].length - 1;
       const body = this.extractBraceContent(content, braceStart);
-      if (!body) continue;
+      if (!body) {
+        continue;
+      }
 
       const keys = this.extractObjectKeys(body);
-      if (keys.length === 0) continue;
+      if (keys.length === 0) {
+        continue;
+      }
 
       const lineInBlock = content.substring(0, match.index).split('\n').length - 1;
 
@@ -615,10 +677,14 @@ export class CodeSnippetExtractor extends BaseExtractor {
   private extractBraceContent(content: string, braceStart: number): string | null {
     let depth = 0;
     for (let i = braceStart; i < content.length; i++) {
-      if (content[i] === '{') depth++;
+      if (content[i] === '{') {
+        depth++;
+      }
       else if (content[i] === '}') {
         depth--;
-        if (depth === 0) return content.substring(braceStart + 1, i);
+        if (depth === 0) {
+          return content.substring(braceStart + 1, i);
+        }
       }
     }
     return null;
@@ -630,14 +696,17 @@ export class CodeSnippetExtractor extends BaseExtractor {
 
     for (const line of body.split('\n')) {
       const trimmed = line.trim();
-      if (!trimmed) continue;
+      if (!trimmed) {
+        continue;
+      }
 
       // Only extract keys at object-literal depth 0
       if (depth === 0) {
         const colonMatch = trimmed.match(/^(\w+)\s*\??:/);
         if (colonMatch) {
           keys.push(colonMatch[1]);
-        } else {
+        }
+        else {
           // Shorthand properties: key, or trailing key
           const shorthandMatch = trimmed.match(/^(\w+)\s*[,}]?\s*$/);
           if (shorthandMatch && !['true', 'false', 'null', 'undefined'].includes(shorthandMatch[1])) {
@@ -647,8 +716,12 @@ export class CodeSnippetExtractor extends BaseExtractor {
       }
 
       for (const ch of trimmed) {
-        if (ch === '{') depth++;
-        else if (ch === '}') depth--;
+        if (ch === '{') {
+          depth++;
+        }
+        else if (ch === '}') {
+          depth--;
+        }
       }
     }
 

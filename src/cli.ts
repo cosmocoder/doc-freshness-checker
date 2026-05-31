@@ -131,7 +131,8 @@ export async function runCli(options: CLIOptions, deps: CliDeps = defaultDeps): 
       return 1;
     }
     return 0;
-  } catch (error) {
+  }
+  catch (error) {
     deps.logError('Error:', (error as Error).message);
     if (options.verbose) {
       deps.logError((error as Error).stack);
@@ -158,7 +159,8 @@ export async function runAsCli(argv: string[] = process.argv, deps: CliDeps = de
 function toRealPath(filePath: string): string {
   try {
     return realpathSync(filePath);
-  } catch {
+  }
+  catch {
     return resolve(filePath);
   }
 }

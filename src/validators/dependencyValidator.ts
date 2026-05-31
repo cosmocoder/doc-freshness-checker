@@ -19,7 +19,9 @@ export class DependencyValidator {
     const manifestFiles = config.manifestFiles || ['package.json'];
     const configKey = `${rootDir}::${manifestFiles.join('|')}`;
 
-    if (this.dependencies && this.loadedFromKey === configKey) return;
+    if (this.dependencies && this.loadedFromKey === configKey) {
+      return;
+    }
 
     this.dependencies = new Set();
     this.loadedFromKey = configKey;
@@ -34,7 +36,8 @@ export class DependencyValidator {
         for (const dep of deps) {
           this.dependencies.add(dep.toLowerCase());
         }
-      } catch {
+      }
+      catch {
         // Manifest not found
       }
     }
@@ -61,7 +64,8 @@ export class DependencyValidator {
           reference: ref,
           valid: true,
         });
-      } else {
+      }
+      else {
         results.push({
           reference: ref,
           valid: false,
@@ -89,12 +93,16 @@ const manifestDependencyParsers: Record<string, (content: string) => string[]> =
       .filter((dep): dep is string => Boolean(dep)),
   'pyproject.toml': (content) => {
     const depsMatch = content.match(/\[project\.dependencies\]([\s\S]*?)(?:\[|$)/);
-    if (!depsMatch) return [];
+    if (!depsMatch) {
+      return [];
+    }
     return Array.from(depsMatch[1].matchAll(/"([^"<>=!]+)/g), (match) => match[1].split(/[<>=!]/)[0]);
   },
   'go.mod': (content) => {
     const requireMatch = content.match(/require\s+\(([\s\S]*?)\)/);
-    if (!requireMatch) return [];
+    if (!requireMatch) {
+      return [];
+    }
     return requireMatch[1]
       .split('\n')
       .map((line) => line.trim().match(/^([^\s]+)/)?.[1])
@@ -102,7 +110,9 @@ const manifestDependencyParsers: Record<string, (content: string) => string[]> =
   },
   'Cargo.toml': (content) => {
     const depsMatch = content.match(/\[dependencies\]([\s\S]*?)(?:\[|$)/);
-    if (!depsMatch) return [];
+    if (!depsMatch) {
+      return [];
+    }
     return depsMatch[1]
       .split('\n')
       .map((line) => line.match(/^([a-zA-Z0-9\-_]+)\s*=/)?.[1])

@@ -96,7 +96,8 @@ export class EnhancedReporter {
           }
           report += '\n';
         }
-      } catch {
+      }
+      catch {
         // Git operations failed
       }
     }

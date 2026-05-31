@@ -204,7 +204,9 @@ describe('UrlValidator', () => {
 
   describe('concurrency', () => {
     it('respects concurrency limit', async () => {
-      for (let i = 0; i < 10; i++) fetchMock.mockResponseOnce('', { status: 200 });
+      for (let i = 0; i < 10; i++) {
+        fetchMock.mockResponseOnce('', { status: 200 });
+      }
       const refs = Array.from({ length: 10 }, (_, i) => makeRef(`https://example${i}.com/`));
       const config: DocFreshnessConfig = { urlValidation: { enabled: true, concurrency: 3 } };
       const results = await validator.validateBatch(refs, doc, config);
