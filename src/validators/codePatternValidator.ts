@@ -87,7 +87,9 @@ export class CodePatternValidator {
   }
 
   async buildSourceIndex(config: DocFreshnessConfig): Promise<void> {
-    if (this.sourceIndex) return;
+    if (this.sourceIndex) {
+      return;
+    }
 
     this.sourceIndex = new Map();
     this.sourceFiles = new Map();
@@ -113,11 +115,13 @@ export class CodePatternValidator {
 
             // Store file content for vector search
             this.sourceFiles.set(relativePath, { content, language: lang });
-          } catch {
+          }
+          catch {
             // Skip unreadable files
           }
         }
-      } catch {
+      }
+      catch {
         // Skip invalid patterns
       }
     }
@@ -150,7 +154,9 @@ export class CodePatternValidator {
 
   private indexContent(content: string, filePath: string, language: string): void {
     const langConfig = languageConfigs[language];
-    if (!langConfig) return;
+    if (!langConfig) {
+      return;
+    }
 
     for (const { regex, kind } of langConfig.patterns) {
       let match: RegExpExecArray | null;
@@ -192,7 +198,8 @@ export class CodePatternValidator {
           valid: true,
           foundIn: found.map((f) => f.filePath),
         });
-      } else {
+      }
+      else {
         const similar = this.findSimilarSymbol(name);
 
         // Reduce severity for illustrative patterns that weren't skipped

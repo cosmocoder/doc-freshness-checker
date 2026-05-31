@@ -66,9 +66,12 @@ export class ValidationEngine {
           for (const result of validationResults) {
             const bucket = this.classifyResult(result);
             this.incrementSummary(results, bucket);
-            if (bucket === 'error' || bucket === 'warning') docResult.issues.push(result);
+            if (bucket === 'error' || bucket === 'warning') {
+              docResult.issues.push(result);
+            }
           }
-        } catch (error) {
+        }
+        catch (error) {
           if (this.config.verbose) {
             console.warn(`Warning: Validator for ${type} failed: ${(error as Error).message}`);
           }
@@ -104,10 +107,18 @@ export class ValidationEngine {
     valid: boolean;
     severity?: 'error' | 'warning' | 'info';
   }): 'valid' | 'error' | 'warning' | 'skipped' {
-    if (result.skipped) return 'skipped';
-    if (result.valid || result.severity === 'info') return 'valid';
-    if (result.severity === 'error') return 'error';
-    if (result.severity === 'warning') return 'warning';
+    if (result.skipped) {
+      return 'skipped';
+    }
+    if (result.valid || result.severity === 'info') {
+      return 'valid';
+    }
+    if (result.severity === 'error') {
+      return 'error';
+    }
+    if (result.severity === 'warning') {
+      return 'warning';
+    }
     return 'valid';
   }
 

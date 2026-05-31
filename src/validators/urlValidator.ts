@@ -46,25 +46,56 @@ function isPrivateIpAddress(value: string): boolean {
     const octets = value.split('.').map((part) => Number(part));
     const [a, b] = octets;
 
-    if (octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
-    if (a === 10) return true; // 10.0.0.0/8
-    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
-    if (a === 192 && b === 168) return true; // 192.168.0.0/16
-    if (a === 169 && b === 254) return true; // 169.254.0.0/16
-    if (a === 127) return true; // 127.0.0.0/8
-    if (a === 0) return true; // 0.0.0.0/8
-    if (a >= 224) return true; // Multicast/reserved
+    if (octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
+      return true;
+    }
+    if (a === 10) {
+      return true;
+    }
+    // 10.0.0.0/8
+    if (a === 172 && b >= 16 && b <= 31) {
+      return true;
+    }
+    // 172.16.0.0/12
+    if (a === 192 && b === 168) {
+      return true;
+    }
+    // 192.168.0.0/16
+    if (a === 169 && b === 254) {
+      return true;
+    }
+    // 169.254.0.0/16
+    if (a === 127) {
+      return true;
+    }
+    // 127.0.0.0/8
+    if (a === 0) {
+      return true;
+    }
+    // 0.0.0.0/8
+    if (a >= 224) {
+      return true;
+    }
+    // Multicast/reserved
     return false;
   }
 
   if (ipVersion === 6) {
     const normalized = value.toLowerCase();
-    if (normalized === '::1' || normalized === '::') return true;
-    if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true; // fc00::/7
+    if (normalized === '::1' || normalized === '::') {
+      return true;
+    }
+    if (normalized.startsWith('fc') || normalized.startsWith('fd')) {
+      return true;
+    }
+    // fc00::/7
     if (normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')) {
       return true; // fe80::/10 link-local
     }
-    if (normalized.startsWith('::ffff:127.')) return true; // IPv4-mapped loopback
+    if (normalized.startsWith('::ffff:127.')) {
+      return true;
+    }
+    // IPv4-mapped loopback
     return false;
   }
 
@@ -191,7 +222,8 @@ export class UrlValidator {
           message: 'Skipped: hostname resolves to private/internal address',
         };
       }
-    } catch {
+    }
+    catch {
       return {
         reference: ref,
         valid: false,
@@ -231,21 +263,24 @@ export class UrlValidator {
           valid: true,
           statusCode: response.status,
         };
-      } else if (response.status === 401 || response.status === 403) {
+      }
+      else if (response.status === 401 || response.status === 403) {
         // Authentication required - treat as valid but note it
         result = {
           valid: true,
           statusCode: response.status,
           message: `Requires authentication: ${url}`,
         };
-      } else if (response.status === 404 && this.isGitHubUrl(url)) {
+      }
+      else if (response.status === 404 && this.isGitHubUrl(url)) {
         // GitHub private repos return 404 - treat as potentially valid
         result = {
           valid: true,
           statusCode: response.status,
           message: `May be private repository: ${url}`,
         };
-      } else {
+      }
+      else {
         result = {
           valid: false,
           severity: config.rules?.['external-url']?.severity || 'warning',
@@ -260,7 +295,8 @@ export class UrlValidator {
         reference: ref,
         ...result,
       };
-    } catch (error) {
+    }
+    catch (error) {
       const err = error as Error;
       const result = {
         valid: false,
@@ -303,7 +339,8 @@ export class UrlValidator {
       response.body?.cancel().catch(() => {});
 
       return result;
-    } finally {
+    }
+    finally {
       clearTimeout(timeoutId);
     }
   }
@@ -315,7 +352,8 @@ export class UrlValidator {
     try {
       const urlObj = new URL(url);
       return urlObj.hostname === 'github.com' || urlObj.hostname === 'raw.githubusercontent.com' || urlObj.hostname.endsWith('.github.com');
-    } catch {
+    }
+    catch {
       return false;
     }
   }
@@ -341,7 +379,8 @@ export class UrlValidator {
     try {
       const addresses = await dns.lookup(hostname, { all: true, verbatim: true });
       return addresses.some((entry) => isPrivateIpAddress(entry.address));
-    } catch {
+    }
+    catch {
       return false;
     }
   }

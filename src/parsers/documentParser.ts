@@ -59,7 +59,8 @@ export class DocumentParser {
         }
 
         documents.push(doc);
-      } catch (error) {
+      }
+      catch (error) {
         if (this.config.verbose) {
           console.warn(`Warning: Could not read ${filePath}: ${(error as Error).message}`);
         }

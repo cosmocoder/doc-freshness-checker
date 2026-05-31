@@ -233,8 +233,12 @@ describe('FreshnessScorer', () => {
       const oneDay = 24 * 60 * 60 * 1000;
       const tracker = makeMockGitTracker({
         getFileCommitInfo: (filePath: string) => {
-          if (filePath === 'doc.md') return { hash: 'doc', timestamp: now - 5 * oneDay, message: 'doc' };
-          if (filePath === 'src/old.ts') return { hash: 'old', timestamp: now - 30 * oneDay, message: 'old' };
+          if (filePath === 'doc.md') {
+            return { hash: 'doc', timestamp: now - 5 * oneDay, message: 'doc' };
+          }
+          if (filePath === 'src/old.ts') {
+            return { hash: 'old', timestamp: now - 30 * oneDay, message: 'old' };
+          }
           return { hash: 'new', timestamp: now, message: 'new' };
         },
       });

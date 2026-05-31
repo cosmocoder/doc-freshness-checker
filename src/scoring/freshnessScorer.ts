@@ -223,10 +223,18 @@ export class FreshnessScorer {
    * Convert numeric score to letter grade
    */
   private scoreToGrade(score: number): Grade {
-    if (score >= this.thresholds.gradeA) return 'A';
-    if (score >= this.thresholds.gradeB) return 'B';
-    if (score >= this.thresholds.gradeC) return 'C';
-    if (score >= this.thresholds.gradeD) return 'D';
+    if (score >= this.thresholds.gradeA) {
+      return 'A';
+    }
+    if (score >= this.thresholds.gradeB) {
+      return 'B';
+    }
+    if (score >= this.thresholds.gradeC) {
+      return 'C';
+    }
+    if (score >= this.thresholds.gradeD) {
+      return 'D';
+    }
     return 'F';
   }
 

@@ -30,7 +30,8 @@ describe('loadConfig', () => {
     await fs.promises.writeFile(configPath, serialized);
     try {
       await assertConfig(configPath);
-    } finally {
+    }
+    finally {
       await unlinkIfExists(configPath);
     }
   }

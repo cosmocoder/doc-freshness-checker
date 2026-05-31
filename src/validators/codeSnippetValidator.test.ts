@@ -50,7 +50,8 @@ async function withTempSourceFiles(
       sourcePatterns: ['src/**/*.{ts,py}'],
       rules: { 'code-snippet': { enabled: true, severity: 'warning' } },
     });
-  } finally {
+  }
+  finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
 }

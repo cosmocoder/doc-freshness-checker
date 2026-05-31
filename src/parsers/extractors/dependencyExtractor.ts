@@ -31,7 +31,9 @@ export class DependencyExtractor extends BaseExtractor {
     ];
 
     for (const { regex, ecosystem } of patterns) {
-      if (!this.ecosystems.includes(ecosystem)) continue;
+      if (!this.ecosystems.includes(ecosystem)) {
+        continue;
+      }
 
       let match: RegExpExecArray | null;
       const re = new RegExp(regex.source, regex.flags);
@@ -39,7 +41,9 @@ export class DependencyExtractor extends BaseExtractor {
         const pkg = match[1];
 
         // Filter out common false positives
-        if (this.isFalsePositive(pkg)) continue;
+        if (this.isFalsePositive(pkg)) {
+          continue;
+        }
 
         references.push({
           type: this.type,
@@ -57,7 +61,9 @@ export class DependencyExtractor extends BaseExtractor {
 
   private isFalsePositive(pkg: string): boolean {
     // Skip very short names
-    if (pkg.length < 3) return true;
+    if (pkg.length < 3) {
+      return true;
+    }
 
     // Skip common words that appear in backticks
     const commonWords = [
@@ -96,10 +102,14 @@ export class DependencyExtractor extends BaseExtractor {
       'file',
     ];
 
-    if (commonWords.includes(pkg.toLowerCase())) return true;
+    if (commonWords.includes(pkg.toLowerCase())) {
+      return true;
+    }
 
     // Skip file extensions
-    if (/\.[a-z]{2,4}$/.test(pkg)) return true;
+    if (/\.[a-z]{2,4}$/.test(pkg)) {
+      return true;
+    }
 
     return false;
   }

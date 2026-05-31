@@ -38,9 +38,11 @@ export async function loadConfig(configPath?: string): Promise<DocFreshnessConfi
     if (extension === '.json') {
       const content = await fs.promises.readFile(fullPath, 'utf-8');
       userConfig = JSON.parse(content);
-    } else if (extension === '.cjs') {
+    }
+    else if (extension === '.cjs') {
       userConfig = loadCjsConfig(fullPath);
-    } else {
+    }
+    else {
       const content = await fs.promises.readFile(fullPath, 'utf-8');
       userConfig = detectModuleType(content, fullPath) ? await loadESMConfig(content, fullPath) : loadCjsConfig(fullPath);
     }
@@ -48,7 +50,8 @@ export async function loadConfig(configPath?: string): Promise<DocFreshnessConfi
     const merged = mergeConfig(DEFAULT_CONFIG, userConfig);
     merged._configFile = configFile;
     return await autoDetectConfig(merged);
-  } catch (error) {
+  }
+  catch (error) {
     const err = error as NodeJS.ErrnoException;
     if (err.code === 'ENOENT' || err.code === 'ERR_MODULE_NOT_FOUND') {
       console.log('Config file not found, using defaults');
@@ -76,7 +79,8 @@ async function loadESMConfig(content: string, filePath: string): Promise<DocFres
     const module = await import(configUrl);
 
     return module.default || module;
-  } finally {
+  }
+  finally {
     await fs.promises.unlink(tempFile).catch(() => {});
   }
 }
@@ -98,8 +102,12 @@ function transformConfigContent(content: string): string {
  */
 function detectModuleType(content: string, filePath: string): boolean {
   // Check file extension first
-  if (filePath.endsWith('.mjs')) return true;
-  if (filePath.endsWith('.cjs')) return false;
+  if (filePath.endsWith('.mjs')) {
+    return true;
+  }
+  if (filePath.endsWith('.cjs')) {
+    return false;
+  }
 
   // Check for ESM syntax indicators
   const esmPatterns = [
@@ -121,10 +129,14 @@ function detectModuleType(content: string, filePath: string): boolean {
   const hasCJS = cjsPatterns.some((pattern) => pattern.test(content));
 
   // If file has ESM syntax, treat as ESM
-  if (hasESM && !hasCJS) return true;
+  if (hasESM && !hasCJS) {
+    return true;
+  }
 
   // If file has CJS syntax, treat as CJS
-  if (hasCJS && !hasESM) return false;
+  if (hasCJS && !hasESM) {
+    return false;
+  }
 
   // If mixed or unclear, check project's package.json
   try {
@@ -132,9 +144,12 @@ function detectModuleType(content: string, filePath: string): boolean {
     const pkgPath = path.join(projectRoot, 'package.json');
     if (fs.existsSync(pkgPath)) {
       const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-      if (pkg.type === 'module') return true;
+      if (pkg.type === 'module') {
+        return true;
+      }
     }
-  } catch {
+  }
+  catch {
     // Ignore package.json read errors
   }
 
@@ -194,10 +209,14 @@ function detectSourcePatterns(rootDir: string): string[] {
     const entries = fs.readdirSync(rootDir, { withFileTypes: true });
 
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
+      if (!entry.isDirectory()) {
+        continue;
+      }
 
       // Skip common non-source directories
-      if (SKIP_DIRS.has(entry.name) || entry.name.startsWith('.')) continue;
+      if (SKIP_DIRS.has(entry.name) || entry.name.startsWith('.')) {
+        continue;
+      }
 
       const dirPath = path.join(rootDir, entry.name);
 
@@ -210,7 +229,8 @@ function detectSourcePatterns(rootDir: string): string[] {
         patterns.push(pattern);
       }
     }
-  } catch {
+  }
+  catch {
     // Fallback if directory reading fails
   }
 
@@ -232,19 +252,25 @@ function containsSourceFiles(dirPath: string, extensions: string[]): boolean {
     const entries = fs.readdirSync(dirPath, { withFileTypes: true });
 
     for (const entry of entries) {
-      if (entry.isFile() && isSourceExt(entry.name)) return true;
+      if (entry.isFile() && isSourceExt(entry.name)) {
+        return true;
+      }
 
       if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
         // Check one level deep
         const subPath = path.join(dirPath, entry.name);
         try {
-          if (fs.readdirSync(subPath).some(isSourceExt)) return true;
-        } catch {
+          if (fs.readdirSync(subPath).some(isSourceExt)) {
+            return true;
+          }
+        }
+        catch {
           // Skip unreadable subdirectory
         }
       }
     }
-  } catch {
+  }
+  catch {
     // Directory not readable
   }
 
@@ -261,7 +287,9 @@ function mergeConfig(defaults: DocFreshnessConfig, user: DocFreshnessConfig): Do
     const userValue = (user as Record<string, unknown>)[key];
     const defaultValue = (defaults as Record<string, unknown>)[key];
 
-    if (userValue === undefined) continue;
+    if (userValue === undefined) {
+      continue;
+    }
 
     if (
       typeof userValue === 'object' &&
@@ -271,7 +299,8 @@ function mergeConfig(defaults: DocFreshnessConfig, user: DocFreshnessConfig): Do
       defaultValue !== null
     ) {
       result[key] = mergeConfig(defaultValue as DocFreshnessConfig, userValue as DocFreshnessConfig);
-    } else {
+    }
+    else {
       result[key] = userValue;
     }
   }

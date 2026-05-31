@@ -182,7 +182,9 @@ describe('runner', () => {
     it.each(['json', 'markdown', 'enhanced'] as ReporterType[])('writes %s report to file with outputPath', async (reporter) => {
       await withOutputFile(cacheRoot, `test-${reporter}.out`, async (outputPath) => {
         const cfg: DocFreshnessConfig = { ...baseConfig, reporters: [reporter], outputPath, cache: { enabled: false } };
-        if (reporter === 'enhanced') cfg.graph = { enabled: true };
+        if (reporter === 'enhanced') {
+          cfg.graph = { enabled: true };
+        }
         captureLog();
         await run(cfg);
         expect(await fs.promises.readFile(outputPath, 'utf-8')).toBeTruthy();
@@ -198,7 +200,9 @@ describe('runner', () => {
           verbose: true,
           cache: { enabled: false },
         };
-        if (reporter === 'enhanced') cfg.graph = { enabled: true };
+        if (reporter === 'enhanced') {
+          cfg.graph = { enabled: true };
+        }
         const spy = captureLog();
         await run(cfg);
         expect(spy.mock.calls.flat().join('\n')).toContain('written to');
@@ -217,7 +221,8 @@ describe('runner', () => {
           .then(() => true)
           .catch(() => false);
         expect(exists).toBe(true);
-      } finally {
+      }
+      finally {
         await fs.promises.rm(path.join(process.cwd(), cacheDir), { recursive: true, force: true }).catch(() => {});
       }
     });
@@ -288,7 +293,8 @@ describe('runner', () => {
     await fs.promises.writeFile(path.join(fullDir, 'url-cache.json'), '{}');
     try {
       expect(await run({ ...baseConfig, cache: { enabled: true, dir: cacheDir } })).toBeDefined();
-    } finally {
+    }
+    finally {
       await fs.promises.rm(fullDir, { recursive: true, force: true }).catch(() => {});
     }
   });

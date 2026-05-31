@@ -8,26 +8,29 @@ export default defineConfig([
   {
     files: ['**/*.{js,mjs,cjs,ts,mts,cts}'],
     plugins: {
-      js
+      js,
     },
     extends: ['js/recommended'],
     languageOptions: {
-      globals: globals.node
+      globals: globals.node,
     },
     rules: {
       'brace-style': ['error', 'stroustrup', { allowSingleLine: false }],
-      curly: ['error', 'all']
-    }
+      curly: ['error', 'all'],
+    },
   },
   tseslint.configs.recommended,
   {
     files: ['**/*.{ts,mts,cts}'],
     rules: {
-      '@typescript-eslint/no-unused-vars': ['error', {
-        argsIgnorePattern: '^_',
-        varsIgnorePattern: '^_',
-        caughtErrorsIgnorePattern: '^_',
-      }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
       'no-unused-vars': 'off',
     },
   },

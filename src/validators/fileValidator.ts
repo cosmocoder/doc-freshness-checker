@@ -60,7 +60,8 @@ export class FileValidator {
     let resolvedPath: string;
     if (path.isAbsolute(ref.value)) {
       resolvedPath = path.resolve(ref.value);
-    } else {
+    }
+    else {
       resolvedPath = path.resolve(docDir, ref.value);
     }
 
@@ -87,7 +88,8 @@ export class FileValidator {
         valid: true,
         resolvedPath,
       };
-    } catch {
+    }
+    catch {
       // File doesn't exist - try to find similar files
       const suggestion = await this.findSuggestion(ref.value, docDir, rootDir);
 
@@ -114,7 +116,8 @@ export class FileValidator {
     // Check if directory exists
     try {
       await fs.promises.access(dir);
-    } catch {
+    }
+    catch {
       return null;
     }
 
@@ -123,7 +126,8 @@ export class FileValidator {
       try {
         const files = await fs.promises.readdir(dir);
         this.directoryCache.set(dir, files);
-      } catch {
+      }
+      catch {
         return null;
       }
     }

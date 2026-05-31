@@ -113,29 +113,31 @@ We follow the [Conventional Commits](https://www.conventionalcommits.org/) speci
 
 ### Commit Types and Release Impact
 
-| Type | Description | Release Impact |
-|------|-------------|----------------|
-| `feat` | A new feature | **Minor** version bump (1.x.0) |
-| `fix` | A bug fix | **Patch** version bump (1.0.x) |
-| `perf` | Performance improvement | **Patch** version bump |
-| `docs` | Documentation only | No release |
-| `style` | Code style (formatting, etc.) | No release |
-| `refactor` | Code change that neither fixes nor adds | No release |
-| `test` | Adding or updating tests | No release |
-| `chore` | Maintenance tasks | No release |
-| `ci` | CI/CD changes | No release |
-| `build` | Build system changes | No release |
+| Type       | Description                             | Release Impact                 |
+| ---------- | --------------------------------------- | ------------------------------ |
+| `feat`     | A new feature                           | **Minor** version bump (1.x.0) |
+| `fix`      | A bug fix                               | **Patch** version bump (1.0.x) |
+| `perf`     | Performance improvement                 | **Patch** version bump         |
+| `docs`     | Documentation only                      | No release                     |
+| `style`    | Code style (formatting, etc.)           | No release                     |
+| `refactor` | Code change that neither fixes nor adds | No release                     |
+| `test`     | Adding or updating tests                | No release                     |
+| `chore`    | Maintenance tasks                       | No release                     |
+| `ci`       | CI/CD changes                           | No release                     |
+| `build`    | Build system changes                    | No release                     |
 
 ### Commit Strategy for Pull Requests
 
 **For feature PRs:**
 
 1. **Primary commit** — Use `feat` prefix for the main feature:
+
    ```
    feat(checker): add custom rule support for freshness checks
    ```
 
 2. **Follow-up fixes within the same PR** — Use `chore` or `refactor` for bug fixes or improvements to your new feature:
+
    ```
    chore(checker): fix typo in rule validation logic
    refactor(checker): simplify rule matching
@@ -162,6 +164,7 @@ We follow the [Conventional Commits](https://www.conventionalcommits.org/) speci
 ### Writing Good Commit Bodies
 
 The commit body is included in release notes, so write it for your users! Use it to explain:
+
 - What the change does and why
 - Any important details or caveats
 - Sub-features or components (use `-` for bullet points)

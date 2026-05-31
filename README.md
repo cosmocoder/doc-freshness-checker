@@ -160,15 +160,15 @@ doc-freshness --score --incremental
 
 ## What Gets Validated
 
-| Reference type        | What is checked                                                                   |
-| --------------------- | --------------------------------------------------------------------------------- |
-| `file-path`           | Referenced files/directories exist                                                |
-| `external-url`        | External URLs are reachable (with caching and skip rules)                         |
-| `version`             | Mentioned versions compared to parsed manifests                                   |
-| `directory-structure` | Tree snippets align with actual structure                                         |
-| `code-pattern`        | Mentioned symbols exist in indexed source                                         |
+| Reference type        | What is checked                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------ |
+| `file-path`           | Referenced files/directories exist                                                               |
+| `external-url`        | External URLs are reachable (with caching and skip rules)                                        |
+| `version`             | Mentioned versions compared to parsed manifests                                                  |
+| `directory-structure` | Tree snippets align with actual structure                                                        |
+| `code-pattern`        | Mentioned symbols exist in indexed source                                                        |
 | `code-snippet`        | Import paths resolve, exported symbols exist, function signatures still match, config keys valid |
-| `dependency`          | Mentioned packages exist in manifest dependencies                                 |
+| `dependency`          | Mentioned packages exist in manifest dependencies                                                |
 
 ### URL Validation Behavior
 

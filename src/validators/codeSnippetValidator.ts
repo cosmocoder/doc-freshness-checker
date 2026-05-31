@@ -78,7 +78,9 @@ export class CodeSnippetValidator {
   // ---------------------------------------------------------------------------
 
   private async buildIndex(config: DocFreshnessConfig): Promise<void> {
-    if (this.indexBuilt) return;
+    if (this.indexBuilt) {
+      return;
+    }
     this.indexBuilt = true;
 
     this.sourceFiles = new Map();
@@ -105,11 +107,13 @@ export class CodeSnippetValidator {
             this.sourceFiles.set(relativePath, { content, language: lang });
             this.indexFunctionSignatures(content, relativePath, lang);
             this.indexInterfaceDefinitions(content, relativePath, lang);
-          } catch {
+          }
+          catch {
             /* skip unreadable files */
           }
         }
-      } catch {
+      }
+      catch {
         /* skip invalid patterns */
       }
     }
@@ -220,7 +224,8 @@ export class CodeSnippetValidator {
       try {
         await fs.promises.access(path.join(rootDir, candidate));
         return candidate;
-      } catch {
+      }
+      catch {
         /* continue */
       }
     }
@@ -243,7 +248,8 @@ export class CodeSnippetValidator {
       try {
         await fs.promises.access(path.join(rootDir, candidate));
         return candidate;
-      } catch {
+      }
+      catch {
         /* continue */
       }
     }
@@ -275,7 +281,9 @@ export class CodeSnippetValidator {
 
   private getExportedSymbols(filePath: string): Set<string> {
     const fileData = this.sourceFiles?.get(filePath);
-    if (!fileData) return new Set();
+    if (!fileData) {
+      return new Set();
+    }
 
     const exports = new Set<string>();
     const content = fileData.content;
@@ -321,7 +329,9 @@ export class CodeSnippetValidator {
           .trim()
           .split(/\s+as\s+/)[0]
           .trim();
-        if (original) exports.add(original);
+        if (original) {
+          exports.add(original);
+        }
       }
     }
 
@@ -334,7 +344,9 @@ export class CodeSnippetValidator {
 
     const defaultDeclarationPattern = /export\s+default\s+(?:async\s+)?(?:function|class)\b(?:\s+(\w+))?/g;
     while ((match = defaultDeclarationPattern.exec(content)) !== null) {
-      if (match[1]) exports.add(match[1]);
+      if (match[1]) {
+        exports.add(match[1]);
+      }
       exports.add('default');
     }
 
@@ -343,7 +355,9 @@ export class CodeSnippetValidator {
     while ((match = cjsPattern.exec(content)) !== null) {
       for (const item of match[1].split(',')) {
         const name = item.trim().split(/\s*:/)[0].trim();
-        if (name) exports.add(name);
+        if (name) {
+          exports.add(name);
+        }
       }
     }
 
@@ -512,24 +526,33 @@ export class CodeSnippetValidator {
   }
 
   private parseParameters(paramsStr: string, lang: string): { names: string[]; requiredCount: number } {
-    if (!paramsStr.trim()) return { names: [], requiredCount: 0 };
+    if (!paramsStr.trim()) {
+      return { names: [], requiredCount: 0 };
+    }
 
     const rawParams: string[] = [];
     let depth = 0;
     let current = '';
 
     for (const ch of paramsStr) {
-      if ('(<[{'.includes(ch)) depth++;
-      else if (')>]}'.includes(ch)) depth--;
+      if ('(<[{'.includes(ch)) {
+        depth++;
+      }
+      else if (')>]}'.includes(ch)) {
+        depth--;
+      }
 
       if (ch === ',' && depth === 0) {
         rawParams.push(current.trim());
         current = '';
-      } else {
+      }
+      else {
         current += ch;
       }
     }
-    if (current.trim()) rawParams.push(current.trim());
+    if (current.trim()) {
+      rawParams.push(current.trim());
+    }
 
     const names: string[] = [];
     let requiredCount = 0;
@@ -537,7 +560,9 @@ export class CodeSnippetValidator {
 
     for (const raw of rawParams) {
       const name = this.extractParamName(raw, lang);
-      if (!name) continue;
+      if (!name) {
+        continue;
+      }
       names.push(name);
 
       const isOptional = this.isOptionalParam(raw, lang);
@@ -545,7 +570,8 @@ export class CodeSnippetValidator {
 
       if (!isOptional && !isRest && !seenOptional) {
         requiredCount++;
-      } else {
+      }
+      else {
         seenOptional = true;
       }
     }
@@ -554,7 +580,9 @@ export class CodeSnippetValidator {
   }
 
   private extractParamName(raw: string, lang: string): string | null {
-    if (!raw) return null;
+    if (!raw) {
+      return null;
+    }
 
     if (lang === 'typescript' || lang === 'javascript') {
       const match = raw.match(/^(?:\.\.\.)?(\w+)/);
@@ -570,20 +598,30 @@ export class CodeSnippetValidator {
   }
 
   private isOptionalParam(raw: string, lang: string): boolean {
-    if (raw.trim().startsWith('...') || raw.trim().startsWith('*')) return true;
+    if (raw.trim().startsWith('...') || raw.trim().startsWith('*')) {
+      return true;
+    }
 
     if (lang === 'typescript' || lang === 'javascript') {
       // name? (TS optional marker right after identifier)
-      if (/^\w+\s*\?/.test(raw.trim())) return true;
+      if (/^\w+\s*\?/.test(raw.trim())) {
+        return true;
+      }
     }
 
     // Default value at top level (= but not =>)
     let depth = 0;
     for (let i = 0; i < raw.length; i++) {
-      if ('({[<'.includes(raw[i])) depth++;
-      else if (')}]>'.includes(raw[i])) depth--;
+      if ('({[<'.includes(raw[i])) {
+        depth++;
+      }
+      else if (')}]>'.includes(raw[i])) {
+        depth--;
+      }
 
-      if (depth === 0 && raw[i] === '=' && raw[i + 1] !== '>') return true;
+      if (depth === 0 && raw[i] === '=' && raw[i + 1] !== '>') {
+        return true;
+      }
     }
 
     return false;
@@ -601,7 +639,9 @@ export class CodeSnippetValidator {
 
   private extractSpecifiersByPrefix(importSpecifiers: string[], prefix: string): string[] {
     return importSpecifiers.flatMap((specifier) => {
-      if (!specifier.startsWith(prefix)) return [];
+      if (!specifier.startsWith(prefix)) {
+        return [];
+      }
 
       const value = specifier.slice(prefix.length);
       return value ? [value] : [];
@@ -649,7 +689,9 @@ export class CodeSnippetValidator {
   }
 
   private indexInterfaceDefinitions(content: string, _filePath: string, lang: string): void {
-    if (lang !== 'typescript') return;
+    if (lang !== 'typescript') {
+      return;
+    }
 
     // interface Name { ... }
     const ifacePattern = /(?:export\s+)?interface\s+(\w+)(?:\s+extends\s+[\w,\s<>]+)?\s*\{/g;
@@ -667,10 +709,14 @@ export class CodeSnippetValidator {
 
   private addInterfaceKeys(name: string, content: string, braceStart: number): void {
     const body = this.extractBraceContent(content, braceStart);
-    if (!body) return;
+    if (!body) {
+      return;
+    }
 
     const keys = this.extractPropertyKeys(body);
-    if (keys.size === 0) return;
+    if (keys.size === 0) {
+      return;
+    }
 
     if (!this.interfaceKeys!.has(name)) {
       this.interfaceKeys!.set(name, new Set());
@@ -683,10 +729,14 @@ export class CodeSnippetValidator {
   private extractBraceContent(content: string, braceStart: number): string | null {
     let depth = 0;
     for (let i = braceStart; i < content.length; i++) {
-      if (content[i] === '{') depth++;
+      if (content[i] === '{') {
+        depth++;
+      }
       else if (content[i] === '}') {
         depth--;
-        if (depth === 0) return content.substring(braceStart + 1, i);
+        if (depth === 0) {
+          return content.substring(braceStart + 1, i);
+        }
       }
     }
     return null;
@@ -698,7 +748,9 @@ export class CodeSnippetValidator {
 
     for (const line of body.split('\n')) {
       const trimmed = line.trim();
-      if (!trimmed) continue;
+      if (!trimmed) {
+        continue;
+      }
 
       if (depth === 0) {
         const keyMatch = trimmed.match(/^(?:readonly\s+)?(\w+)\??\s*:/);
@@ -708,8 +760,12 @@ export class CodeSnippetValidator {
       }
 
       for (const ch of trimmed) {
-        if (ch === '{') depth++;
-        else if (ch === '}') depth--;
+        if (ch === '{') {
+          depth++;
+        }
+        else if (ch === '}') {
+          depth--;
+        }
       }
     }
 

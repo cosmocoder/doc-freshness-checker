@@ -52,7 +52,8 @@ export class CacheManager {
       const content = await fs.promises.readFile(this.cacheFile, 'utf-8');
       const data = JSON.parse(content) as SerializedGraph;
       return CodeDocGraph.deserialize(data);
-    } catch {
+    }
+    catch {
       return null;
     }
   }
@@ -61,8 +62,12 @@ export class CacheManager {
    * Check if cache is valid based on config hash and git state
    */
   isCacheValid(graph: CodeDocGraph | null, currentCommit: string | null): boolean {
-    if (!graph) return false;
-    if (!graph.buildTimestamp) return false;
+    if (!graph) {
+      return false;
+    }
+    if (!graph.buildTimestamp) {
+      return false;
+    }
 
     const configHash = this.getConfigHash();
     if (graph.configHash && graph.configHash !== configHash) {
@@ -102,7 +107,8 @@ export class CacheManager {
     try {
       const content = await fs.promises.readFile(this.urlCacheFile, 'utf-8');
       return JSON.parse(content) as Record<string, UrlCacheEntry>;
-    } catch {
+    }
+    catch {
       return {};
     }
   }
@@ -113,7 +119,8 @@ export class CacheManager {
   async clearCache(): Promise<void> {
     try {
       await fs.promises.rm(this.cacheDir, { recursive: true });
-    } catch {
+    }
+    catch {
       // Directory doesn't exist
     }
   }
@@ -134,14 +141,16 @@ export class CacheManager {
       stats.exists = true;
       stats.graphSize = graphStat.size;
       stats.lastUpdated = graphStat.mtime;
-    } catch {
+    }
+    catch {
       // File doesn't exist
     }
 
     try {
       const urlStat = await fs.promises.stat(this.urlCacheFile);
       stats.urlCacheSize = urlStat.size;
-    } catch {
+    }
+    catch {
       // File doesn't exist
     }
 

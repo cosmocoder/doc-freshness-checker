@@ -2,7 +2,9 @@
  * Find the most similar string from a list using Levenshtein distance
  */
 export function findSimilar(target: string, candidates: string[], maxDistance: number = 3): string | null {
-  if (!candidates || candidates.length === 0) return null;
+  if (!candidates || candidates.length === 0) {
+    return null;
+  }
 
   let bestMatch: string | null = null;
   let bestDistance = Infinity;
@@ -32,8 +34,12 @@ export function findSimilar(target: string, candidates: string[], maxDistance: n
  * Calculate Levenshtein distance between two strings
  */
 export function levenshteinDistance(a: string, b: string): number {
-  if (a.length === 0) return b.length;
-  if (b.length === 0) return a.length;
+  if (a.length === 0) {
+    return b.length;
+  }
+  if (b.length === 0) {
+    return a.length;
+  }
 
   const matrix: number[][] = [];
 
@@ -51,7 +57,8 @@ export function levenshteinDistance(a: string, b: string): number {
     for (let j = 1; j <= a.length; j++) {
       if (b.charAt(i - 1) === a.charAt(j - 1)) {
         matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
+      }
+      else {
         matrix[i][j] = Math.min(
           matrix[i - 1][j - 1] + 1, // substitution
           matrix[i][j - 1] + 1, // insertion

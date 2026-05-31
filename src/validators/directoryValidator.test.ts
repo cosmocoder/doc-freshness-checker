@@ -213,7 +213,8 @@ describe('DirectoryValidator', () => {
 
       const second = await validator.validateBatch([makeRef('./target.txt')], secondDoc, contextConfig);
       expect(second[0].valid).toBe(false);
-    } finally {
+    }
+    finally {
       await fs.promises.rm(root, { recursive: true, force: true }).catch(() => {});
     }
   });

@@ -5,7 +5,8 @@ export async function withOutputFile(cacheRoot: string, fileName: string, runAss
   const outputPath = path.join(cacheRoot, fileName);
   try {
     await runAssert(outputPath);
-  } finally {
+  }
+  finally {
     await fs.promises.unlink(outputPath).catch(() => {});
   }
 }

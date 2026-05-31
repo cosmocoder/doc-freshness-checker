@@ -60,7 +60,9 @@ export class VectorSearch {
    * Initialize the FastEmbed model (lazy loading)
    */
   async initialize(): Promise<boolean> {
-    if (this.model) return true;
+    if (this.model) {
+      return true;
+    }
 
     // Wait for existing initialization if in progress
     if (this.modelInitPromise) {
@@ -80,7 +82,8 @@ export class VectorSearch {
       const modelCacheExists = await this.checkModelCacheExists();
       if (!modelCacheExists) {
         console.log('  Downloading embedding model (first run only)...');
-      } else if (this.config.verbose) {
+      }
+      else if (this.config.verbose) {
         console.log(`  Loading embedding model from cache...`);
       }
 
@@ -98,7 +101,8 @@ export class VectorSearch {
 
           this.modelInitPromise = null;
           return true;
-        } catch (initError) {
+        }
+        catch (initError) {
           retries++;
           if (this.config.verbose) {
             console.warn(`  Model initialization attempt ${retries}/${MAX_RETRIES} failed: ${(initError as Error).message}`);
@@ -114,7 +118,8 @@ export class VectorSearch {
       }
 
       return false;
-    } catch (error) {
+    }
+    catch (error) {
       this.modelInitPromise = null;
       console.warn('Vector search initialization failed:', (error as Error).message);
       this.model = null;
@@ -137,7 +142,8 @@ export class VectorSearch {
       const entries = await fs.promises.readdir(this.modelCacheDir, { withFileTypes: true });
       // Check if there are any subdirectories (fastembed stores models in subdirs like 'fast-bge-small-en-v1.5')
       return entries.some((entry) => entry.isDirectory() && entry.name.includes('bge'));
-    } catch {
+    }
+    catch {
       return false;
     }
   }
@@ -146,7 +152,9 @@ export class VectorSearch {
    * Load embedding cache from disk
    */
   private async loadCache(): Promise<void> {
-    if (this.cacheLoaded) return;
+    if (this.cacheLoaded) {
+      return;
+    }
 
     try {
       const data = await fs.promises.readFile(this.embeddingCacheFile, 'utf-8');
@@ -165,7 +173,8 @@ export class VectorSearch {
       if (this.config.verbose) {
         console.log(`Loaded ${this.embeddingCache.size} cached embeddings.`);
       }
-    } catch {
+    }
+    catch {
       // No cache file or invalid - start fresh
       this.embeddingCache = new Map();
     }
@@ -194,7 +203,8 @@ export class VectorSearch {
       if (this.config.verbose) {
         console.log(`Saved ${this.embeddingCache.size} embeddings to cache.`);
       }
-    } catch (error) {
+    }
+    catch (error) {
       if (this.config.verbose) {
         console.warn('Failed to save embedding cache:', (error as Error).message);
       }
@@ -278,7 +288,9 @@ export class VectorSearch {
    */
   async indexDocumentation(documents: Document[]): Promise<void> {
     const initialized = await this.initialize();
-    if (!initialized) return;
+    if (!initialized) {
+      return;
+    }
 
     await this.loadCache();
 
@@ -293,7 +305,9 @@ export class VectorSearch {
       const sections = this.splitIntoSections(doc.content);
 
       for (const section of sections) {
-        if (section.text.length < 50) continue;
+        if (section.text.length < 50) {
+          continue;
+        }
 
         const cacheKey = this.getCacheKey(section.text, 'doc');
         const wasCached = this.embeddingCache.has(cacheKey);
@@ -302,7 +316,8 @@ export class VectorSearch {
 
         if (wasCached) {
           cachedEmbeddings++;
-        } else {
+        }
+        else {
           newEmbeddings++;
         }
 
@@ -326,7 +341,9 @@ export class VectorSearch {
    */
   async indexCodeComments(codeFiles: CodeFile[]): Promise<void> {
     const initialized = await this.initialize();
-    if (!initialized) return;
+    if (!initialized) {
+      return;
+    }
 
     await this.loadCache();
 
@@ -337,7 +354,9 @@ export class VectorSearch {
       const comments = this.extractComments(file.content, file.language);
 
       for (const comment of comments) {
-        if (comment.text.length < 20) continue;
+        if (comment.text.length < 20) {
+          continue;
+        }
 
         const cacheKey = this.getCacheKey(comment.text, 'code');
         const wasCached = this.embeddingCache.has(cacheKey);
@@ -346,7 +365,8 @@ export class VectorSearch {
 
         if (wasCached) {
           cachedEmbeddings++;
-        } else {
+        }
+        else {
           newEmbeddings++;
         }
 
@@ -435,7 +455,9 @@ export class VectorSearch {
     }
 
     const denominator = Math.sqrt(normA) * Math.sqrt(normB);
-    if (denominator === 0) return 0;
+    if (denominator === 0) {
+      return 0;
+    }
     return dotProduct / denominator;
   }
 
@@ -550,7 +572,8 @@ export class VectorSearch {
 
     try {
       await fs.promises.unlink(this.embeddingCacheFile);
-    } catch {
+    }
+    catch {
       // File doesn't exist - ok
     }
   }

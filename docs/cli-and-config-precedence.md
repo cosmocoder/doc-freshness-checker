@@ -44,21 +44,21 @@ Manifest candidate list includes:
 
 ## Flag-to-Config Mapping
 
-| CLI flag | Effective config impact |
-| --- | --- |
-| `--reporter <type>` | `config.reporters = [type]` |
-| `--output <path>` | `config.outputPath = path` |
-| `--verbose` | `config.verbose = true` |
-| `--skip-urls` | `config.urlValidation.enabled = false` |
-| `--only <types>` | Enables only listed rule keys inside `config.rules` |
-| `--files <patterns>` | Replaces `config.include` |
-| `--manifest <files>` | Replaces `config.manifestFiles` |
-| `--source <patterns>` | Replaces `config.sourcePatterns` |
-| `--no-cache` | Sets `config.cache.enabled = false` |
-| `--clear-cache` | Sets `config.clearCache = true` |
-| `--score` | Sets `config.freshnessScoring.enabled = true` |
-| `--incremental` | Sets `config.incremental.enabled = true` |
-| `--vector-search` | Sets `config.vectorSearch.enabled = true` |
+| CLI flag              | Effective config impact                             |
+| --------------------- | --------------------------------------------------- |
+| `--reporter <type>`   | `config.reporters = [type]`                         |
+| `--output <path>`     | `config.outputPath = path`                          |
+| `--verbose`           | `config.verbose = true`                             |
+| `--skip-urls`         | `config.urlValidation.enabled = false`              |
+| `--only <types>`      | Enables only listed rule keys inside `config.rules` |
+| `--files <patterns>`  | Replaces `config.include`                           |
+| `--manifest <files>`  | Replaces `config.manifestFiles`                     |
+| `--source <patterns>` | Replaces `config.sourcePatterns`                    |
+| `--no-cache`          | Sets `config.cache.enabled = false`                 |
+| `--clear-cache`       | Sets `config.clearCache = true`                     |
+| `--score`             | Sets `config.freshnessScoring.enabled = true`       |
+| `--incremental`       | Sets `config.incremental.enabled = true`            |
+| `--vector-search`     | Sets `config.vectorSearch.enabled = true`           |
 
 ## Important Interactions and Caveats
 
