@@ -60,10 +60,12 @@
     "devops"
   ],
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=24",
+    "npm": ">=11"
   },
   "volta": {
-    "node": "24.15.0"
+    "node": "24.15.0",
+    "npm": "11.12.1"
   },
   "engine-strict": true,
   "dependencies": {
