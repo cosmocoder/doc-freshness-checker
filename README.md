@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/doc-freshness-checker.svg)](https://www.npmjs.com/package/doc-freshness-checker)
 [![npm downloads](https://img.shields.io/npm/dm/doc-freshness-checker.svg)](https://www.npmjs.com/package/doc-freshness-checker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D24.0.0-brightgreen.svg)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D24-brightgreen.svg)](https://nodejs.org/)
 [![CI](https://github.com/cosmocoder/doc-freshness-checker/actions/workflows/release.yml/badge.svg)](https://github.com/cosmocoder/doc-freshness-checker/actions/workflows/release.yml)
 
 Validate documentation against your codebase to catch stale references before they create confusion or slow onboarding. `doc-freshness-checker` scans your docs, extracts references to files, URLs, versions, symbols, dependencies, and directory trees, then validates each one against source code and manifests.
@@ -44,8 +44,8 @@ Validate documentation against your codebase to catch stale references before th
 
 ## Prerequisites
 
-- **Node.js** >= 24.0.0
-- **npm**
+- **Node.js** >= 24
+- **npm** >= 11
 
 ## Installation
 
