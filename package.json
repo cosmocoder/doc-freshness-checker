@@ -84,7 +84,7 @@
     "@semantic-release/npm": "13.1.5",
     "@semantic-release/release-notes-generator": "14.1.1",
     "@types/semver": "7.7.1",
-    "@vitest/coverage-v8": "4.1.9",
+    "@vitest/coverage-v8": "4.1.10",
     "eslint": "9.39.2",
     "globals": "17.7.0",
     "husky": "9.1.7",
@@ -94,7 +94,7 @@
     "prettier-plugin-brace-style": "0.10.2",
     "typescript": "5.9.3",
     "typescript-eslint": "8.62.1",
-    "vitest": "4.1.9",
+    "vitest": "4.1.10",
     "vitest-fetch-mock": "0.4.5"
   },
   "publishConfig": {
