@@ -178,7 +178,7 @@ describe('ValidationEngine', () => {
     expect(captureCalls).toBe(0);
   });
 
-  it('handles validator errors gracefully', async () => {
+  it('propagates validator execution failures', async () => {
     const engine = new ValidationEngine({ ...config, verbose: false });
     const failValidator: BaseValidator = {
       async validateBatch() {
@@ -187,9 +187,7 @@ describe('ValidationEngine', () => {
     };
     engine.registerValidator('file-path', failValidator);
 
-    const results = await engine.validate([makeDoc([makeRef('file-path', 'a.ts')])]);
-    expect(results.summary.skipped).toBe(1);
-    expect(engine.hadIncompleteValidation()).toBe(true);
+    await expect(engine.validate([makeDoc([makeRef('file-path', 'a.ts')])])).rejects.toThrow('validator crashed');
   });
 
   it('treats info-level issues as valid', async () => {

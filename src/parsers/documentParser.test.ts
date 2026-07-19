@@ -3,7 +3,6 @@ import path from 'path';
 import { DocumentParser } from './documentParser.js';
 import { BaseExtractor } from './extractors/baseExtractor.js';
 import type { Document, Reference } from '../types.js';
-import { captureConsoleWarn } from '../test-utils/console.js';
 
 class MockExtractor extends BaseExtractor {
   private refs: Reference[];
@@ -34,7 +33,6 @@ class MarkdownOnlyExtractor extends BaseExtractor {
 
 describe('DocumentParser', () => {
   const tmpDir = path.join(process.cwd(), '.doc-freshness-cache', 'parser-test');
-  const captureWarn = captureConsoleWarn;
   const writeDoc = async (fileName: string, content: string) => {
     const fullPath = path.join(tmpDir, fileName);
     await fs.promises.writeFile(fullPath, content);
@@ -105,29 +103,82 @@ describe('DocumentParser', () => {
       expect(docs[0].references).toHaveLength(0);
     });
 
-    it('handles unreadable files gracefully in verbose mode', async () => {
+    it('propagates matched-document read failures', async () => {
       const badFile = await writeDoc('bad-file.md', 'content');
       const parser = createParser([path.relative(process.cwd(), badFile)], true);
 
       const readSpy = vi.spyOn(fs.promises, 'readFile');
-      readSpy.mockRejectedValueOnce(new Error('Permission denied'));
-      const warnSpy = captureWarn();
+      readSpy.mockRejectedValueOnce(Object.assign(new Error('Permission denied'), { code: 'EACCES' }));
 
-      const docs = await parser.scanDocuments();
-      expect(docs).toHaveLength(0);
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Permission denied'));
+      await expect(parser.scanDocuments()).rejects.toThrow('Permission denied');
     });
 
-    it('silently skips unreadable files in non-verbose mode', async () => {
-      const badFile = await writeDoc('silent-bad.md', 'content');
-      const parser = createParser([path.relative(process.cwd(), badFile)], false);
+    it('preserves the read failure when checking whether the path disappeared also fails', async () => {
+      const badFile = await writeDoc('bad-file-stat.md', 'content');
+      const parser = createParser([path.relative(process.cwd(), badFile)]);
+      const readError = Object.assign(new Error('File disappeared while opening'), {
+        code: 'ENOENT',
+        syscall: 'open',
+      });
+      vi.spyOn(fs.promises, 'readFile').mockRejectedValueOnce(readError);
+      vi.spyOn(fs.promises, 'lstat').mockRejectedValueOnce(
+        Object.assign(new Error('Permission denied while checking path'), {
+          code: 'EACCES',
+          syscall: 'lstat',
+        })
+      );
 
-      vi.spyOn(fs.promises, 'readFile').mockRejectedValueOnce(new Error('EPERM'));
-      const warnSpy = captureWarn();
+      await expect(parser.scanDocuments()).rejects.toBe(readError);
+    });
 
-      const docs = await parser.scanDocuments();
-      expect(docs).toHaveLength(0);
-      expect(warnSpy).not.toHaveBeenCalled();
+    it('continues when a matched document disappears before it is read', async () => {
+      const firstFile = await writeDoc('race-a.md', 'first');
+      const missingFile = await writeDoc('race-b.md', 'missing');
+      const lastFile = await writeDoc('race-c.md', 'last');
+      const parser = createParser([firstFile, missingFile, lastFile].map((file) => path.relative(process.cwd(), file)));
+      const contents = new Map([
+        [firstFile, 'first'],
+        [lastFile, 'last'],
+      ]);
+      const readSpy = vi.spyOn(fs.promises, 'readFile').mockImplementation(async (file) => {
+        if (file === missingFile) {
+          throw Object.assign(new Error('File disappeared'), { code: 'ENOENT' });
+        }
+        return contents.get(file.toString()) ?? '';
+      });
+      const lstatSpy = vi
+        .spyOn(fs.promises, 'lstat')
+        .mockRejectedValueOnce(Object.assign(new Error('File disappeared'), { code: 'ENOENT' }));
+
+      try {
+        const docs = await parser.scanDocuments();
+        expect(docs.map((doc) => doc.absolutePath).sort()).toEqual([firstFile, lastFile].sort());
+      }
+      finally {
+        readSpy.mockRestore();
+        lstatSpy.mockRestore();
+      }
+    });
+
+    it('rejects a dangling matched-document symlink', async () => {
+      const linkPath = path.join(tmpDir, 'broken-link.md');
+      await fs.promises.rm(linkPath, { force: true });
+      await fs.promises.symlink('missing-target.md', linkPath);
+      const parser = createParser([path.relative(process.cwd(), linkPath)]);
+
+      await expect(parser.scanDocuments()).rejects.toMatchObject({ code: 'ENOENT' });
+    });
+
+    it('propagates ENOENT-coded extractor failures', async () => {
+      const mdFile = await writeDoc('extractor-enoent.md', 'content');
+      const parser = createParser([path.relative(process.cwd(), mdFile)]);
+      const extractor = new MockExtractor('test');
+      vi.spyOn(extractor, 'extract').mockImplementation(() => {
+        throw Object.assign(new Error('Extractor path missing'), { code: 'ENOENT' });
+      });
+      parser.registerExtractor(extractor);
+
+      await expect(parser.scanDocuments()).rejects.toMatchObject({ code: 'ENOENT' });
     });
 
     it('uses empty array when include is not set', async () => {

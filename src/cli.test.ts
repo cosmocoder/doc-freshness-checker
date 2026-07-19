@@ -148,6 +148,22 @@ describe('runCli', () => {
     expect(logErrorMock).toHaveBeenCalledWith('Error:', 'boom');
     expect(logErrorMock).toHaveBeenCalledWith(thrown.stack);
   });
+
+  it('returns 1 when the runtime fails', async () => {
+    const logErrorMock = vi.fn();
+
+    const exitCode = await runCli(
+      {},
+      {
+        loadConfig: vi.fn().mockResolvedValue(makeConfig()),
+        run: vi.fn().mockRejectedValue(new Error('validator crashed')),
+        logError: logErrorMock,
+      }
+    );
+
+    expect(exitCode).toBe(1);
+    expect(logErrorMock).toHaveBeenCalledWith('Error:', 'validator crashed');
+  });
 });
 
 describe('main', () => {
