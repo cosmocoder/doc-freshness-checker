@@ -1,8 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
-import { pathToFileURL } from 'url';
 import { createRequire } from 'module';
+import { loadESMConfig } from './esm-loader.js';
 import { DEFAULT_CONFIG } from './defaults.js';
 import type { DocFreshnessConfig } from '../types.js';
 
@@ -43,23 +42,12 @@ export async function loadConfig(configPath?: string): Promise<DocFreshnessConfi
   }
   else {
     const content = await fs.promises.readFile(fullPath, 'utf-8');
-    userConfig = detectModuleType(content, fullPath) ? await loadESMConfig(fullPath) : loadCjsConfig(fullPath);
+    userConfig = detectModuleType(content, fullPath) ? await loadESMConfig<DocFreshnessConfig>(content, fullPath) : loadCjsConfig(fullPath);
   }
 
   const merged = mergeConfig(DEFAULT_CONFIG, userConfig);
   merged._configFile = configFile;
   return await autoDetectConfig(merged);
-}
-
-/**
- * Load ESM config from its original URL so relative imports and import.meta
- * resolve from the config directory. The query bypasses Node's ESM cache.
- */
-async function loadESMConfig(filePath: string): Promise<DocFreshnessConfig> {
-  const configUrl = pathToFileURL(filePath);
-  configUrl.searchParams.set('doc-freshness-reload', crypto.randomUUID());
-  const module = await import(configUrl.href);
-  return module.default || module;
 }
 
 /**

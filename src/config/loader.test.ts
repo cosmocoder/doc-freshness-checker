@@ -1,12 +1,17 @@
 import fs from 'fs';
+import { execFile } from 'child_process';
 import { tmpdir } from 'os';
 import path from 'path';
+import { promisify } from 'util';
+import { pathToFileURL } from 'url';
 import { loadConfig, DEFAULT_CONFIG } from './loader.js';
 import { BUILT_IN_RULE_TYPES } from './defaults.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+const execFileAsync = promisify(execFile);
 
 describe('DEFAULT_CONFIG', () => {
   it('has sensible default values', () => {
@@ -257,56 +262,63 @@ describe('loadConfig', () => {
     });
   });
 
-  it('handles config file importing defineConfig', async () => {
-    const projectDir = await fs.promises.mkdtemp(path.join(tmpdir(), 'doc-freshness-installed-'));
-    const packageDir = path.join(projectDir, 'node_modules', 'doc-freshness-checker');
-    await fs.promises.mkdir(packageDir, { recursive: true });
-    await fs.promises.writeFile(
-      path.join(packageDir, 'package.json'),
-      JSON.stringify({ name: 'doc-freshness-checker', type: 'module', exports: './index.mjs' })
-    );
-    await fs.promises.writeFile(path.join(packageDir, 'index.mjs'), `export const defineConfig = config => config;`);
-    const configPath = path.join(projectDir, 'doc-freshness.config.mjs');
+  it('loads cache-busted ESM .js configs from CommonJS projects without a local package', async () => {
+    const projectDir = await fs.promises.mkdtemp(path.join(tmpdir(), 'doc-freshness-commonjs-'));
+    const configPath = path.join(projectDir, 'doc-freshness.config.js');
+    const concurrentConfigPath = path.join(projectDir, 'concurrent.config.js');
+    await fs.promises.writeFile(path.join(projectDir, 'package.json'), JSON.stringify({ type: 'commonjs' }));
+    await fs.promises.writeFile(path.join(projectDir, 'config-value.mjs'), `export const include = ['from-sibling/**/*.md'];`);
+    await fs.promises.writeFile(path.join(projectDir, 'config-value.txt'), 'from-asset');
     await fs.promises.writeFile(
       configPath,
-      `import { defineConfig } from 'doc-freshness-checker';\nexport default defineConfig({ verbose: true });`
+      [
+        `import { defineConfig } from 'doc-freshness-checker';`,
+        `import { include } from './config-value.mjs';`,
+        `import { readFileSync } from 'node:fs';`,
+        `export default defineConfig({ include, outputDir: readFileSync(new URL('./config-value.txt', import.meta.url), 'utf8'), outputPath: import.meta.filename });`,
+      ].join('\n')
+    );
+    await fs.promises.writeFile(
+      concurrentConfigPath,
+      `import { defineConfig } from 'doc-freshness-checker';\nexport default defineConfig({ outputDir: 'concurrent' });`
     );
 
     try {
-      expect((await loadConfig(configPath)).verbose).toBe(true);
+      expect(fs.existsSync(path.join(projectDir, 'node_modules'))).toBe(false);
+      const loaderUrl = pathToFileURL(path.join(process.cwd(), 'src/config/esm-loader.ts')).href;
+      const reloadedSource = `import { defineConfig } from 'doc-freshness-checker';\nexport default defineConfig({ outputDir: 'reloaded' });`;
+      const script = `
+        import { readFile, writeFile } from 'node:fs/promises';
+        import { loadESMConfig } from ${JSON.stringify(loaderUrl)};
+        const [configPath, concurrentConfigPath, reloadedSource] = process.argv.slice(1);
+        const load = async filePath => loadESMConfig(await readFile(filePath, 'utf8'), filePath);
+        const [config, concurrentConfig] = await Promise.all([load(configPath), load(concurrentConfigPath)]);
+        await writeFile(configPath, "throw new Error('config failed');");
+        let errorMessage;
+        try { await load(configPath); } catch (error) { errorMessage = error.message; }
+        await writeFile(configPath, reloadedSource);
+        const reloadedConfig = await load(configPath);
+        process.stdout.write(JSON.stringify({ config, concurrentConfig, errorMessage, reloadedConfig }));
+      `;
+      const { stdout } = await execFileAsync(process.execPath, [
+        '--input-type=module',
+        '--eval',
+        script,
+        configPath,
+        concurrentConfigPath,
+        reloadedSource,
+      ]);
+      const result = JSON.parse(stdout);
+
+      expect(result.config.include).toEqual(['from-sibling/**/*.md']);
+      expect(result.config.outputDir).toBe('from-asset');
+      expect(result.config.outputPath).toBe(configPath);
+      expect(result.concurrentConfig.outputDir).toBe('concurrent');
+      expect(result.errorMessage).toBe('config failed');
+      expect(result.reloadedConfig.outputDir).toBe('reloaded');
     }
     finally {
       await fs.promises.rm(projectDir, { recursive: true, force: true });
-    }
-  });
-
-  it('loads explicit ESM imports and assets relative to the original config and reloads changes', async () => {
-    const siblingModule = path.join(tmpDir, 'config-value.mjs');
-    const siblingAsset = path.join(tmpDir, 'config-value.txt');
-    await fs.promises.writeFile(siblingModule, `export const include = ['from-sibling/**/*.md'];`);
-    await fs.promises.writeFile(siblingAsset, 'from-asset');
-
-    try {
-      await withTempConfig(
-        'relative-config.mjs',
-        [
-          `import { include } from './config-value.mjs';`,
-          `import { readFileSync } from 'node:fs';`,
-          `export default { include, outputDir: readFileSync(new URL('./config-value.txt', import.meta.url), 'utf8'), outputPath: import.meta.filename };`,
-        ].join('\n'),
-        async (configPath) => {
-          const config = await loadConfig(configPath);
-          expect(config.include).toEqual(['from-sibling/**/*.md']);
-          expect(config.outputDir).toBe('from-asset');
-          expect(config.outputPath).toBe(configPath);
-
-          await fs.promises.writeFile(configPath, `export default { outputDir: 'reloaded' };`);
-          expect((await loadConfig(configPath)).outputDir).toBe('reloaded');
-        }
-      );
-    }
-    finally {
-      await Promise.all([unlinkIfExists(siblingModule), unlinkIfExists(siblingAsset)]);
     }
   });
 
