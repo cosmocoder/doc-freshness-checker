@@ -4,10 +4,11 @@ import path from 'path';
 import { glob } from 'glob';
 import { run, runWithConfig } from './runner.js';
 import { BUILT_IN_RULE_TYPES } from './config/defaults.js';
+import { VectorSearch } from './semantic/vectorSearch.js';
 import { ValidationEngine } from './validators/validationEngine.js';
 import { IncrementalChecker } from './utils/incremental.js';
 import { FileValidator } from './validators/fileValidator.js';
-import type { BaseExtractor, BaseValidator, DocFreshnessConfig, Reference, ReporterType } from './types.js';
+import type { BaseExtractor, BaseValidator, DocFreshnessConfig, Reference, ReporterType, VectorMismatch } from './types.js';
 import { withOutputFile } from './test-utils/tempFiles.js';
 import { captureConsoleLog, captureConsoleWarn } from './test-utils/console.js';
 
@@ -40,6 +41,7 @@ describe('runner', () => {
     '.doc-freshness-cache/runner-vs',
     '.doc-freshness-cache/runner-vs-v',
     '.doc-freshness-cache/runner-vs-nograph',
+    '.doc-freshness-cache/runner-vs-reporters',
     '.doc-freshness-cache/rv-clear',
   ];
   const captureLog = captureConsoleLog;
@@ -901,6 +903,43 @@ describe('runner', () => {
   });
 
   describe('vector search', () => {
+    it.each(['console', 'json', 'markdown', 'enhanced'] as ReporterType[])(
+      'renders vector mismatches with the %s reporter',
+      async (reporter) => {
+        const mismatch: VectorMismatch = {
+          docPath: 'docs/vector-api.md',
+          docSection: 'Vector API',
+          docText: 'The API returns a vector',
+          bestMatchScore: 0.2,
+          bestMatch: null,
+          suggestion: 'Update the API documentation',
+        };
+        const mismatchSpy = vi.spyOn(VectorSearch.prototype, 'findMismatches').mockResolvedValue([mismatch]);
+        const logSpy = captureLog();
+        try {
+          const results = await run({
+            ...baseConfig,
+            reporters: [reporter],
+            vectorSearch: { enabled: true },
+            freshnessScoring: { enabled: false },
+            cache: { enabled: false, dir: '.doc-freshness-cache/runner-vs-reporters' },
+          });
+
+          expect(results.vectorMismatches).toEqual([mismatch]);
+          expect(
+            logSpy.mock.calls
+              .flat()
+              .join('\n')
+              .match(/docs\/vector-api\.md/g)
+          ).toHaveLength(1);
+        }
+        finally {
+          mismatchSpy.mockRestore();
+          logSpy.mockRestore();
+        }
+      }
+    );
+
     it('runs vector search when enabled', async () => {
       const spy = captureLog();
       await run({

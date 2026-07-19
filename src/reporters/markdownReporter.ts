@@ -1,11 +1,16 @@
 import type { ProjectScores, ValidationResults } from '../types.js';
 import { escapeMarkdownTableCell } from '../utils/escapeMarkdownTableCell.js';
+import { formatVectorMismatches } from './formatVectorMismatches.js';
 
 /**
  * Markdown reporter for documentation-friendly output
  */
 export class MarkdownReporter {
   generate(results: ValidationResults): string {
+    return this.generateValidationResults(results) + formatVectorMismatches(results.vectorMismatches);
+  }
+
+  private generateValidationResults(results: ValidationResults): string {
     const { summary, documents } = results;
     let md = '';
 
@@ -23,25 +28,27 @@ export class MarkdownReporter {
     md += `| ⏭️ Skipped | ${summary.skipped} |\n\n`;
 
     if (documents.length === 0) {
-      md += '✨ **All documentation is up to date!**\n';
-      return md;
-    }
-
-    md += '## Issues\n\n';
-
-    for (const doc of documents) {
-      md += `### 📄 \`${doc.path}\`\n\n`;
-      md += '| Line | Severity | Issue | Suggestion |\n';
-      md += '|------|----------|-------|------------|\n';
-
-      for (const issue of doc.issues) {
-        const severity = issue.severity === 'error' ? '❌ Error' : issue.severity === 'info' ? 'ℹ️ Info' : '⚠️ Warning';
-        const suggestion = escapeMarkdownTableCell(issue.suggestion || '-');
-        const message = escapeMarkdownTableCell(issue.message || '');
-        md += `| ${issue.reference.lineNumber} | ${severity} | ${message} | ${suggestion} |\n`;
+      if (!results.vectorMismatches?.length) {
+        md += '✨ **All documentation is up to date!**\n';
       }
+    }
+    else {
+      md += '## Issues\n\n';
 
-      md += '\n';
+      for (const doc of documents) {
+        md += `### 📄 \`${doc.path}\`\n\n`;
+        md += '| Line | Severity | Issue | Suggestion |\n';
+        md += '|------|----------|-------|------------|\n';
+
+        for (const issue of doc.issues) {
+          const severity = issue.severity === 'error' ? '❌ Error' : issue.severity === 'info' ? 'ℹ️ Info' : '⚠️ Warning';
+          const suggestion = escapeMarkdownTableCell(issue.suggestion || '-');
+          const message = escapeMarkdownTableCell(issue.message || '');
+          md += `| ${issue.reference.lineNumber} | ${severity} | ${message} | ${suggestion} |\n`;
+        }
+
+        md += '\n';
+      }
     }
 
     return md;
@@ -51,7 +58,7 @@ export class MarkdownReporter {
    * Generate with freshness scores
    */
   generateWithScores(results: ValidationResults, freshnessScores: ProjectScores | null): string {
-    let md = this.generate(results);
+    let md = this.generateValidationResults(results);
 
     if (freshnessScores) {
       md += '## Freshness Scores\n\n';
@@ -67,6 +74,6 @@ export class MarkdownReporter {
       md += '\n';
     }
 
-    return md;
+    return md + formatVectorMismatches(results.vectorMismatches);
   }
 }

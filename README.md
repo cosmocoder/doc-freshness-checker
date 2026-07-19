@@ -139,6 +139,7 @@ Options:
 Incremental mode skips unchanged documents only after a clean run when the effective configuration and project inventory are unchanged. It conservatively revalidates all documents when filesystem or external inputs cannot be fingerprinted safely.
 
 `--reporter` accepts only the four choices shown above. An unsupported value prints an error and exits with status `1`.
+With vector search enabled, potential mismatches appear under **Semantic Analysis** in text reports and as `vectorMismatches` in JSON.
 
 ### Common Examples
 

@@ -256,7 +256,7 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
   }
 
   // Generate reports
-  await generateReports(results, config, graph, gitTracker, freshnessScores, vectorMismatches);
+  await generateReports(results, config, graph, gitTracker, freshnessScores);
 
   // Persist only after validation and reporting complete; findings make the next run revalidate everything.
   if (incrementalChecker) {
@@ -287,8 +287,7 @@ async function generateReports(
   config: DocFreshnessConfig,
   graph: CodeDocGraph | null,
   gitTracker: GitChangeTracker | null,
-  freshnessScores: ProjectScores | null,
-  _vectorMismatches: VectorMismatch[] | null
+  freshnessScores: ProjectScores | null
 ): Promise<void> {
   const reporters = config.reporters?.length ? config.reporters : ['console'];
 

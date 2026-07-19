@@ -131,7 +131,7 @@ describe('ConsoleReporter', () => {
     expect(output).toContain('🔴');
   });
 
-  it('generateWithScores() shows vector mismatches when present', () => {
+  it('generate() shows vector mismatches when present', () => {
     const spy = captureConsoleLog();
     const mismatches: VectorMismatch[] = [
       {
@@ -144,13 +144,17 @@ describe('ConsoleReporter', () => {
       },
     ];
     const results: ValidationResults = { ...cleanResults, vectorMismatches: mismatches };
-    reporter.generateWithScores(results, null);
+    reporter.generate(results);
     const output = spy.mock.calls.flat().join('\n');
     expect(output).toContain('Semantic Analysis');
+    expect(output).toContain('Found 1 potential semantic mismatches');
     expect(output).toContain('docs/api.md');
     expect(output).toContain('Auth API');
     expect(output).toContain('src/db.ts');
     expect(output).toContain('20.0%');
+    expect(output).not.toContain('up to date');
+    expect(output).toContain('Skipped: 0\n\n🔍 Semantic Analysis');
+    expect(output.match(/docs\/api\.md/g)).toHaveLength(1);
   });
 
   it('generateVectorMismatches handles mismatches without bestMatch', () => {
@@ -166,9 +170,17 @@ describe('ConsoleReporter', () => {
       },
     ];
     const results: ValidationResults = { ...cleanResults, vectorMismatches: mismatches };
-    reporter.generateWithScores(results, null);
+    reporter.generateWithScores(results, {
+      projectScore: 100,
+      projectGrade: 'A',
+      documents: [],
+      summary: { total: 0, gradeA: 0, gradeB: 0, gradeC: 0, gradeD: 0, gradeF: 0 },
+    });
     const output = spy.mock.calls.flat().join('\n');
+    expect(output.indexOf('Documentation Freshness Report')).toBeLessThan(output.indexOf('Freshness Scores'));
+    expect(output.indexOf('Freshness Scores')).toBeLessThan(output.indexOf('Semantic Analysis'));
     expect(output).toContain('docs/guide.md');
-    expect(output).not.toContain('Best match:');
+    expect(output).toContain('Best match: -');
+    expect(output.match(/docs\/guide\.md/g)).toHaveLength(1);
   });
 });
