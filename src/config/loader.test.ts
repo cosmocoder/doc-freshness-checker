@@ -1,7 +1,12 @@
 import fs from 'fs';
+import { tmpdir } from 'os';
 import path from 'path';
 import { loadConfig, DEFAULT_CONFIG } from './loader.js';
 import { BUILT_IN_RULE_TYPES } from './defaults.js';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('DEFAULT_CONFIG', () => {
   it('has sensible default values', () => {
@@ -19,7 +24,7 @@ describe('DEFAULT_CONFIG', () => {
 });
 
 describe('loadConfig', () => {
-  const tmpDir = path.join(process.cwd(), '.doc-freshness-cache', 'config-test');
+  let tmpDir: string;
   const unlinkIfExists = async (filePath: string) => {
     await fs.promises.unlink(filePath).catch(() => {});
   };
@@ -41,7 +46,7 @@ describe('loadConfig', () => {
   }
 
   beforeAll(async () => {
-    await fs.promises.mkdir(tmpDir, { recursive: true });
+    tmpDir = await fs.promises.mkdtemp(path.join(tmpdir(), 'doc-freshness-config-'));
   });
 
   afterAll(async () => {
@@ -49,19 +54,35 @@ describe('loadConfig', () => {
   });
 
   it('uses defaults only when no explicit or discovered config exists', async () => {
-    const existsSpy = vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    const emptyProject = path.join(tmpDir, 'no-config-project');
+    await fs.promises.mkdir(emptyProject, { recursive: true });
+    vi.spyOn(process, 'cwd').mockReturnValue(emptyProject);
+    const defaultSnapshot = structuredClone(DEFAULT_CONFIG);
 
     try {
-      const config = await loadConfig();
-      expect(config.include).toEqual(DEFAULT_CONFIG.include);
-      expect(config._noConfigFile).toBe(true);
+      const first = await loadConfig();
+      first.include!.push('mutated/**/*.md');
+      first.rules!.dependency!.enabled = false;
+
+      const second = await loadConfig();
+      expect(second.include).toEqual(defaultSnapshot.include);
+      expect(second.rules?.dependency?.enabled).toBe(defaultSnapshot.rules?.dependency?.enabled);
+      expect(second._noConfigFile).toBe(true);
+      expect(DEFAULT_CONFIG).toEqual(defaultSnapshot);
     }
     finally {
-      existsSpy.mockRestore();
+      Object.assign(DEFAULT_CONFIG, structuredClone(defaultSnapshot));
     }
   });
 
-  it.each(['missing.json', 'missing.cjs', 'missing.mjs'])('rejects an explicitly requested missing %s config', async (fileName) => {
+  it('rejects a discovered config with a missing dependency', async () => {
+    await withTempConfig('.doc-freshness.config.js', `import './missing-auto-dependency.mjs'; export default {};`, async () => {
+      vi.spyOn(process, 'cwd').mockReturnValue(tmpDir);
+      await expect(loadConfig()).rejects.toThrow('missing-auto-dependency.mjs');
+    });
+  });
+
+  it.each(['missing.json', 'missing.cjs'])('rejects an explicitly requested missing %s config', async (fileName) => {
     await expect(loadConfig(path.join(tmpDir, fileName))).rejects.toThrow(fileName);
   });
 
@@ -245,6 +266,25 @@ describe('loadConfig', () => {
         expect(config.verbose).toBe(true);
       }
     );
+  });
+
+  it('loads an ESM config with a relative import', async () => {
+    const dependencyPath = path.join(tmpDir, 'shared-config-value.mjs');
+    await fs.promises.writeFile(dependencyPath, 'export const verbose = true;');
+
+    try {
+      await withTempConfig(
+        'relative-import-config.mjs',
+        `import { verbose } from './shared-config-value.mjs'; export default { verbose };`,
+        async (tmpConfig) => {
+          expect((await loadConfig(tmpConfig)).verbose).toBe(true);
+          expect((await fs.promises.readdir(tmpDir)).some((name) => name.startsWith('.doc-freshness-temp-config-'))).toBe(false);
+        }
+      );
+    }
+    finally {
+      await unlinkIfExists(dependencyPath);
+    }
   });
 
   it.each([

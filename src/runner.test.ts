@@ -917,7 +917,15 @@ describe('runner', () => {
 
   describe('runWithConfig', () => {
     it('propagates explicit config load failures', async () => {
-      await expect(runWithConfig('/nonexistent/path.json')).rejects.toThrow('/nonexistent/path.json');
+      const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'doc-freshness-runner-config-'));
+      const missingConfig = path.join(tempDir, 'missing.json');
+
+      try {
+        await expect(runWithConfig(missingConfig)).rejects.toThrow(missingConfig);
+      }
+      finally {
+        await fs.promises.rm(tempDir, { recursive: true, force: true });
+      }
     });
   });
 

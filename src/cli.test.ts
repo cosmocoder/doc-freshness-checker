@@ -181,6 +181,22 @@ describe('applyCliOverrides', () => {
 });
 
 describe('runCli', () => {
+  it('returns 1 with the original path when an explicit config is missing', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'doc-freshness-missing-'));
+    const missingConfig = path.join(tempDir, 'missing.json');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const exitCode = await runCli({ config: missingConfig });
+
+      expect(exitCode).toBe(1);
+      expect(errorSpy).toHaveBeenCalledWith('Error:', expect.stringContaining(missingConfig));
+    }
+    finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('does not override the configured reporter when options omit reporter', async () => {
     const loadConfigMock = vi.fn().mockResolvedValue({ ...makeConfig(), reporters: ['json'] });
     const runMock = vi.fn().mockResolvedValue(makeResults(0));
