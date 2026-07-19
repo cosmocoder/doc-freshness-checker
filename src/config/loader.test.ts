@@ -4,6 +4,7 @@ import { tmpdir } from 'os';
 import path from 'path';
 import { promisify } from 'util';
 import { pathToFileURL } from 'url';
+import ts from 'typescript';
 import { loadConfig, DEFAULT_CONFIG } from './loader.js';
 import { BUILT_IN_RULE_TYPES } from './defaults.js';
 
@@ -12,6 +13,26 @@ afterEach(() => {
 });
 
 const execFileAsync = promisify(execFile);
+
+async function transpilePublicLoader(outputDir: string): Promise<string> {
+  const sourceFiles = ['config/loader.ts', 'config/esm-loader.ts', 'config/defaults.ts'];
+  await fs.promises.mkdir(path.join(outputDir, 'config'), { recursive: true });
+  await fs.promises.writeFile(path.join(outputDir, 'package.json'), JSON.stringify({ type: 'module' }));
+
+  await Promise.all(
+    sourceFiles.map(async (relativePath) => {
+      const sourcePath = path.join(process.cwd(), 'src', relativePath);
+      const source = await fs.promises.readFile(sourcePath, 'utf8');
+      const { outputText } = ts.transpileModule(source, {
+        fileName: sourcePath,
+        compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2023 },
+      });
+      await fs.promises.writeFile(path.join(outputDir, relativePath.replace(/\.ts$/, '.js')), outputText);
+    })
+  );
+
+  return path.join(outputDir, 'config', 'loader.js');
+}
 
 describe('DEFAULT_CONFIG', () => {
   it('has sensible default values', () => {
@@ -264,6 +285,7 @@ describe('loadConfig', () => {
 
   it('loads cache-busted ESM .js configs from CommonJS projects without a local package', async () => {
     const projectDir = await fs.promises.mkdtemp(path.join(tmpdir(), 'doc-freshness-commonjs-'));
+    const buildDir = path.join(projectDir, '.loader-build');
     const configPath = path.join(projectDir, 'doc-freshness.config.js');
     const concurrentConfigPath = path.join(projectDir, 'concurrent.config.js');
     await fs.promises.writeFile(path.join(projectDir, 'package.json'), JSON.stringify({ type: 'commonjs' }));
@@ -285,34 +307,31 @@ describe('loadConfig', () => {
 
     try {
       expect(fs.existsSync(path.join(projectDir, 'node_modules'))).toBe(false);
-      const loaderUrl = pathToFileURL(path.join(process.cwd(), 'src/config/esm-loader.ts')).href;
+      const loaderUrl = pathToFileURL(await transpilePublicLoader(buildDir)).href;
       const reloadedSource = `import { defineConfig } from 'doc-freshness-checker';\nexport default defineConfig({ outputDir: 'reloaded' });`;
       const script = `
-        import { readFile, writeFile } from 'node:fs/promises';
-        import { loadESMConfig } from ${JSON.stringify(loaderUrl)};
+        import { writeFile } from 'node:fs/promises';
+        import { loadConfig } from ${JSON.stringify(loaderUrl)};
         const [configPath, concurrentConfigPath, reloadedSource] = process.argv.slice(1);
-        const load = async filePath => loadESMConfig(await readFile(filePath, 'utf8'), filePath);
-        const [config, concurrentConfig] = await Promise.all([load(configPath), load(concurrentConfigPath)]);
+        const [config, concurrentConfig] = await Promise.all([loadConfig(configPath), loadConfig(concurrentConfigPath)]);
         await writeFile(configPath, "throw new Error('config failed');");
         let errorMessage;
-        try { await load(configPath); } catch (error) { errorMessage = error.message; }
+        try { await loadConfig(configPath); } catch (error) { errorMessage = error.message; }
         await writeFile(configPath, reloadedSource);
-        const reloadedConfig = await load(configPath);
+        const reloadedConfig = await loadConfig(configPath);
         process.stdout.write(JSON.stringify({ config, concurrentConfig, errorMessage, reloadedConfig }));
       `;
-      const { stdout } = await execFileAsync(process.execPath, [
-        '--input-type=module',
-        '--eval',
-        script,
-        configPath,
-        concurrentConfigPath,
-        reloadedSource,
-      ]);
+      const { stdout } = await execFileAsync(
+        process.execPath,
+        ['--input-type=module', '--eval', script, configPath, concurrentConfigPath, reloadedSource],
+        { cwd: projectDir }
+      );
       const result = JSON.parse(stdout);
+      const canonicalConfigPath = await fs.promises.realpath(configPath);
 
       expect(result.config.include).toEqual(['from-sibling/**/*.md']);
       expect(result.config.outputDir).toBe('from-asset');
-      expect(result.config.outputPath).toBe(configPath);
+      expect(result.config.outputPath).toBe(canonicalConfigPath);
       expect(result.concurrentConfig.outputDir).toBe('concurrent');
       expect(result.errorMessage).toBe('config failed');
       expect(result.reloadedConfig.outputDir).toBe('reloaded');
@@ -337,7 +356,7 @@ describe('loadConfig', () => {
           try {
             const config = await loadConfig();
             expect(config.outputDir).toBe('discovered-sibling');
-            expect(config.outputPath).toBe(configPath);
+            expect(config.outputPath).toBe(await fs.promises.realpath(configPath));
           }
           finally {
             cwdSpy.mockRestore();

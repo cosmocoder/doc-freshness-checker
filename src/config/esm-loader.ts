@@ -1,38 +1,52 @@
 import crypto from 'crypto';
+import fs from 'fs';
 import { registerHooks } from 'module';
 import { pathToFileURL } from 'url';
+
+const activeConfigSources = new Map<string, string>();
+let registeredHooks: ReturnType<typeof registerHooks> | null = null;
+
+function registerESMLoaderHook(): void {
+  if (registeredHooks) {
+    return;
+  }
+
+  registeredHooks = registerHooks({
+    load(url, context, nextLoad) {
+      const source = activeConfigSources.get(url);
+      if (source === undefined) {
+        return nextLoad(url, context);
+      }
+
+      return { format: 'module', source, shortCircuit: true };
+    },
+  });
+}
+
+function releaseESMLoaderHook(): void {
+  if (registeredHooks && activeConfigSources.size === 0) {
+    registeredHooks.deregister();
+    registeredHooks = null;
+  }
+}
 
 /**
  * Load an ESM config as a module from its original URL so relative imports and
  * import.meta resolve from the config directory, regardless of package type.
  */
 export async function loadESMConfig<T>(content: string, filePath: string): Promise<T> {
-  const configUrl = pathToFileURL(filePath);
+  const configUrl = pathToFileURL(await fs.promises.realpath(filePath));
   configUrl.searchParams.set('doc-freshness-reload', crypto.randomUUID());
-  const transformedContent = transformConfigContent(content);
-  const hooks = registerHooks({
-    resolve(specifier, context, nextResolve) {
-      if (specifier !== configUrl.href) {
-        return nextResolve(specifier, context);
-      }
-
-      return { url: configUrl.href, format: 'module', shortCircuit: true };
-    },
-    load(url, context, nextLoad) {
-      if (url !== configUrl.href) {
-        return nextLoad(url, context);
-      }
-
-      return { format: 'module', source: transformedContent, shortCircuit: true };
-    },
-  });
+  registerESMLoaderHook();
+  activeConfigSources.set(configUrl.href, transformConfigContent(content));
 
   try {
     const module = await import(configUrl.href);
     return (module.default || module) as T;
   }
   finally {
-    hooks.deregister();
+    activeConfigSources.delete(configUrl.href);
+    releaseESMLoaderHook();
   }
 }
 
