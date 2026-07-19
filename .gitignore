@@ -7,7 +7,6 @@ build/
 
 # Cache
 .doc-freshness-cache/
-.doc-freshness-temp-config-*
 .doc-freshness-reports/
 
 # IDE

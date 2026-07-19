@@ -43,7 +43,7 @@ export async function loadConfig(configPath?: string): Promise<DocFreshnessConfi
   }
   else {
     const content = await fs.promises.readFile(fullPath, 'utf-8');
-    userConfig = detectModuleType(content, fullPath) ? await loadESMConfig(content, fullPath) : loadCjsConfig(fullPath);
+    userConfig = detectModuleType(content, fullPath) ? await loadESMConfig(fullPath) : loadCjsConfig(fullPath);
   }
 
   const merged = mergeConfig(DEFAULT_CONFIG, userConfig);
@@ -52,36 +52,14 @@ export async function loadConfig(configPath?: string): Promise<DocFreshnessConfi
 }
 
 /**
- * Load ESM config file via dynamic import with a temp .mjs file
- * to avoid the Node.js MODULE_TYPELESS_PACKAGE_JSON warning.
+ * Load ESM config from its original URL so relative imports and import.meta
+ * resolve from the config directory. The query bypasses Node's ESM cache.
  */
-async function loadESMConfig(content: string, filePath: string): Promise<DocFreshnessConfig> {
-  const transformedContent = transformConfigContent(content);
-
-  const tempFile = path.join(path.dirname(filePath), `.doc-freshness-temp-config-${Date.now()}-${crypto.randomUUID()}.mjs`);
-
-  try {
-    await fs.promises.writeFile(tempFile, transformedContent, 'utf-8');
-
-    const configUrl = pathToFileURL(tempFile).href;
-    const module = await import(configUrl);
-
-    return module.default || module;
-  }
-  finally {
-    await fs.promises.unlink(tempFile).catch(() => {});
-  }
-}
-
-/**
- * Transform config content to handle doc-freshness-checker imports
- * Replaces the import with a local defineConfig function
- */
-function transformConfigContent(content: string): string {
-  // Replace import from doc-freshness-checker with local defineConfig
-  const importPattern = /import\s*\{\s*defineConfig\s*\}\s*from\s*['"]doc-freshness-checker['"]\s*;?/g;
-
-  return content.replace(importPattern, 'const defineConfig = (config) => config;');
+async function loadESMConfig(filePath: string): Promise<DocFreshnessConfig> {
+  const configUrl = pathToFileURL(filePath);
+  configUrl.searchParams.set('doc-freshness-reload', crypto.randomUUID());
+  const module = await import(configUrl.href);
+  return module.default || module;
 }
 
 /**
