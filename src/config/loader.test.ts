@@ -285,32 +285,32 @@ describe('loadConfig', () => {
 
   it('loads symlinked cache-busted ESM .js configs from CommonJS projects without a local package', async () => {
     const projectDir = await fs.promises.mkdtemp(path.join(tmpdir(), 'doc-freshness-commonjs-'));
-    const buildDir = path.join(projectDir, '.loader-build');
-    const targetDir = path.join(projectDir, 'config-target');
-    const linkDir = path.join(projectDir, 'config-link');
-    const targetConfigPath = path.join(targetDir, 'doc-freshness.config.js');
-    const configPath = path.join(linkDir, 'doc-freshness.config.js');
-    const concurrentConfigPath = path.join(targetDir, 'concurrent.config.js');
-    await Promise.all([fs.promises.mkdir(targetDir, { recursive: true }), fs.promises.mkdir(linkDir, { recursive: true })]);
-    await fs.promises.writeFile(path.join(projectDir, 'package.json'), JSON.stringify({ type: 'commonjs' }));
-    await fs.promises.writeFile(path.join(targetDir, 'config-value.mjs'), `export const include = ['from-sibling/**/*.md'];`);
-    await fs.promises.writeFile(path.join(targetDir, 'config-value.txt'), 'from-asset');
-    await fs.promises.writeFile(
-      targetConfigPath,
-      [
-        `import { defineConfig } from 'doc-freshness-checker';`,
-        `import { include } from './config-value.mjs';`,
-        `import { readFileSync } from 'node:fs';`,
-        `export default defineConfig({ include, outputDir: readFileSync(new URL('./config-value.txt', import.meta.url), 'utf8'), outputPath: import.meta.filename });`,
-      ].join('\n')
-    );
-    await fs.promises.writeFile(
-      concurrentConfigPath,
-      `import { defineConfig } from 'doc-freshness-checker';\nexport default defineConfig({ outputDir: 'concurrent' });`
-    );
-    await fs.promises.symlink(targetConfigPath, configPath, 'file');
-
     try {
+      const buildDir = path.join(projectDir, '.loader-build');
+      const targetDir = path.join(projectDir, 'config-target');
+      const linkDir = path.join(projectDir, 'config-link');
+      const targetConfigPath = path.join(targetDir, 'doc-freshness.config.js');
+      const configPath = path.join(linkDir, 'doc-freshness.config.js');
+      const concurrentConfigPath = path.join(targetDir, 'concurrent.config.js');
+      await Promise.all([fs.promises.mkdir(targetDir, { recursive: true }), fs.promises.mkdir(linkDir, { recursive: true })]);
+      await fs.promises.writeFile(path.join(projectDir, 'package.json'), JSON.stringify({ type: 'commonjs' }));
+      await fs.promises.writeFile(path.join(targetDir, 'config-value.mjs'), `export const include = ['from-sibling/**/*.md'];`);
+      await fs.promises.writeFile(path.join(targetDir, 'config-value.txt'), 'from-asset');
+      await fs.promises.writeFile(
+        targetConfigPath,
+        [
+          `import { defineConfig } from 'doc-freshness-checker';`,
+          `import { include } from './config-value.mjs';`,
+          `import { readFileSync } from 'node:fs';`,
+          `export default defineConfig({ include, outputDir: readFileSync(new URL('./config-value.txt', import.meta.url), 'utf8'), outputPath: import.meta.filename });`,
+        ].join('\n')
+      );
+      await fs.promises.writeFile(
+        concurrentConfigPath,
+        `import { defineConfig } from 'doc-freshness-checker';\nexport default defineConfig({ outputDir: 'concurrent' });`
+      );
+      await fs.promises.symlink(targetConfigPath, configPath, 'file');
+
       expect(fs.existsSync(path.join(projectDir, 'node_modules'))).toBe(false);
       const loaderUrl = pathToFileURL(await transpilePublicLoader(buildDir)).href;
       const reloadedSource = `import { defineConfig } from 'doc-freshness-checker';\nexport default defineConfig({ outputDir: 'reloaded' });`;
