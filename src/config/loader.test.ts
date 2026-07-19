@@ -15,7 +15,7 @@ afterEach(() => {
 const execFileAsync = promisify(execFile);
 
 async function transpilePublicLoader(outputDir: string): Promise<string> {
-  const sourceFiles = ['config/loader.ts', 'config/esm-loader.ts', 'config/defaults.ts'];
+  const sourceFiles = ['config/loader.ts', 'config/esm-loader.ts', 'config/defaults.ts', 'config/validateConfig.ts'];
   await fs.promises.mkdir(path.join(outputDir, 'config'), { recursive: true });
   await fs.promises.writeFile(path.join(outputDir, 'package.json'), JSON.stringify({ type: 'module' }));
 
@@ -236,6 +236,31 @@ describe('loadConfig', () => {
     finally {
       await unlinkIfExists(sharedValuesPath);
     }
+  });
+
+  it('rejects malformed config before auto-detection', async () => {
+    const readdirSpy = vi.spyOn(fs, 'readdirSync');
+    try {
+      await withTempConfig('malformed-config.json', { urlValidation: null }, async (tmpConfig) => {
+        await expect(loadConfig(tmpConfig)).rejects.toThrow('urlValidation must be a plain object');
+      });
+      expect(readdirSpy).not.toHaveBeenCalled();
+    }
+    finally {
+      readdirSpy.mockRestore();
+    }
+  });
+
+  it('merges partial scoring weights with defaults', async () => {
+    await withTempConfig('partial-weight-config.json', { freshnessScoring: { weights: { referenceValidity: 0.5 } } }, async (tmpConfig) => {
+      const config = await loadConfig(tmpConfig);
+      expect(config.freshnessScoring?.weights).toEqual({
+        referenceValidity: 0.5,
+        gitTimeDelta: 0.3,
+        codeChangeFrequency: 0.15,
+        symbolCoverage: 0.15,
+      });
+    });
   });
 
   it('auto-detects manifest files', async () => {
@@ -469,7 +494,7 @@ describe('loadConfig', () => {
     await withTempConfig('undefined-vals.json', { verbose: true }, async (tmpConfig) => {
       const config = await loadConfig(tmpConfig);
       expect(config.verbose).toBe(true);
-      expect(config.include).toEqual(DEFAULT_CONFIG.include);
+      expect(config.include).toEqual(['docs/**/*.md', 'README.md']);
     });
   });
 
@@ -499,12 +524,11 @@ describe('loadConfig', () => {
     });
   });
 
-  it('deep-merges nested objects but overwrites null with object values', async () => {
+  it('deep-merges nested objects', async () => {
     await withTempConfig(
-      'deep-null.json',
+      'deep-merge.json',
       {
         rules: { 'file-path': { severity: 'error' } },
-        urlValidation: null,
       },
       async (tmpConfig) => {
         const config = await loadConfig(tmpConfig);

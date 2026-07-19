@@ -85,6 +85,19 @@ describe('runner', () => {
     rules: { ...baseConfig.rules, ...overrides.rules },
   });
 
+  it('validates config before runner side effects', async () => {
+    const mkdirSpy = vi.spyOn(fs.promises, 'mkdir');
+    try {
+      await expect(run({ ...baseConfig, urlValidation: null } as unknown as DocFreshnessConfig)).rejects.toThrow(
+        'urlValidation must be a plain object'
+      );
+      expect(mkdirSpy).not.toHaveBeenCalled();
+    }
+    finally {
+      mkdirSpy.mockRestore();
+    }
+  });
+
   afterAll(async () => {
     await Promise.all(
       transientCacheDirs.map((dir) => fs.promises.rm(path.join(process.cwd(), dir), { recursive: true, force: true }).catch(() => {}))

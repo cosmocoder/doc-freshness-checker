@@ -65,6 +65,37 @@ describe('FreshnessScorer', () => {
       // = 50 + 22.5 + 11.25 + 15 = 98.75 ≈ 99 (weights sum > 1 since only one was overridden)
       expect(score.totalScore).toBe(99);
     });
+
+    it('caps a partial-weight raw total above 100 before rounding and grading', () => {
+      const scorer = new FreshnessScorer({
+        freshnessScoring: { weights: { referenceValidity: 0.5 } },
+      });
+      const tracker = makeMockGitTracker({
+        getFileCommitInfo: () => ({ hash: 'abc', timestamp: Date.now(), message: 'current' }),
+      });
+
+      const score = scorer.calculateDocScore(makeDoc('test.md'), emptyResults, tracker, null);
+
+      expect(score.factors).toEqual({ referenceValidity: 100, gitTimeDelta: 100, codeChangeFrequency: 100, symbolCoverage: 100 });
+      expect(score.totalScore).toBe(100);
+      expect(score.grade).toBe('A');
+    });
+
+    it.each([
+      ['negative', -1],
+      ['NaN', Number.NaN],
+    ])('falls back to zero for a %s weighted total', (_name, referenceValidity) => {
+      const scorer = new FreshnessScorer({
+        freshnessScoring: {
+          weights: { referenceValidity, gitTimeDelta: 0, codeChangeFrequency: 0, symbolCoverage: 0 },
+        },
+      });
+
+      const score = scorer.calculateDocScore(makeDoc('test.md'), emptyResults, null, null);
+
+      expect(score.totalScore).toBe(0);
+      expect(score.grade).toBe('F');
+    });
   });
 
   describe('calculateReferenceValidityScore (via calculateDocScore)', () => {
@@ -419,7 +450,6 @@ describe('FreshnessScorer', () => {
     const scorer = new FreshnessScorer({
       freshnessScoring: {
         weights: { referenceValidity: 1, gitTimeDelta: 0, codeChangeFrequency: 0, symbolCoverage: 0 },
-        thresholds: { gradeA: 90, gradeB: 80, gradeC: 70, gradeD: 60 },
       },
     });
 

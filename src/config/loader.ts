@@ -3,6 +3,7 @@ import path from 'path';
 import { createRequire } from 'module';
 import { loadESMConfig } from './esm-loader.js';
 import { DEFAULT_CONFIG } from './defaults.js';
+import { isPlainObject, validateConfig } from './validateConfig.js';
 import type { DocFreshnessConfig } from '../types.js';
 
 export { DEFAULT_CONFIG };
@@ -15,7 +16,6 @@ const MANIFEST_CANDIDATES = ['package.json', 'requirements.txt', 'pyproject.toml
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.java'];
 const SOURCE_GLOB = `**/*.{${SOURCE_EXTENSIONS.map((ext) => ext.slice(1)).join(',')}}`;
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.nuxt', '__pycache__', 'vendor', 'target']);
-
 /**
  * Load and merge configuration
  */
@@ -47,6 +47,7 @@ export async function loadConfig(configPath?: string): Promise<DocFreshnessConfi
 
   const merged = mergeConfig(DEFAULT_CONFIG, userConfig);
   merged._configFile = configFile;
+  validateConfig(merged);
   return await autoDetectConfig(merged);
 }
 
@@ -264,14 +265,6 @@ function cloneConfigValue<T>(value: T): T {
     return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, cloneConfigValue(nested)])) as T;
   }
   return value;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null) {
-    return false;
-  }
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
 }
 
 function loadCjsConfig(fullPath: string): DocFreshnessConfig {
