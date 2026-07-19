@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { run } from './runner.js';
 import { loadConfig } from './config/loader.js';
 import { readFileSync, realpathSync } from 'fs';
@@ -52,7 +52,7 @@ export function createProgram(): Command {
     .description('Check documentation freshness and accuracy for any project')
     .version(packageJson.version)
     .option('-c, --config <path>', 'Path to config file')
-    .option('-r, --reporter <type>', 'Reporter type (console, json, markdown)', 'console')
+    .addOption(new Option('-r, --reporter <type>', 'Reporter type').choices(['console', 'json', 'markdown', 'enhanced']))
     .option('-o, --output <path>', 'Output file path for reports')
     .option('-v, --verbose', 'Enable verbose logging')
     .option('--only <types>', 'Only check specific reference types (comma-separated)')

@@ -287,6 +287,12 @@ describe('runner', () => {
       expect(spy.mock.calls.flat().join('\n')).toContain('Documentation Freshness Report');
     });
 
+    it('falls back to console when the reporter list is empty', async () => {
+      const spy = captureLog();
+      await run({ ...baseConfig, reporters: [] });
+      expect(spy.mock.calls.flat().join('\n')).toContain('Documentation Freshness Report');
+    });
+
     it('generates json to stdout without outputPath', async () => {
       const spy = captureLog();
       await run({ ...baseConfig, reporters: ['json'] });
@@ -306,10 +312,10 @@ describe('runner', () => {
       expect(spy.mock.calls.flat().join('\n')).toContain('Documentation Freshness Scan Report');
     });
 
-    it('warns for unknown reporter in verbose', async () => {
+    it('warns for unknown reporter', async () => {
       const spy = captureWarn();
       captureLog();
-      await run({ ...baseConfig, reporters: ['unknown' as unknown as ReporterType], verbose: true });
+      await run({ ...baseConfig, reporters: ['unknown' as unknown as ReporterType] });
       expect(spy.mock.calls.flat().join('\n')).toContain('Unknown reporter');
     });
 

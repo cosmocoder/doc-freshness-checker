@@ -62,6 +62,9 @@ Manifest candidate list includes:
 
 ## Important Interactions and Caveats
 
+- When `--reporter` is omitted, configured reporters are preserved; the built-in defaults provide `console` when no config overrides them.
+- `--reporter` accepts `console`, `json`, `markdown`, or `enhanced`; other values print an error and exit with status `1`.
+- An empty configured reporter list falls back to `console` so a successful run still produces output.
 - `--only` only toggles rules that already exist in `config.rules`.
 - `--files`, `--manifest`, and `--source` are comma-split lists and replace prior values.
 - `--no-cache` disables cache usage; `--clear-cache` still requests cache clearing early in runtime.
@@ -72,6 +75,7 @@ Manifest candidate list includes:
 
 - Exit code `1` when:
   - at least one validation error exists, or
+  - a CLI option has an invalid value, or
   - runtime/config loading fails.
 - Exit code `0` otherwise.
 

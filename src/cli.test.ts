@@ -2,7 +2,16 @@ import { mkdtemp, symlink, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { applyCliOverrides, isDirectCliInvocation, main, parseCliOptions, runAsCli, runCli, type CLIOptions } from './cli.js';
+import {
+  applyCliOverrides,
+  createProgram,
+  isDirectCliInvocation,
+  main,
+  parseCliOptions,
+  runAsCli,
+  runCli,
+  type CLIOptions,
+} from './cli.js';
 import type { DocFreshnessConfig, ValidationResults } from './types.js';
 
 afterEach(() => {
@@ -37,6 +46,10 @@ function makeResults(errors: number, info: number = 0): ValidationResults {
 }
 
 describe('CLI option parsing', () => {
+  it('leaves reporter unset when the flag is absent', () => {
+    expect(parseCliOptions(['node', 'doc-freshness']).reporter).toBeUndefined();
+  });
+
   it('parses supported flags and values', () => {
     const options = parseCliOptions([
       'node',
@@ -56,6 +69,17 @@ describe('CLI option parsing', () => {
     expect(options.only).toBe('file-path,version');
     expect(options.cache).toBe(false);
     expect(options.vectorSearch).toBe(true);
+  });
+
+  it('lists and validates every reporter choice', () => {
+    const program = createProgram()
+      .exitOverride()
+      .configureOutput({ writeErr: () => {} });
+
+    expect(program.helpInformation().replace(/\s+/g, ' ')).toContain('Reporter type (choices: "console", "json", "markdown", "enhanced")');
+    expect(() => program.parse(['node', 'doc-freshness', '--reporter', 'bogus'])).toThrow(
+      'Allowed choices are console, json, markdown, enhanced'
+    );
   });
 });
 
@@ -99,8 +123,8 @@ describe('applyCliOverrides', () => {
 });
 
 describe('runCli', () => {
-  it('returns 0 on successful run with no errors', async () => {
-    const loadConfigMock = vi.fn().mockResolvedValue(makeConfig());
+  it('does not override the configured reporter when options omit reporter', async () => {
+    const loadConfigMock = vi.fn().mockResolvedValue({ ...makeConfig(), reporters: ['json'] });
     const runMock = vi.fn().mockResolvedValue(makeResults(0));
     const logErrorMock = vi.fn();
 
@@ -116,6 +140,7 @@ describe('runCli', () => {
     expect(exitCode).toBe(0);
     expect(loadConfigMock).toHaveBeenCalledWith('doc-freshness.config.ts');
     expect(runMock).toHaveBeenCalledTimes(1);
+    expect(runMock).toHaveBeenCalledWith(expect.objectContaining({ reporters: ['json'] }));
     expect(logErrorMock).not.toHaveBeenCalled();
   });
 
@@ -181,6 +206,21 @@ describe('runCli', () => {
 });
 
 describe('main', () => {
+  it('preserves the configured reporter when the CLI flag is absent', async () => {
+    const runMock = vi.fn().mockResolvedValue(makeResults(0));
+    const deps = {
+      loadConfig: vi.fn().mockResolvedValue({ ...makeConfig(), reporters: ['json'] }),
+      run: runMock,
+      logError: vi.fn(),
+    };
+
+    const exitCode = await main(['node', 'doc-freshness', '--config', 'doc-freshness.config.ts'], deps);
+
+    expect(exitCode).toBe(0);
+    expect(runMock).toHaveBeenCalledTimes(1);
+    expect(runMock).toHaveBeenCalledWith(expect.objectContaining({ reporters: ['json'] }));
+  });
+
   it('parses argv and applies options before running', async () => {
     const runMock = vi.fn().mockResolvedValue(makeResults(0));
     const deps = {
