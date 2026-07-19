@@ -48,10 +48,21 @@ describe('loadConfig', () => {
     await fs.promises.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
   });
 
-  it('returns defaults with auto-detection when no config file exists', async () => {
-    const config = await loadConfig('/nonexistent/path.json');
-    expect(config.include).toEqual(DEFAULT_CONFIG.include);
-    expect(config._noConfigFile).toBe(true);
+  it('uses defaults only when no explicit or discovered config exists', async () => {
+    const existsSpy = vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+
+    try {
+      const config = await loadConfig();
+      expect(config.include).toEqual(DEFAULT_CONFIG.include);
+      expect(config._noConfigFile).toBe(true);
+    }
+    finally {
+      existsSpy.mockRestore();
+    }
+  });
+
+  it.each(['missing.json', 'missing.cjs', 'missing.mjs'])('rejects an explicitly requested missing %s config', async (fileName) => {
+    await expect(loadConfig(path.join(tmpDir, fileName))).rejects.toThrow(fileName);
   });
 
   it('loads JSON config file and merges with defaults', async () => {
@@ -180,25 +191,6 @@ describe('loadConfig', () => {
     }
   });
 
-  it('isolates defaults when an explicit config file is missing', async () => {
-    const defaultSnapshot = structuredClone(DEFAULT_CONFIG);
-
-    try {
-      const missingConfig = path.join(tmpDir, 'missing-config.json');
-      const first = await loadConfig(missingConfig);
-      first.include!.push('mutated/**/*.md');
-      first.rules!.dependency!.enabled = false;
-
-      const second = await loadConfig(missingConfig);
-      expect(second.include).toEqual(defaultSnapshot.include);
-      expect(second.rules?.dependency?.enabled).toBe(defaultSnapshot.rules?.dependency?.enabled);
-      expect(DEFAULT_CONFIG).toEqual(defaultSnapshot);
-    }
-    finally {
-      Object.assign(DEFAULT_CONFIG, structuredClone(defaultSnapshot));
-    }
-  });
-
   it('auto-detects manifest files', async () => {
     const config = await loadConfig();
     expect(config.manifestFiles).toBeDefined();
@@ -255,7 +247,16 @@ describe('loadConfig', () => {
     );
   });
 
-  it('returns defaults when config file throws non-ENOENT error', async () => {
+  it.each([
+    ['CJS', 'missing-dependency.cjs', `require('./missing-dependency.cjs'); module.exports = {};`],
+    ['ESM', 'missing-dependency.mjs', `import './missing-dependency.mjs'; export default {};`],
+  ])('rejects an existing %s config with a missing dependency', async (moduleType, missingDependency, content) => {
+    await withTempConfig(`missing-dependency-config.${moduleType === 'CJS' ? 'cjs' : 'mjs'}`, content, async (tmpConfig) => {
+      await expect(loadConfig(tmpConfig)).rejects.toThrow(missingDependency);
+    });
+  });
+
+  it('rejects an invalid JSON config', async () => {
     await withTempConfig('bad-config.json', 'not valid json!!!', async (tmpConfig) => {
       await expect(loadConfig(tmpConfig)).rejects.toThrow();
     });
@@ -321,11 +322,6 @@ describe('loadConfig', () => {
       expect(config.verbose).toBe(true);
       expect(config.include).toEqual(DEFAULT_CONFIG.include);
     });
-  });
-
-  it('handles ENOENT (module not found) error code', async () => {
-    const config = await loadConfig('/nonexistent/deep/path/config.json');
-    expect(config._noConfigFile).toBe(true);
   });
 
   it('loads config without explicit path, using auto-detection', async () => {

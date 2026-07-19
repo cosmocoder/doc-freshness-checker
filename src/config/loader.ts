@@ -32,33 +32,23 @@ export async function loadConfig(configPath?: string): Promise<DocFreshnessConfi
   const fullPath = path.resolve(process.cwd(), configFile);
   const extension = path.extname(configFile).toLowerCase();
 
-  try {
-    let userConfig: DocFreshnessConfig;
+  let userConfig: DocFreshnessConfig;
 
-    if (extension === '.json') {
-      const content = await fs.promises.readFile(fullPath, 'utf-8');
-      userConfig = JSON.parse(content);
-    }
-    else if (extension === '.cjs') {
-      userConfig = loadCjsConfig(fullPath);
-    }
-    else {
-      const content = await fs.promises.readFile(fullPath, 'utf-8');
-      userConfig = detectModuleType(content, fullPath) ? await loadESMConfig(content, fullPath) : loadCjsConfig(fullPath);
-    }
+  if (extension === '.json') {
+    const content = await fs.promises.readFile(fullPath, 'utf-8');
+    userConfig = JSON.parse(content);
+  }
+  else if (extension === '.cjs') {
+    userConfig = loadCjsConfig(fullPath);
+  }
+  else {
+    const content = await fs.promises.readFile(fullPath, 'utf-8');
+    userConfig = detectModuleType(content, fullPath) ? await loadESMConfig(content, fullPath) : loadCjsConfig(fullPath);
+  }
 
-    const merged = mergeConfig(DEFAULT_CONFIG, userConfig);
-    merged._configFile = configFile;
-    return await autoDetectConfig(merged);
-  }
-  catch (error) {
-    const err = error as NodeJS.ErrnoException;
-    if (err.code === 'ENOENT' || err.code === 'ERR_MODULE_NOT_FOUND') {
-      console.log('Config file not found, using defaults');
-      return await autoDetectConfig(mergeConfig(DEFAULT_CONFIG, { _noConfigFile: true }));
-    }
-    throw error;
-  }
+  const merged = mergeConfig(DEFAULT_CONFIG, userConfig);
+  merged._configFile = configFile;
+  return await autoDetectConfig(merged);
 }
 
 /**

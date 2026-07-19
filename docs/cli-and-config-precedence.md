@@ -24,6 +24,8 @@ When `--config` is omitted, the loader checks these filenames in project root:
 If none are found, defaults are used with auto-detection for some values.
 
 When you provide `--config <path>`, the loader reads that file directly.
+If that path cannot be read, the loader reports the error and the CLI exits with code `1` instead of falling back to defaults.
+An explicit or discovered config that fails to load because of invalid JSON, a syntax error, or an unresolved import is reported the same way.
 
 ## Auto-Detected Values
 

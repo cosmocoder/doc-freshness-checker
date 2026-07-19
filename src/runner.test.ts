@@ -916,10 +916,8 @@ describe('runner', () => {
   });
 
   describe('runWithConfig', () => {
-    it('loads config from path and runs', async () => {
-      captureLog();
-      const result = await runWithConfig('/nonexistent/path.json');
-      expect(result.summary).toBeDefined();
+    it('propagates explicit config load failures', async () => {
+      await expect(runWithConfig('/nonexistent/path.json')).rejects.toThrow('/nonexistent/path.json');
     });
   });
 
