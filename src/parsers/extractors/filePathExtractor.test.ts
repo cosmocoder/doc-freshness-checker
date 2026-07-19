@@ -1,7 +1,7 @@
 import { FilePathExtractor } from './filePathExtractor.js';
 import type { Document } from '../../types.js';
 
-function makeDoc(content: string, format: 'markdown' | 'restructuredtext' | 'asciidoc' = 'markdown'): Document {
+function makeDoc(content: string, format: Document['format'] = 'markdown'): Document {
   return {
     path: 'docs/test.md',
     absolutePath: '/project/docs/test.md',
@@ -50,10 +50,20 @@ describe('FilePathExtractor', () => {
     });
 
     it('handles GitHub-style line references', () => {
-      const doc = makeDoc('[file](../src/file.ts#L123)');
+      const doc = makeDoc('[line](README.md#L10) [range](./README.md#L10-L20) [relative](../src/file.ts#L123)');
       const refs = extractor.extract(doc);
-      expect(refs[0].value).toBe('../src/file.ts');
-      expect(refs[0].lineRef).toBe('123');
+      expect(refs.map(({ value, lineRef }) => ({ value, lineRef }))).toEqual([
+        { value: 'README.md', lineRef: '10' },
+        { value: './README.md', lineRef: '10-L20' },
+        { value: '../src/file.ts', lineRef: '123' },
+      ]);
+    });
+
+    it('strips ordinary fragments from file links', () => {
+      const doc = makeDoc('[readme](README.md#usage) [relative](./README.md#usage)');
+      const refs = extractor.extract(doc);
+      expect(refs.map((ref) => ref.value)).toEqual(['README.md', './README.md']);
+      expect(refs.every((ref) => ref.lineRef === undefined)).toBe(true);
     });
 
     it('preserves linkText', () => {
@@ -61,6 +71,11 @@ describe('FilePathExtractor', () => {
       const refs = extractor.extract(doc);
       expect(refs[0].linkText).toBe('My Link Text');
     });
+  });
+
+  it('strips fragments from plaintext links parsed as Markdown', () => {
+    const refs = extractor.extract(makeDoc('[readme](README.md#usage)', 'plaintext'));
+    expect(refs[0].value).toBe('README.md');
   });
 
   describe('restructuredtext format', () => {
@@ -79,6 +94,11 @@ describe('FilePathExtractor', () => {
       expect(refs).toHaveLength(1);
       expect(refs[0].value).toBe('./config.adoc');
       expect(refs[0].linkText).toBe('Configuration');
+    });
+
+    it('preserves fragments in AsciiDoc links', () => {
+      const refs = extractor.extract(makeDoc('link:./config.adoc#usage[Configuration]', 'asciidoc'));
+      expect(refs[0].value).toBe('./config.adoc#usage');
     });
   });
 });

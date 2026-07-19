@@ -1,4 +1,5 @@
 import { FileValidator } from './fileValidator.js';
+import { FilePathExtractor } from '../parsers/extractors/filePathExtractor.js';
 import type { DocFreshnessConfig, Reference } from '../types.js';
 import { makeDoc as makeBaseDoc, makeRef as makeBaseRef } from '../test-utils/factories.js';
 
@@ -26,6 +27,16 @@ describe('FileValidator', () => {
     await expect(validator.getIncrementalInputs([makeRef('../package.json')], makeDoc(), config)).resolves.toEqual([
       { path: `${process.cwd()}/package.json` },
     ]);
+  });
+
+  it('validates Markdown file links with ordinary and line fragments', async () => {
+    const content = '[usage](README.md#usage) [relative](./README.md#usage) [lines](README.md#L10-L20)';
+    const document = makeBaseDoc({ path: 'guide.md', content, lines: [content] });
+    document.references = new FilePathExtractor().extract(document);
+
+    const results = await validator.validateBatch(document.references, document, config);
+
+    expect(results.map((result) => result.valid)).toEqual([true, true, true]);
   });
 
   it('marks missing files as invalid', async () => {
