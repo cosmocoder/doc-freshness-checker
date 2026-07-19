@@ -1,4 +1,5 @@
 import { ValidationEngine } from './validationEngine.js';
+import { BUILT_IN_RULE_TYPES } from '../config/defaults.js';
 import type { IncrementalInput, IncrementalInputProvider } from './incrementalInputs.js';
 import type { BaseValidator, DocFreshnessConfig, Document, Reference, ValidationResult } from '../types.js';
 
@@ -80,12 +81,12 @@ describe('ValidationEngine', () => {
     expect(engine.hadIncompleteValidation()).toBe(false);
   });
 
-  it('skips disabled rules', async () => {
-    const cfg: DocFreshnessConfig = { rules: { 'file-path': { enabled: false } } };
+  it.each(BUILT_IN_RULE_TYPES)('skips disabled %s rules', async (rule) => {
+    const cfg: DocFreshnessConfig = { rules: { [rule]: { enabled: false } } };
     const engine = new ValidationEngine(cfg);
-    engine.registerValidator('file-path', new StubValidator([]));
+    engine.registerValidator(rule, new StubValidator([]));
 
-    const results = await engine.validate([makeDoc([makeRef('file-path', 'a.ts')])]);
+    const results = await engine.validate([makeDoc([makeRef(rule, 'value')])]);
     expect(results.summary.skipped).toBe(1);
     expect(results.summary.total).toBe(1);
     expect(engine.hadIncompleteValidation()).toBe(false);

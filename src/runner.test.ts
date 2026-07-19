@@ -3,10 +3,10 @@ import os from 'os';
 import path from 'path';
 import { glob } from 'glob';
 import { run, runWithConfig } from './runner.js';
+import { BUILT_IN_RULE_TYPES } from './config/defaults.js';
 import { ValidationEngine } from './validators/validationEngine.js';
 import { IncrementalChecker } from './utils/incremental.js';
 import { FileValidator } from './validators/fileValidator.js';
-import { CodeSnippetValidator } from './validators/codeSnippetValidator.js';
 import type { BaseExtractor, BaseValidator, DocFreshnessConfig, Reference, ReporterType } from './types.js';
 import { withOutputFile } from './test-utils/tempFiles.js';
 import { captureConsoleLog, captureConsoleWarn } from './test-utils/console.js';
@@ -63,15 +63,7 @@ describe('runner', () => {
     include: [],
     exclude: [],
     urlValidation: { enabled: false },
-    rules: {
-      'file-path': { enabled: false },
-      'external-url': { enabled: false },
-      version: { enabled: false },
-      'directory-structure': { enabled: false },
-      'code-pattern': { enabled: false },
-      'code-snippet': { enabled: false },
-      dependency: { enabled: false },
-    },
+    rules: Object.fromEntries(BUILT_IN_RULE_TYPES.map((rule) => [rule, { enabled: false }])),
     graph: { enabled: false },
     git: { enabled: false },
     freshnessScoring: { enabled: false },
@@ -242,39 +234,6 @@ describe('runner', () => {
         severity: 'info',
         message: 'Package not found in dependencies: definitely-not-installed-doc-freshness-package',
       });
-    });
-  });
-
-  it('does not execute the code-snippet validator when the rule is excluded', async () => {
-    const reference: Reference = {
-      type: 'code-snippet',
-      value: './missing.js',
-      lineNumber: 1,
-      raw: "import './missing.js'",
-      sourceFile: 'runner-only.md',
-      kind: 'import',
-    };
-
-    await withOutputFile(cacheRoot, 'runner-only.md', async (docPath) => {
-      await fs.promises.mkdir(cacheRoot, { recursive: true });
-      await fs.promises.writeFile(docPath, 'Code example');
-      vi.mocked(glob).mockResolvedValueOnce([docPath]);
-      const validateSpy = vi.spyOn(CodeSnippetValidator.prototype, 'validateBatch');
-
-      try {
-        const results = await run({
-          ...baseConfig,
-          customExtractors: [
-            { extract: () => [reference], supportsFormat: () => true },
-          ] as unknown as DocFreshnessConfig['customExtractors'],
-        });
-
-        expect(validateSpy).not.toHaveBeenCalled();
-        expect(results.summary.skipped).toBe(1);
-      }
-      finally {
-        validateSpy.mockRestore();
-      }
     });
   });
 
