@@ -6,6 +6,7 @@ import { loadConfig } from './config/loader.js';
 import { readFileSync, realpathSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
+import { BUILT_IN_RULE_TYPES } from './config/defaults.js';
 import type { DocFreshnessConfig, ValidationResults } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -88,10 +89,9 @@ export function applyCliOverrides(config: DocFreshnessConfig, options: CLIOption
   if (options.only) {
     const types = options.only.split(',');
     const rules = (config.rules ??= {});
-    for (const [rule, ruleConfig] of Object.entries(rules)) {
-      if (ruleConfig) {
-        ruleConfig.enabled = types.includes(rule);
-      }
+    const knownRules = new Set<string>([...BUILT_IN_RULE_TYPES, ...Object.keys(rules), ...Object.keys(config.customValidators ?? {})]);
+    for (const rule of knownRules) {
+      (rules[rule] ??= {}).enabled = types.includes(rule);
     }
   }
   if (options.files) {

@@ -44,28 +44,28 @@ Manifest candidate list includes:
 
 ## Flag-to-Config Mapping
 
-| CLI flag              | Effective config impact                             |
-| --------------------- | --------------------------------------------------- |
-| `--reporter <type>`   | `config.reporters = [type]`                         |
-| `--output <path>`     | `config.outputPath = path`                          |
-| `--verbose`           | `config.verbose = true`                             |
-| `--skip-urls`         | `config.urlValidation.enabled = false`              |
-| `--only <types>`      | Enables only listed rule keys inside `config.rules` |
-| `--files <patterns>`  | Replaces `config.include`                           |
-| `--manifest <files>`  | Replaces `config.manifestFiles`                     |
-| `--source <patterns>` | Replaces `config.sourcePatterns`                    |
-| `--no-cache`          | Sets `config.cache.enabled = false`                 |
-| `--clear-cache`       | Sets `config.clearCache = true`                     |
-| `--score`             | Sets `config.freshnessScoring.enabled = true`       |
-| `--incremental`       | Sets `config.incremental.enabled = true`            |
-| `--vector-search`     | Sets `config.vectorSearch.enabled = true`           |
+| CLI flag              | Effective config impact                                 |
+| --------------------- | ------------------------------------------------------- |
+| `--reporter <type>`   | `config.reporters = [type]`                             |
+| `--output <path>`     | `config.outputPath = path`                              |
+| `--verbose`           | `config.verbose = true`                                 |
+| `--skip-urls`         | `config.urlValidation.enabled = false`                  |
+| `--only <types>`      | Enables only listed built-in or configured custom rules |
+| `--files <patterns>`  | Replaces `config.include`                               |
+| `--manifest <files>`  | Replaces `config.manifestFiles`                         |
+| `--source <patterns>` | Replaces `config.sourcePatterns`                        |
+| `--no-cache`          | Sets `config.cache.enabled = false`                     |
+| `--clear-cache`       | Sets `config.clearCache = true`                         |
+| `--score`             | Sets `config.freshnessScoring.enabled = true`           |
+| `--incremental`       | Sets `config.incremental.enabled = true`                |
+| `--vector-search`     | Sets `config.vectorSearch.enabled = true`               |
 
 ## Important Interactions and Caveats
 
 - When `--reporter` is omitted, configured reporters are preserved; the built-in defaults provide `console` when no config overrides them.
 - `--reporter` accepts `console`, `json`, `markdown`, or `enhanced`; other values print an error and exit with status `1`.
 - An empty configured reporter list falls back to `console` so a successful run still produces output.
-- `--only` only toggles rules that already exist in `config.rules`.
+- `--only` accepts built-in rules and configured custom rule keys.
 - `--files`, `--manifest`, and `--source` are comma-split lists and replace prior values.
 - `--no-cache` disables cache usage; `--clear-cache` still requests cache clearing early in runtime.
 - `--output` controls file output for reporters that emit string payloads (`json`, `markdown`, `enhanced`).

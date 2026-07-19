@@ -12,6 +12,7 @@ import {
   runCli,
   type CLIOptions,
 } from './cli.js';
+import { BUILT_IN_RULE_TYPES, DEFAULT_CONFIG } from './config/defaults.js';
 import type { DocFreshnessConfig, ValidationResults } from './types.js';
 
 afterEach(() => {
@@ -84,6 +85,25 @@ describe('CLI option parsing', () => {
 });
 
 describe('applyCliOverrides', () => {
+  it('selects built-in and configured custom rules', () => {
+    const config = structuredClone(DEFAULT_CONFIG);
+    delete config.rules!['code-snippet'];
+    config.rules!.custom = { enabled: false };
+    config.customValidators!.validatorOnly = {
+      async validateBatch() {
+        return [];
+      },
+    };
+
+    applyCliOverrides(config, { only: 'file-path,custom,validatorOnly' });
+
+    for (const rule of BUILT_IN_RULE_TYPES) {
+      expect(config.rules?.[rule]?.enabled).toBe(rule === 'file-path');
+    }
+    expect(config.rules!.custom!.enabled).toBe(true);
+    expect(config.rules!.validatorOnly!.enabled).toBe(true);
+  });
+
   it('applies all overrideable CLI options to config', () => {
     const config = makeConfig();
     const options: CLIOptions = {

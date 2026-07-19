@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { loadConfig, DEFAULT_CONFIG } from './loader.js';
+import { BUILT_IN_RULE_TYPES } from './defaults.js';
 
 describe('DEFAULT_CONFIG', () => {
   it('has sensible default values', () => {
@@ -10,6 +11,8 @@ describe('DEFAULT_CONFIG', () => {
     expect(DEFAULT_CONFIG.urlValidation?.timeout).toBe(10000);
     expect(DEFAULT_CONFIG.rules?.['file-path']?.enabled).toBe(true);
     expect(DEFAULT_CONFIG.rules?.dependency).toMatchObject({ enabled: true, severity: 'info' });
+    expect(DEFAULT_CONFIG.rules?.['code-snippet']).toEqual({ enabled: true, severity: 'warning' });
+    expect(Object.keys(DEFAULT_CONFIG.rules!).sort()).toEqual([...BUILT_IN_RULE_TYPES].sort());
     expect(DEFAULT_CONFIG.reporters).toEqual(['console']);
     expect(DEFAULT_CONFIG.verbose).toBe(false);
   });
