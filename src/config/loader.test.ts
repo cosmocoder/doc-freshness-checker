@@ -283,16 +283,20 @@ describe('loadConfig', () => {
     });
   });
 
-  it('loads cache-busted ESM .js configs from CommonJS projects without a local package', async () => {
+  it('loads symlinked cache-busted ESM .js configs from CommonJS projects without a local package', async () => {
     const projectDir = await fs.promises.mkdtemp(path.join(tmpdir(), 'doc-freshness-commonjs-'));
     const buildDir = path.join(projectDir, '.loader-build');
-    const configPath = path.join(projectDir, 'doc-freshness.config.js');
-    const concurrentConfigPath = path.join(projectDir, 'concurrent.config.js');
+    const targetDir = path.join(projectDir, 'config-target');
+    const linkDir = path.join(projectDir, 'config-link');
+    const targetConfigPath = path.join(targetDir, 'doc-freshness.config.js');
+    const configPath = path.join(linkDir, 'doc-freshness.config.js');
+    const concurrentConfigPath = path.join(targetDir, 'concurrent.config.js');
+    await Promise.all([fs.promises.mkdir(targetDir, { recursive: true }), fs.promises.mkdir(linkDir, { recursive: true })]);
     await fs.promises.writeFile(path.join(projectDir, 'package.json'), JSON.stringify({ type: 'commonjs' }));
-    await fs.promises.writeFile(path.join(projectDir, 'config-value.mjs'), `export const include = ['from-sibling/**/*.md'];`);
-    await fs.promises.writeFile(path.join(projectDir, 'config-value.txt'), 'from-asset');
+    await fs.promises.writeFile(path.join(targetDir, 'config-value.mjs'), `export const include = ['from-sibling/**/*.md'];`);
+    await fs.promises.writeFile(path.join(targetDir, 'config-value.txt'), 'from-asset');
     await fs.promises.writeFile(
-      configPath,
+      targetConfigPath,
       [
         `import { defineConfig } from 'doc-freshness-checker';`,
         `import { include } from './config-value.mjs';`,
@@ -304,6 +308,7 @@ describe('loadConfig', () => {
       concurrentConfigPath,
       `import { defineConfig } from 'doc-freshness-checker';\nexport default defineConfig({ outputDir: 'concurrent' });`
     );
+    await fs.promises.symlink(targetConfigPath, configPath, 'file');
 
     try {
       expect(fs.existsSync(path.join(projectDir, 'node_modules'))).toBe(false);
@@ -328,7 +333,10 @@ describe('loadConfig', () => {
       );
       const result = JSON.parse(stdout);
       const canonicalConfigPath = await fs.promises.realpath(configPath);
+      const canonicalTargetPath = await fs.promises.realpath(targetConfigPath);
 
+      expect(canonicalConfigPath).toBe(canonicalTargetPath);
+      expect(canonicalConfigPath).not.toBe(configPath);
       expect(result.config.include).toEqual(['from-sibling/**/*.md']);
       expect(result.config.outputDir).toBe('from-asset');
       expect(result.config.outputPath).toBe(canonicalConfigPath);
