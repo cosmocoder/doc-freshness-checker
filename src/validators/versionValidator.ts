@@ -4,6 +4,7 @@ import semver from 'semver';
 import { resolveManifestPaths } from '../utils/manifestPaths.js';
 import type { IncrementalInput } from './incrementalInputs.js';
 import type { DocFreshnessConfig, Document, ManifestParser, Reference, ValidationResult } from '../types.js';
+import { canonicalizePythonPackageName, parsePyprojectDependencies, parseRequirementsDependencies } from '../utils/pythonDependencies.js';
 
 /**
  * Manifest file parsers for different ecosystems
@@ -33,41 +34,13 @@ const manifestParsers: Record<string, ManifestParser> = {
   // Python: requirements.txt
   'requirements.txt': async (filePath: string): Promise<Map<string, string>> => {
     const content = await fs.promises.readFile(filePath, 'utf-8');
-    const versions = new Map<string, string>();
-
-    for (const line of content.split('\n')) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) {
-        continue;
-      }
-      const match = trimmed.match(/^([a-zA-Z0-9\-_]+)([<>=!]+)?(.+)?$/);
-      if (!match) {
-        continue;
-      }
-      versions.set(match[1].toLowerCase(), match[3] ? normalizeVersion(match[3]) : 'any');
-    }
-
-    return versions;
+    return parseRequirementsDependencies(content);
   },
 
   // Python: pyproject.toml
   'pyproject.toml': async (filePath: string): Promise<Map<string, string>> => {
     const content = await fs.promises.readFile(filePath, 'utf-8');
-    const versions = new Map<string, string>();
-
-    // Basic TOML parsing for dependencies
-    const depsMatch = content.match(/\[project\.dependencies\]([\s\S]*?)(?:\[|$)/);
-    if (depsMatch) {
-      const depEntries = Array.from(depsMatch[1].matchAll(/"([^"]+)"/g), (match) => match[1]);
-      for (const dep of depEntries) {
-        const [pkg, version = 'any'] = dep.split(/[<>=!]+/);
-        if (pkg) {
-          versions.set(pkg.toLowerCase(), version);
-        }
-      }
-    }
-
-    return versions;
+    return parsePyprojectDependencies(content);
   },
 
   // Go: go.mod
@@ -141,16 +114,23 @@ function normalizeVersion(version: string): string {
   return version.replace(/^[\^~>=<]+/, '').replace(/\.x$/i, '.0');
 }
 
+interface VersionCandidate {
+  version: string;
+  sourceIndex: number;
+}
+
 /**
  * Validates version references against manifest files
  */
 export class VersionValidator {
-  private packageVersions: Map<string, string> | null;
+  private packageVersions: Map<string, VersionCandidate> | null;
+  private pythonVersions: Map<string, VersionCandidate>;
   private technologyMap: Record<string, string[]>;
   private loadedFromKey: string | null;
 
   constructor() {
     this.packageVersions = null;
+    this.pythonVersions = new Map();
     this.loadedFromKey = null;
     this.technologyMap = {
       react: ['react'],
@@ -178,9 +158,10 @@ export class VersionValidator {
     }
 
     this.packageVersions = new Map();
+    this.pythonVersions = new Map();
     this.loadedFromKey = configKey;
 
-    for (const manifestPath of manifestPaths) {
+    for (const [sourceIndex, manifestPath] of manifestPaths.entries()) {
       const fileName = path.basename(manifestPath);
       const parser = manifestParsers[fileName];
 
@@ -191,7 +172,12 @@ export class VersionValidator {
       try {
         const versions = await parser(manifestPath);
         for (const [name, version] of versions) {
-          this.packageVersions.set(name, version);
+          const candidate = { version, sourceIndex };
+          this.packageVersions.set(name, candidate);
+          if (fileName === 'pyproject.toml' || fileName === 'requirements.txt') {
+            const canonicalName = canonicalizePythonPackageName(name);
+            this.pythonVersions.set(canonicalName, candidate);
+          }
         }
       }
       catch {
@@ -219,17 +205,33 @@ export class VersionValidator {
       let actualVersion: string | null = null;
 
       for (const pkgName of pkgNames) {
-        if (this.packageVersions!.has(pkgName)) {
-          actualVersion = this.packageVersions!.get(pkgName)!;
+        const exactCandidate = this.packageVersions!.get(pkgName);
+        const pythonCandidate = this.pythonVersions.get(canonicalizePythonPackageName(pkgName));
+        const candidate =
+          exactCandidate && pythonCandidate
+            ? exactCandidate.sourceIndex >= pythonCandidate.sourceIndex
+              ? exactCandidate
+              : pythonCandidate
+            : exactCandidate || pythonCandidate;
+        if (candidate) {
+          actualVersion = candidate.version;
           break;
         }
       }
 
-      if (!actualVersion || actualVersion === 'any') {
+      if (!actualVersion) {
         results.push({
           reference: ref,
           valid: true,
           message: `Could not find ${tech} in dependencies`,
+        });
+        continue;
+      }
+      if (actualVersion === 'any') {
+        results.push({
+          reference: ref,
+          valid: true,
+          message: `${ref.technology} is listed without an exact version; version comparison skipped`,
         });
         continue;
       }
@@ -259,6 +261,10 @@ export class VersionValidator {
   }
 
   private getMajorVersion(version: string): number | null {
+    const pythonRelease = version.match(/^(?:\d+!)?(\d+)(?:\.|$)/);
+    if (pythonRelease) {
+      return Number.parseInt(pythonRelease[1], 10);
+    }
     const parsed = semver.coerce(version);
     return parsed ? parsed.major : null;
   }

@@ -4,6 +4,7 @@ import type { Document, DocFreshnessConfig, Reference } from '../../types.js';
 interface PatternConfig {
   regex: RegExp;
   ecosystem: string;
+  requiresPythonSeparator?: boolean;
 }
 
 /**
@@ -20,17 +21,21 @@ export class DependencyExtractor extends BaseExtractor {
 
   extract(document: Document): Reference[] {
     const references: Reference[] = [];
+    const plainPackageEcosystem = this.ecosystems.includes('npm') ? 'npm' : 'pypi';
+    const pypiOnly = this.ecosystems.length === 1 && this.ecosystems[0] === 'pypi';
 
     const patterns: PatternConfig[] = [
       // npm scoped packages: @scope/package-name
       { regex: /`(@[a-z0-9-]+\/[a-z0-9-]+)`/g, ecosystem: 'npm' },
-      // npm regular packages in backticks
-      { regex: /`([a-z][a-z0-9-]{2,})`/g, ecosystem: 'npm' },
+      // PyPI names distinguished by underscores or dots
+      { regex: /`([a-z][a-z0-9._-]{2,})`/g, ecosystem: 'pypi', requiresPythonSeparator: true },
+      // Plain/hyphen names are npm by default and PyPI when npm is disabled
+      { regex: /`([a-z][a-z0-9-]{2,})`/g, ecosystem: plainPackageEcosystem },
       // Go packages
       { regex: /`(github\.com\/[a-zA-Z0-9\-_]+\/[a-zA-Z0-9\-_]+)`/g, ecosystem: 'go' },
     ];
 
-    for (const { regex, ecosystem } of patterns) {
+    for (const { regex, ecosystem, requiresPythonSeparator } of patterns) {
       if (!this.ecosystems.includes(ecosystem)) {
         continue;
       }
@@ -40,8 +45,12 @@ export class DependencyExtractor extends BaseExtractor {
       while ((match = re.exec(document.content)) !== null) {
         const pkg = match[1];
 
+        if (requiresPythonSeparator && !/[._]/.test(pkg)) {
+          continue;
+        }
+
         // Filter out common false positives
-        if (this.isFalsePositive(pkg)) {
+        if (this.isFalsePositive(pkg, ecosystem === 'pypi' && pypiOnly)) {
           continue;
         }
 
@@ -59,7 +68,7 @@ export class DependencyExtractor extends BaseExtractor {
     return references;
   }
 
-  private isFalsePositive(pkg: string): boolean {
+  private isFalsePositive(pkg: string, allowDottedPyPI: boolean): boolean {
     // Skip very short names
     if (pkg.length < 3) {
       return true;
@@ -106,8 +115,8 @@ export class DependencyExtractor extends BaseExtractor {
       return true;
     }
 
-    // Skip file extensions
-    if (/\.[a-z]{2,4}$/.test(pkg)) {
+    // Dotted names are ambiguous with file names unless PyPI is the only enabled ecosystem.
+    if (!allowDottedPyPI && /\.[a-z]{2,4}$/i.test(pkg)) {
       return true;
     }
 
