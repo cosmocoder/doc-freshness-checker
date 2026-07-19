@@ -340,6 +340,8 @@ through 1. Omitted factors retain their defaults; weights are not normalized, an
 documented `0..100` range. Grade thresholds must be finite values from 0
 through 100 in strictly descending order: `gradeA > gradeB > gradeC > gradeD`.
 
+Configured supported manifests (`package.json`, `requirements.txt`, `pyproject.toml`, `go.mod`, `Cargo.toml`, and `pom.xml`) must be readable; read failures abort validation. Parser errors also abort when a parser reports them. The regex-based parsers may treat malformed content as empty or partial and report missing dependencies instead. Unknown manifest basenames are ignored for compatibility. These parsers do not execute package managers.
+
 For details on CLI-to-config mapping and precedence, see [CLI and Configuration Precedence](docs/cli-and-config-precedence.md). For the internal execution pipeline, see [Runtime Architecture](docs/runtime-architecture.md).
 
 ## CI Integration

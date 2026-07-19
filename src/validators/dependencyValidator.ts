@@ -32,32 +32,35 @@ export class DependencyValidator {
       return;
     }
 
-    this.dependencies = new Set();
-    this.pythonDependencies = new Set();
-    this.loadedFromKey = configKey;
+    const dependencies = new Set<string>();
+    const pythonDependencies = new Set<string>();
 
     for (const manifestPath of manifestPaths) {
       const fileName = path.basename(manifestPath);
+      const parser = manifestDependencyParsers[fileName];
+
+      if (!parser) {
+        continue;
+      }
 
       try {
         const content = await fs.promises.readFile(manifestPath, 'utf-8');
-        const deps = await this.parseManifest(fileName, content);
+        const deps = parser(content);
         for (const dep of deps) {
-          this.dependencies.add(dep.toLowerCase());
+          dependencies.add(dep.toLowerCase());
           if (fileName === 'pyproject.toml' || fileName === 'requirements.txt') {
-            this.pythonDependencies.add(canonicalizePythonPackageName(dep));
+            pythonDependencies.add(canonicalizePythonPackageName(dep));
           }
         }
       }
-      catch {
-        // Manifest not found
+      catch (cause) {
+        throw new Error(`Failed to load manifest: ${manifestPath}: ${cause instanceof Error ? cause.message : String(cause)}`, { cause });
       }
     }
-  }
 
-  private async parseManifest(fileName: string, content: string): Promise<string[]> {
-    const parser = manifestDependencyParsers[fileName];
-    return parser ? parser(content) : [];
+    this.dependencies = dependencies;
+    this.pythonDependencies = pythonDependencies;
+    this.loadedFromKey = configKey;
   }
 
   async validateBatch(references: Reference[], _document: Document, config: DocFreshnessConfig): Promise<ValidationResult[]> {
