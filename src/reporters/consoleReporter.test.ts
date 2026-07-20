@@ -1,6 +1,13 @@
-import { ConsoleReporter } from './consoleReporter.js';
-import type { ProjectScores, ValidationResults, VectorMismatch } from '../types.js';
 import { captureConsoleLog } from '../test-utils/console.js';
+import type { ProjectScores, ValidationResults, VectorMismatch } from '../types.js';
+import { ConsoleReporter } from './consoleReporter.js';
+
+const score = (document: string, totalScore: number, grade: ProjectScores['projectGrade']) => ({
+  document,
+  totalScore,
+  factors: { referenceValidity: totalScore, gitTimeDelta: totalScore, codeChangeFrequency: totalScore, symbolCoverage: totalScore },
+  grade,
+});
 
 describe('ConsoleReporter', () => {
   const reporter = new ConsoleReporter();
@@ -95,34 +102,10 @@ describe('ConsoleReporter', () => {
     const scores: ProjectScores = {
       projectScore: 70,
       projectGrade: 'C',
-      documents: [
-        {
-          document: 'a.md',
-          totalScore: 95,
-          factors: { referenceValidity: 100, gitTimeDelta: 90, codeChangeFrequency: 90, symbolCoverage: 90 },
-          grade: 'A',
-        },
-        {
-          document: 'b.md',
-          totalScore: 85,
-          factors: { referenceValidity: 90, gitTimeDelta: 80, codeChangeFrequency: 80, symbolCoverage: 80 },
-          grade: 'B',
-        },
-        {
-          document: 'c.md',
-          totalScore: 75,
-          factors: { referenceValidity: 80, gitTimeDelta: 70, codeChangeFrequency: 70, symbolCoverage: 70 },
-          grade: 'C',
-        },
-        {
-          document: 'd.md',
-          totalScore: 50,
-          factors: { referenceValidity: 50, gitTimeDelta: 50, codeChangeFrequency: 50, symbolCoverage: 50 },
-          grade: 'F',
-        },
-      ],
+      documents: [score('a.md', 95, 'A'), score('b.md', 85, 'B'), score('c.md', 75, 'C'), score('d.md', 50, 'F')],
       summary: { total: 4, gradeA: 1, gradeB: 1, gradeC: 1, gradeD: 0, gradeF: 1 },
     };
+
     reporter.generateWithScores(cleanResults, scores);
     const output = spy.mock.calls.flat().join('\n');
     expect(output).toContain('🟢');
@@ -130,7 +113,6 @@ describe('ConsoleReporter', () => {
     expect(output).toContain('🟠');
     expect(output).toContain('🔴');
   });
-
   it('generate() shows vector mismatches when present', () => {
     const spy = captureConsoleLog();
     const mismatches: VectorMismatch[] = [
@@ -182,5 +164,21 @@ describe('ConsoleReporter', () => {
     expect(output).toContain('docs/guide.md');
     expect(output).toContain('Best match: -');
     expect(output.match(/docs\/guide\.md/g)).toHaveLength(1);
+  });
+
+  it('emits completed chunks before a later rendering error', () => {
+    const summary = {
+      get total(): number {
+        throw new Error('summary failed');
+      },
+      valid: 0,
+      errors: 0,
+      warnings: 0,
+      skipped: 0,
+    };
+    const log = captureConsoleLog();
+
+    expect(() => new ConsoleReporter().generate({ documents: [], summary })).toThrow('summary failed');
+    expect(log.mock.calls).toEqual([['\n📚 Documentation Freshness Report\n'], ['━'.repeat(50)], ['\n📊 Summary:']]);
   });
 });

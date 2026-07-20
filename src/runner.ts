@@ -15,10 +15,11 @@ import { DirectoryValidator } from './validators/directoryValidator.js';
 import { DependencyValidator } from './validators/dependencyValidator.js';
 import { VersionValidator } from './validators/versionValidator.js';
 import { attachInventory, ManifestInventory } from './manifests/manifestInventory.js';
-import { ConsoleReporter } from './reporters/consoleReporter.js';
-import { JsonReporter } from './reporters/jsonReporter.js';
-import { MarkdownReporter } from './reporters/markdownReporter.js';
-import { EnhancedReporter } from './reporters/enhancedReporter.js';
+import { emitConsoleReport } from './reporters/consoleReporter.js';
+import { createScoredJsonReportContext, renderJsonReport } from './reporters/jsonReporter.js';
+import { generateMarkdownReport } from './reporters/markdownReporter.js';
+import { createEnhancedReportContext, renderEnhancedReport } from './reporters/enhancedReporter.js';
+import { createReportContext } from './reporters/reportContext.js';
 import { GraphBuilder } from './graph/graphBuilder.js';
 import { GitChangeTracker } from './git/changeTracker.js';
 import { CacheManager } from './cache/cacheManager.js';
@@ -32,13 +33,56 @@ import { BUILT_IN_RULE_TYPES } from './config/defaults.js';
 import type { BuiltInRuleType } from './config/defaults.js';
 import { validateConfig } from './config/validateConfig.js';
 import type { CodeDocGraph } from './graph/codeDocGraph.js';
-import type { BaseValidator, DocFreshnessConfig, ProjectScores, ReporterType, ValidationResults, VectorMismatch } from './types.js';
+import type { BaseValidator, DocFreshnessConfig, ProjectScores, ReporterType, ValidationResults } from './types.js';
 
 const REPORTER_OUTPUT: Record<ReporterType, 'console' | 'stable' | 'timestamped'> = {
   console: 'console',
   json: 'stable',
   markdown: 'timestamped',
   enhanced: 'timestamped',
+};
+
+interface ReportInput {
+  readonly results: ValidationResults;
+  readonly graph: CodeDocGraph | null;
+  readonly gitTracker: GitChangeTracker | null;
+  readonly freshnessScores: ProjectScores | null;
+}
+
+interface RenderedReport {
+  readonly content: string;
+  readonly label: string;
+}
+
+interface ReporterDefinition {
+  readonly generate: (input: ReportInput) => RenderedReport | null;
+}
+
+const reporterDefinitions: Record<ReporterType, ReporterDefinition> = {
+  console: {
+    generate: ({ results, freshnessScores }) => {
+      emitConsoleReport(createReportContext(results, freshnessScores || undefined));
+      return null;
+    },
+  },
+  json: {
+    generate: ({ results, freshnessScores }) => ({
+      content: renderJsonReport(freshnessScores ? createScoredJsonReportContext(results, freshnessScores) : createReportContext(results)),
+      label: 'JSON',
+    }),
+  },
+  markdown: {
+    generate: ({ results, freshnessScores }) => ({
+      content: generateMarkdownReport(results, freshnessScores || undefined),
+      label: 'Markdown',
+    }),
+  },
+  enhanced: {
+    generate: ({ results, graph, gitTracker, freshnessScores }) => ({
+      content: renderEnhancedReport(createEnhancedReportContext(results, graph, gitTracker, freshnessScores)),
+      label: 'Enhanced',
+    }),
+  },
 };
 
 /**
@@ -211,7 +255,6 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
   }
 
   // Run vector search if enabled
-  let vectorMismatches: VectorMismatch[] | null = null;
   if (config.vectorSearch?.enabled) {
     // Always show this message since embedding generation can take time
     console.log('🔍 Running semantic analysis (this may take a moment on first run)...');
@@ -245,7 +288,7 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
     if (config.verbose) {
       console.log('  Finding semantic mismatches...');
     }
-    vectorMismatches = await vectorSearch.findMismatches();
+    const vectorMismatches = await vectorSearch.findMismatches();
 
     const stats = vectorSearch.getCacheStats();
     console.log(`  ✓ Analyzed ${stats.indexedDocSections} doc sections and ${stats.indexedCodeComments} code comments`);
@@ -294,55 +337,26 @@ async function generateReports(
   gitTracker: GitChangeTracker | null,
   freshnessScores: ProjectScores | null
 ): Promise<void> {
-  const reporters = config.reporters?.length ? config.reporters : ['console'];
-
-  const emitOutput = async (output: string, reportName: string): Promise<void> => {
-    if (config.outputPath) {
-      await writeOutput(config.outputPath, output);
-      if (config.verbose) {
-        console.log(`${reportName} report written to ${config.outputPath}`);
-      }
-      return;
-    }
-    console.log(output);
-  };
+  const reporters: ReporterType[] = config.reporters?.length ? config.reporters : ['console'];
 
   for (const reporterType of reporters) {
-    switch (reporterType) {
-      case 'console': {
-        const reporter = new ConsoleReporter();
-        if (freshnessScores) {
-          reporter.generateWithScores(results, freshnessScores);
-        }
-        else {
-          reporter.generate(results);
-        }
-        break;
-      }
+    if (!Object.hasOwn(reporterDefinitions, reporterType)) {
+      console.warn(`Unknown reporter type: ${reporterType}`);
+      continue;
+    }
+    const output = reporterDefinitions[reporterType].generate({ results, graph, gitTracker, freshnessScores });
+    if (!output) {
+      continue;
+    }
 
-      case 'json': {
-        const reporter = new JsonReporter();
-        const output = freshnessScores ? reporter.generateWithScores(results, freshnessScores) : reporter.generate(results);
-        await emitOutput(output, 'JSON');
-        break;
+    if (config.outputPath) {
+      await writeOutput(config.outputPath, output.content);
+      if (config.verbose) {
+        console.log(`${output.label} report written to ${config.outputPath}`);
       }
-
-      case 'markdown': {
-        const reporter = new MarkdownReporter();
-        const output = freshnessScores ? reporter.generateWithScores(results, freshnessScores) : reporter.generate(results);
-        await emitOutput(output, 'Markdown');
-        break;
-      }
-
-      case 'enhanced': {
-        const reporter = new EnhancedReporter();
-        const output = reporter.generateScanReport(results, graph, gitTracker, freshnessScores);
-        await emitOutput(output, 'Enhanced');
-        break;
-      }
-
-      default:
-        console.warn(`Unknown reporter type: ${reporterType}`);
+    }
+    else {
+      console.log(output.content);
     }
   }
 }
