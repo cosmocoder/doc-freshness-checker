@@ -83,6 +83,7 @@ export const DEFAULT_CONFIG: DefaultConfig = {
     version: {
       enabled: true,
       severity: 'warning',
+      // Deprecated: ignored by validation; changing this value invalidates incremental reuse.
       allowMinorDrift: true,
     },
     'directory-structure': {
@@ -117,9 +118,11 @@ export const DEFAULT_CONFIG: DefaultConfig = {
   reporters: ['console'],
 
   // Output directory for reports
+  // Deprecated: ignored by reporting; changing this value invalidates incremental reuse.
   outputDir: '.doc-freshness-reports',
 
   // Ignore patterns (regex strings)
+  // Deprecated: ignored by reference filtering; changing this value invalidates incremental reuse.
   ignorePatterns: [],
 
   // Custom extractors (advanced)
@@ -136,10 +139,11 @@ export const DEFAULT_CONFIG: DefaultConfig = {
   },
 
   // Git integration settings
+  // Deprecated: ignored by Git behavior; changing these values invalidates incremental reuse.
   git: {
-    enabled: true, // Auto-detected
-    trackChanges: true, // Enable incremental checking
-    changeWindow: 7, // Days to look back for changes
+    enabled: true,
+    trackChanges: true,
+    changeWindow: 7,
   },
 
   // Freshness scoring settings
@@ -163,7 +167,9 @@ export const DEFAULT_CONFIG: DefaultConfig = {
   vectorSearch: {
     enabled: false, // Disabled by default
     similarityThreshold: 0.3, // Lower = stricter matching
+    // Deprecated: ignored by vector indexing; changing this value invalidates incremental reuse.
     indexCodeComments: true,
+    // Deprecated: ignored by vector indexing; changing this value invalidates incremental reuse.
     indexDocstrings: true,
   },
 
