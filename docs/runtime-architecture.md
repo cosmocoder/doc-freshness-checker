@@ -13,6 +13,7 @@ flowchart TD
     extractors[Reference Extractors]
     engine[Validation Engine]
     validators[Validators]
+    manifestInventory[Internal Manifest Inventory]
     graphBuild[Graph Builder]
     scoring[Freshness Scorer]
     vectorSearch[Vector Search]
@@ -24,6 +25,8 @@ flowchart TD
     parser --> extractors
     extractors --> engine
     engine --> validators
+    runner --> manifestInventory
+    manifestInventory --> validators
     validators --> graphBuild
     graphBuild --> scoring
     validators --> vectorSearch
@@ -48,6 +51,13 @@ flowchart TD
 - `src/runner.ts`
   - Orchestrates parsing, validation, optional advanced features, and reporting.
   - Handles cache loading/saving and optional cache clearing.
+  - Creates one internal manifest inventory shared by dependency and version validation.
+
+- `src/manifests/manifestInventory.ts`
+  - Lazily builds distinct dependency-name and package-version projections.
+  - For built-in projections, deduplicates successful and failed raw reads by the joined root/manifest path while the manifest root/list configuration is unchanged.
+  - Replaced or added `manifestParsers` callbacks retain file-path control; any I/O they perform is outside inventory read deduplication.
+  - Remains internal; public validators retain zero-argument construction.
 
 ## Parsing and Extraction
 

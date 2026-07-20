@@ -11,11 +11,12 @@ import { CodeSnippetExtractor } from './parsers/extractors/codeSnippetExtractor.
 import { ValidationEngine } from './validators/validationEngine.js';
 import { FileValidator } from './validators/fileValidator.js';
 import { UrlValidator } from './validators/urlValidator.js';
-import { VersionValidator } from './validators/versionValidator.js';
 import { DirectoryValidator } from './validators/directoryValidator.js';
 import { CodePatternValidator } from './validators/codePatternValidator.js';
-import { DependencyValidator } from './validators/dependencyValidator.js';
 import { CodeSnippetValidator } from './validators/codeSnippetValidator.js';
+import { DependencyValidator } from './validators/dependencyValidator.js';
+import { VersionValidator } from './validators/versionValidator.js';
+import { attachInventory, ManifestInventory } from './manifests/manifestInventory.js';
 import { ConsoleReporter } from './reporters/consoleReporter.js';
 import { JsonReporter } from './reporters/jsonReporter.js';
 import { MarkdownReporter } from './reporters/markdownReporter.js';
@@ -79,13 +80,18 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
   // Register validators
   const codePatternValidator = new CodePatternValidator();
   const urlValidator = new UrlValidator();
+  const manifestInventory = new ManifestInventory();
+  const versionValidator = new VersionValidator();
+  const dependencyValidator = new DependencyValidator();
+  attachInventory(versionValidator, manifestInventory);
+  attachInventory(dependencyValidator, manifestInventory);
 
   validationEngine.registerValidator('file-path', new FileValidator());
   validationEngine.registerValidator('external-url', urlValidator);
-  validationEngine.registerValidator('version', new VersionValidator());
+  validationEngine.registerValidator('version', versionValidator);
   validationEngine.registerValidator('directory-structure', new DirectoryValidator());
   validationEngine.registerValidator('code-pattern', codePatternValidator);
-  validationEngine.registerValidator('dependency', new DependencyValidator());
+  validationEngine.registerValidator('dependency', dependencyValidator);
   validationEngine.registerValidator('code-snippet', new CodeSnippetValidator());
 
   // Register custom validators

@@ -1,6 +1,9 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { run, runWithConfig } from './runner.js';
+import { DocumentParser } from './parsers/documentParser.js';
+import { ManifestInventory } from './manifests/manifestInventory.js';
 import type { DocFreshnessConfig, ReporterType } from './types.js';
 import { withOutputFile } from './test-utils/tempFiles.js';
 import { captureConsoleLog, captureConsoleWarn } from './test-utils/console.js';
@@ -107,6 +110,78 @@ describe('runner', () => {
       customValidators: { custom: { validateBatch } } as unknown as DocFreshnessConfig['customValidators'],
     });
     expect(true).toBe(true);
+  });
+
+  describe('shared manifest inventory', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    const manifestDocument = {
+      path: 'doc.md',
+      absolutePath: '/doc.md',
+      content: '',
+      format: 'markdown' as const,
+      lines: [],
+      references: [
+        {
+          type: 'version',
+          value: 'TypeScript 5.0',
+          technology: 'typescript',
+          version: '5.0',
+          lineNumber: 1,
+          raw: 'TypeScript 5.0',
+          sourceFile: 'doc.md',
+        },
+        { type: 'dependency', value: 'typescript', lineNumber: 2, raw: 'typescript', sourceFile: 'doc.md' },
+      ],
+    };
+
+    it('reads a manifest once for both built-in validators', async () => {
+      const rootDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'doc-freshness-runner-manifest-'));
+      await fs.promises.writeFile(path.join(rootDir, 'package.json'), JSON.stringify({ dependencies: { typescript: '5.9.0' } }));
+      vi.spyOn(DocumentParser.prototype, 'scanDocuments').mockResolvedValue([manifestDocument]);
+      const readFile = vi.spyOn(fs.promises, 'readFile');
+      try {
+        const results = await run({
+          ...baseConfig,
+          rootDir,
+          manifestFiles: ['package.json'],
+          rules: { ...baseConfig.rules, version: { enabled: true }, dependency: { enabled: true } },
+        });
+        expect(results.summary).toMatchObject({ total: 2, valid: 2 });
+        expect(readFile).toHaveBeenCalledOnce();
+      }
+      finally {
+        await fs.promises.rm(rootDir, { recursive: true, force: true });
+      }
+    });
+
+    it('does no manifest work when there are no references or both rules are disabled', async () => {
+      const dependencyNames = vi.spyOn(ManifestInventory.prototype, 'dependencyNames');
+      const packageVersions = vi.spyOn(ManifestInventory.prototype, 'packageVersions');
+      await run(baseConfig);
+      vi.spyOn(DocumentParser.prototype, 'scanDocuments').mockResolvedValue([manifestDocument]);
+      await run(baseConfig);
+      expect(dependencyNames).not.toHaveBeenCalled();
+      expect(packageVersions).not.toHaveBeenCalled();
+    });
+
+    it('does no built-in manifest work when custom validators replace both types', async () => {
+      vi.spyOn(DocumentParser.prototype, 'scanDocuments').mockResolvedValue([manifestDocument]);
+      const dependencyNames = vi.spyOn(ManifestInventory.prototype, 'dependencyNames');
+      const packageVersions = vi.spyOn(ManifestInventory.prototype, 'packageVersions');
+      const validateBatch = vi.fn().mockResolvedValue([]);
+      await run({
+        ...baseConfig,
+        rules: { ...baseConfig.rules, version: { enabled: true }, dependency: { enabled: true } },
+        customValidators: {
+          version: { validateBatch },
+          dependency: { validateBatch },
+        },
+      });
+      expect(validateBatch).toHaveBeenCalledTimes(2);
+      expect(dependencyNames).not.toHaveBeenCalled();
+      expect(packageVersions).not.toHaveBeenCalled();
+    });
   });
 
   describe('verbose mode', () => {
