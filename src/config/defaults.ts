@@ -57,6 +57,7 @@ export const DEFAULT_CONFIG: DocFreshnessConfig = {
     version: {
       enabled: true,
       severity: 'warning',
+      // Deprecated/no-op: validation compares major versions only.
       allowMinorDrift: true,
     },
     'directory-structure': {
@@ -87,9 +88,11 @@ export const DEFAULT_CONFIG: DocFreshnessConfig = {
   reporters: ['console'],
 
   // Output directory for reports
+  // Deprecated/no-op: outputPath applies to JSON, Markdown, and Enhanced reports; Console remains stdout.
   outputDir: '.doc-freshness-reports',
 
   // Ignore patterns (regex strings)
+  // Deprecated/no-op: include/exclude only select documentation files.
   ignorePatterns: [],
 
   // Custom extractors (advanced)
@@ -106,10 +109,11 @@ export const DEFAULT_CONFIG: DocFreshnessConfig = {
   },
 
   // Git integration settings
+  // Deprecated/no-op: Git availability and Enhanced's seven-day window are not configurable.
   git: {
-    enabled: true, // Auto-detected
-    trackChanges: true, // Enable incremental checking
-    changeWindow: 7, // Days to look back for changes
+    enabled: true,
+    trackChanges: true,
+    changeWindow: 7,
   },
 
   // Freshness scoring settings
@@ -133,7 +137,9 @@ export const DEFAULT_CONFIG: DocFreshnessConfig = {
   vectorSearch: {
     enabled: false, // Disabled by default
     similarityThreshold: 0.3, // Lower = stricter matching
+    // Deprecated/no-op: available code comments are indexed when vector search runs.
     indexCodeComments: true,
+    // Deprecated/no-op: there is no configurable docstring-indexing path.
     indexDocstrings: true,
   },
 
