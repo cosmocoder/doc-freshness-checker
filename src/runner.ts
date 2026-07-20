@@ -11,9 +11,10 @@ import { CodeSnippetExtractor } from './parsers/extractors/codeSnippetExtractor.
 import { ValidationEngine } from './validators/validationEngine.js';
 import { FileValidator } from './validators/fileValidator.js';
 import { UrlValidator } from './validators/urlValidator.js';
-import { VersionValidator } from './validators/versionValidator.js';
 import { DirectoryValidator } from './validators/directoryValidator.js';
 import { DependencyValidator } from './validators/dependencyValidator.js';
+import { VersionValidator } from './validators/versionValidator.js';
+import { attachInventory, ManifestInventory } from './manifests/manifestInventory.js';
 import { ConsoleReporter } from './reporters/consoleReporter.js';
 import { JsonReporter } from './reporters/jsonReporter.js';
 import { MarkdownReporter } from './reporters/markdownReporter.js';
@@ -93,14 +94,19 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
   const sourceValidators = createSourceValidators(sourceIndex);
   const codePatternValidator = sourceValidators.pattern;
   const urlValidator = new UrlValidator();
+  const manifestInventory = new ManifestInventory();
+  const versionValidator = new VersionValidator();
+  const dependencyValidator = new DependencyValidator();
+  attachInventory(versionValidator, manifestInventory);
+  attachInventory(dependencyValidator, manifestInventory);
   const builtInValidators: Record<BuiltInRuleType, BaseValidator> = {
     'file-path': new FileValidator(),
     'external-url': urlValidator,
-    version: new VersionValidator(),
+    version: versionValidator,
     'directory-structure': new DirectoryValidator(),
     'code-pattern': codePatternValidator,
     'code-snippet': sourceValidators.snippet,
-    dependency: new DependencyValidator(),
+    dependency: dependencyValidator,
   };
   for (const type of BUILT_IN_RULE_TYPES) {
     validationEngine.registerValidator(type, builtInValidators[type]);

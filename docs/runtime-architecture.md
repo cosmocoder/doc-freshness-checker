@@ -14,6 +14,7 @@ flowchart TD
     engine[Validation Engine]
     validators[Validators]
     sourceIndex[Internal Source Index]
+    manifestInventory[Internal Manifest Inventory]
     graphBuild[Graph Builder]
     scoring[Freshness Scorer]
     vectorSearch[Vector Search]
@@ -28,6 +29,8 @@ flowchart TD
     runner --> sourceIndex
     sourceIndex --> validators
     sourceIndex --> graphBuild
+    runner --> manifestInventory
+    manifestInventory --> validators
     graphBuild --> scoring
     sourceIndex --> vectorSearch
     scoring --> reporters
@@ -52,12 +55,19 @@ flowchart TD
   - Orchestrates parsing, validation, optional advanced features, and reporting.
   - Handles cache loading/saving and optional cache clearing.
   - Creates one internal source index shared by code validators, graph building, and vector search.
+  - Creates one internal manifest inventory shared by dependency and version validation.
 
 - `src/source/sourceIndex.ts`
   - Starts the code-pattern and code-snippet discovery/glob passes independently on demand, preserving their distinct views.
   - Deduplicates physical reads so each matched absolute source file is read at most once per run.
   - Supplies symbol data directly to graph building and source-file content directly to vector search.
   - Remains an internal runtime module rather than part of the package's public API.
+
+- `src/manifests/manifestInventory.ts`
+  - Lazily builds distinct dependency-name and package-version projections.
+  - Reuses raw reads by resolved manifest path while the manifest configuration is unchanged; failed reads are evicted so repaired files can be retried.
+  - Gives dependency and version validation one consistent manifest snapshot per run; file changes during a run are observed by the next run.
+  - Remains internal; public validators retain zero-argument construction.
 
 ## Parsing and Extraction
 
