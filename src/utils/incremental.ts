@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { isWithinRoot } from './pathSecurity.js';
+import type { CacheManager } from '../cache/cacheManager.js';
 import type { IncrementalInput } from '../validators/incrementalInputs.js';
 import type { DocFreshnessConfig, Document, IncrementalStats } from '../types.js';
 
@@ -23,15 +24,17 @@ interface IncrementalState {
 export class IncrementalChecker {
   private stateDir: string;
   private stateFile: string;
+  private cacheManager: CacheManager | null;
   private previousState: IncrementalState | null;
   private currentHashes: Map<string, string>;
   private configFingerprint: string | null;
   private inputFingerprint: string | null;
   private verbose: boolean;
 
-  constructor(stateDir: string = '.doc-freshness-cache') {
-    this.stateDir = stateDir;
-    this.stateFile = path.join(stateDir, 'file-hashes.json');
+  constructor(stateDirOrManager: string | CacheManager = '.doc-freshness-cache') {
+    this.cacheManager = typeof stateDirOrManager === 'string' ? null : stateDirOrManager;
+    this.stateDir = typeof stateDirOrManager === 'string' ? stateDirOrManager : stateDirOrManager.policy.dir;
+    this.stateFile = path.join(this.stateDir, 'file-hashes.json');
     this.previousState = null;
     this.currentHashes = new Map();
     this.configFingerprint = null;
@@ -41,8 +44,28 @@ export class IncrementalChecker {
 
   async loadState(): Promise<void> {
     this.previousState = null;
+    let data: string | null;
+    if (this.cacheManager) {
+      data = await this.cacheManager.readIncrementalState();
+    }
+    else {
+      try {
+        data = await fs.promises.readFile(this.stateFile, 'utf-8');
+      }
+      catch (error) {
+        this.logFullValidation(
+          (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'no saved state exists' : 'saved state could not be read'
+        );
+        return;
+      }
+    }
+    if (data === null) {
+      this.logFullValidation('no saved state exists');
+      return;
+    }
+
     try {
-      const value: unknown = JSON.parse(await fs.promises.readFile(this.stateFile, 'utf-8'));
+      const value: unknown = JSON.parse(data);
       if (!value || typeof value !== 'object' || Array.isArray(value)) {
         this.logFullValidation('saved state is not an object');
         return;
@@ -70,15 +93,12 @@ export class IncrementalChecker {
       }
       this.previousState = parsed as IncrementalState;
     }
-    catch (error) {
-      this.logFullValidation(
-        (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'no saved state exists' : 'saved state could not be read'
-      );
+    catch {
+      this.logFullValidation('saved state could not be read');
     }
   }
 
   async saveState(clean: boolean = true): Promise<void> {
-    await fs.promises.mkdir(this.stateDir, { recursive: true });
     const state: IncrementalState = {
       version: STATE_VERSION,
       documentHashes: Object.fromEntries(this.currentHashes),
@@ -86,7 +106,13 @@ export class IncrementalChecker {
       inputFingerprint: this.inputFingerprint,
       clean,
     };
-    await fs.promises.writeFile(this.stateFile, JSON.stringify(state, null, 2));
+    const content = JSON.stringify(state, null, 2);
+    if (this.cacheManager) {
+      await this.cacheManager.writeIncrementalState(content);
+      return;
+    }
+    await fs.promises.mkdir(this.stateDir, { recursive: true });
+    await fs.promises.writeFile(this.stateFile, content);
   }
 
   async getHash(filePath: string): Promise<string> {

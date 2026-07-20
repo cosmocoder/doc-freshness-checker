@@ -8,6 +8,7 @@ import { VectorSearch } from './semantic/vectorSearch.js';
 import { ValidationEngine } from './validators/validationEngine.js';
 import { IncrementalChecker } from './utils/incremental.js';
 import { FileValidator } from './validators/fileValidator.js';
+import { CacheManager } from './cache/cacheManager.js';
 import type { BaseExtractor, BaseValidator, DocFreshnessConfig, Reference, ReporterType, VectorMismatch } from './types.js';
 import { withOutputFile } from './test-utils/tempFiles.js';
 import { captureConsoleLog, captureConsoleWarn } from './test-utils/console.js';
@@ -43,6 +44,9 @@ describe('runner', () => {
     '.doc-freshness-cache/runner-vs-nograph',
     '.doc-freshness-cache/runner-vs-reporters',
     '.doc-freshness-cache/rv-clear',
+    '.doc-freshness-cache/runner-clear-root',
+    '.doc-freshness-cache/runner-policy-root',
+    '.doc-freshness-cache/runner-incremental-disabled',
   ];
   const captureLog = captureConsoleLog;
   const captureWarn = captureConsoleWarn;
@@ -82,7 +86,7 @@ describe('runner', () => {
     sourcePatterns: [],
     manifestFiles: [],
     incremental: { enabled: true },
-    cache: { enabled: false, dir: '.cache' },
+    cache: { enabled: true, dir: '.cache' },
     ...overrides,
     rules: { ...baseConfig.rules, ...overrides.rules },
   });
@@ -121,12 +125,14 @@ describe('runner', () => {
   });
 
   it('clears cache when clearCache is set', async () => {
-    const cacheDir = path.join(process.cwd(), '.doc-freshness-cache', 'runner-test');
+    const rootDir = path.join(cacheRoot, 'runner-clear-root');
+    const cacheDir = path.join(rootDir, '.result-cache');
     await fs.promises.mkdir(cacheDir, { recursive: true });
     await fs.promises.writeFile(path.join(cacheDir, 'dummy.json'), '{}');
     await run({
       ...baseConfig,
-      cache: { enabled: true, dir: '.doc-freshness-cache/runner-test' },
+      rootDir,
+      cache: { enabled: false, dir: '.result-cache' },
       clearCache: true,
     });
     const exists = await fs.promises
@@ -134,6 +140,25 @@ describe('runner', () => {
       .then(() => true)
       .catch(() => false);
     expect(exists).toBe(false);
+  });
+
+  it('ignores an unused outside cache directory when caching is disabled', async () => {
+    const outsideDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'doc-freshness-disabled-cache-'));
+
+    await expect(run({ ...baseConfig, cache: { enabled: false, dir: outsideDir } })).resolves.toBeDefined();
+    expect(await fs.promises.readdir(outsideDir)).toEqual([]);
+
+    await fs.promises.rm(outsideDir, { recursive: true, force: true });
+  });
+
+  it('continues when an enabled cache file is unreadable', async () => {
+    const cacheDir = '.doc-freshness-cache/runner-unreadable';
+    const readSpy = vi.spyOn(fs.promises, 'readFile').mockRejectedValueOnce(Object.assign(new Error('denied'), { code: 'EACCES' }));
+
+    await expect(run({ ...baseConfig, cache: { enabled: true, dir: cacheDir } })).resolves.toBeDefined();
+
+    readSpy.mockRestore();
+    await fs.promises.rm(path.join(process.cwd(), cacheDir), { recursive: true, force: true });
   });
 
   it('registers custom extractors and validators', async () => {
@@ -360,16 +385,13 @@ describe('runner', () => {
   });
 
   describe('graph and scoring', () => {
-    it('builds graph with git and saves cache', async () => {
+    it('builds graph without persisting an unused graph cache', async () => {
       captureLog();
       const cacheDir = '.doc-freshness-cache/runner-graph';
       try {
         await run({ ...baseConfig, graph: { enabled: true }, cache: { enabled: true, dir: cacheDir } });
-        const exists = await fs.promises
-          .access(path.join(process.cwd(), cacheDir, 'graph-cache.json'))
-          .then(() => true)
-          .catch(() => false);
-        expect(exists).toBe(true);
+        await expect(fs.promises.access(path.join(process.cwd(), cacheDir, 'graph-cache.json'))).rejects.toThrow();
+        await expect(fs.promises.access(path.join(process.cwd(), cacheDir, 'url-cache.json'))).resolves.toBeUndefined();
       }
       finally {
         await fs.promises.rm(path.join(process.cwd(), cacheDir), { recursive: true, force: true }).catch(() => {});
@@ -422,6 +444,67 @@ describe('runner', () => {
     });
   });
 
+  describe('result cache policy', () => {
+    const modes = [false, true].flatMap((cache) =>
+      [false, true].flatMap((graph) =>
+        [false, true].flatMap((incremental) => [false, true].map((vector) => ({ cache, graph, incremental, vector })))
+      )
+    );
+
+    it.each(modes)(
+      'applies cache=$cache graph=$graph incremental=$incremental vector=$vector under rootDir',
+      async ({ cache, graph, incremental, vector }) => {
+        captureLog();
+        const rootDir = path.join(
+          cacheRoot,
+          'runner-policy-root',
+          `${Number(cache)}${Number(graph)}${Number(incremental)}${Number(vector)}`
+        );
+        const resultDir = path.join(rootDir, '.result-cache');
+        const docPath = path.join(rootDir, 'README.md');
+        await fs.promises.mkdir(rootDir, { recursive: true });
+        await fs.promises.writeFile(docPath, '# Test');
+        vi.mocked(glob).mockResolvedValueOnce([docPath]);
+
+        await run({
+          ...baseConfig,
+          rootDir,
+          include: ['README.md'],
+          cache: { enabled: cache, dir: '.result-cache' },
+          graph: { enabled: graph },
+          incremental: { enabled: incremental },
+          vectorSearch: { enabled: vector },
+        });
+
+        const exists = (file: string) =>
+          fs.promises
+            .access(path.join(resultDir, file))
+            .then(() => true)
+            .catch(() => false);
+        expect(await exists('url-cache.json')).toBe(cache);
+        expect(await exists('file-hashes.json')).toBe(cache && incremental);
+        expect(await exists('embedding-cache.json')).toBe(cache && vector);
+        expect(await exists('graph-cache.json')).toBe(false);
+        if (!cache) {
+          await expect(fs.promises.access(resultDir)).rejects.toThrow();
+        }
+      }
+    );
+
+    it('continues when the URL cache cannot be saved', async () => {
+      const saveSpy = vi.spyOn(CacheManager.prototype, 'saveUrlCache').mockRejectedValueOnce(new Error('read only'));
+      const warnSpy = captureWarn();
+      try {
+        await expect(run({ ...baseConfig, cache: { enabled: true }, verbose: true })).resolves.toBeDefined();
+        expect(warnSpy).toHaveBeenCalledWith('Could not save the URL cache: read only');
+      }
+      finally {
+        saveSpy.mockRestore();
+        warnSpy.mockRestore();
+      }
+    });
+  });
+
   describe('incremental mode', () => {
     it('reports changed files in verbose mode', async () => {
       const spy = captureLog();
@@ -445,7 +528,7 @@ describe('runner', () => {
           include: ['*.md'],
           incremental: { enabled: true },
           graph: { enabled: false },
-          cache: { enabled: false, dir: '.cache' },
+          cache: { enabled: true, dir: '.cache' },
           reporters: [],
         };
 
@@ -707,7 +790,7 @@ describe('runner', () => {
         const config = incrementalConfig(rootDir, {
           manifestFiles: ['package.json'],
           rules: { dependency: { enabled: true, severity: 'info' } },
-          cache: { enabled: false, dir: cacheDir },
+          cache: { enabled: true, dir: cacheDir },
         });
 
         mockDocumentScan(docPath);
@@ -854,7 +937,7 @@ describe('runner', () => {
         await fs.promises.writeFile(docPath, 'No references');
         const config = incrementalConfig(rootDir, {
           rules: { 'file-path': { enabled: true } },
-          cache: { enabled: false, dir: cacheDir },
+          cache: { enabled: true, dir: cacheDir },
         });
         mockDocumentScan(docPath);
         await run(config);
@@ -887,15 +970,45 @@ describe('runner', () => {
         expect((await run(config)).summary.errors).toBe(1);
       });
     });
+
+    it('checks every document without reading or saving state when caching is disabled', async () => {
+      const rootDir = path.join(cacheRoot, 'runner-incremental-disabled');
+      const docPath = path.join(rootDir, 'README.md');
+      const stateFile = path.join(rootDir, '.result-cache', 'file-hashes.json');
+      await fs.promises.mkdir(path.dirname(stateFile), { recursive: true });
+      await fs.promises.writeFile(docPath, '# Test');
+      await fs.promises.writeFile(stateFile, 'sentinel');
+      vi.mocked(glob).mockResolvedValueOnce([docPath]);
+      const readSpy = vi.spyOn(fs.promises, 'readFile');
+      const spy = captureLog();
+
+      await run({
+        ...baseConfig,
+        rootDir,
+        include: ['README.md'],
+        incremental: { enabled: true },
+        cache: { enabled: false, dir: '.result-cache' },
+        verbose: true,
+      });
+
+      expect(spy.mock.calls.flat().join('\n')).toContain('checking 1 changed files, skipping 0 unchanged');
+      expect(readSpy).not.toHaveBeenCalledWith(stateFile, 'utf-8');
+      expect(await fs.promises.readFile(stateFile, 'utf-8')).toBe('sentinel');
+      readSpy.mockRestore();
+      await fs.promises.rm(rootDir, { recursive: true, force: true });
+    });
   });
 
-  it('loads URL cache when cache is enabled', async () => {
+  it('loads and saves URL cache when graph is disabled', async () => {
     const cacheDir = '.doc-freshness-cache/runner-url';
     const fullDir = path.join(process.cwd(), cacheDir);
+    const cacheFile = path.join(fullDir, 'url-cache.json');
+    const cached = { 'https://cached.example': { result: { valid: true }, timestamp: Date.now() } };
     await fs.promises.mkdir(fullDir, { recursive: true });
-    await fs.promises.writeFile(path.join(fullDir, 'url-cache.json'), '{}');
+    await fs.promises.writeFile(cacheFile, JSON.stringify(cached));
     try {
       expect(await run({ ...baseConfig, cache: { enabled: true, dir: cacheDir } })).toBeDefined();
+      expect(await fs.promises.readFile(cacheFile, 'utf-8')).toBe(JSON.stringify(cached, null, 2));
     }
     finally {
       await fs.promises.rm(fullDir, { recursive: true, force: true }).catch(() => {});
