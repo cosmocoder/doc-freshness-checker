@@ -1,71 +1,89 @@
 import type { ProjectScores, ValidationResults } from '../types.js';
-import { escapeMarkdownTableCell } from '../utils/escapeMarkdownTableCell.js';
+import { normalizeMarkdownIssueCells } from './markdownIssueCells.js';
+
+interface MarkdownReportContext {
+  readonly summary: ValidationResults['summary'];
+  readonly documents: ValidationResults['documents'];
+  readonly freshnessScores: ProjectScores | null | undefined;
+  readonly generatedAt: string;
+}
+
+function createMarkdownReportContext(
+  results: ValidationResults,
+  freshnessScores: ProjectScores | null | undefined = undefined
+): MarkdownReportContext {
+  const { summary, documents } = results;
+  const generatedAt = new Date().toISOString();
+  return { summary, documents, freshnessScores, generatedAt };
+}
+
+function renderMarkdownBase(report: MarkdownReportContext): string {
+  const { summary, documents } = report;
+  let markdown = '';
+
+  markdown += '# Documentation Freshness Report\n\n';
+  markdown += `Generated: ${report.generatedAt}\n\n`;
+  markdown += '## Summary\n\n';
+  markdown += '| Metric | Count |\n';
+  markdown += '|--------|-------|\n';
+  markdown += `| Total Checked | ${summary.total} |\n`;
+  markdown += `| ✅ Valid | ${summary.valid} |\n`;
+  markdown += `| ❌ Errors | ${summary.errors} |\n`;
+  markdown += `| ⚠️ Warnings | ${summary.warnings} |\n`;
+  markdown += `| ⏭️ Skipped | ${summary.skipped} |\n\n`;
+
+  if (documents.length === 0) {
+    return `${markdown}✨ **All documentation is up to date!**\n`;
+  }
+
+  markdown += '## Issues\n\n';
+  for (const document of documents) {
+    markdown += `### 📄 \`${document.path}\`\n\n`;
+    markdown += '| Line | Severity | Issue | Suggestion |\n';
+    markdown += '|------|----------|-------|------------|\n';
+    for (const issue of document.issues) {
+      const { isError, suggestion, message } = normalizeMarkdownIssueCells(issue);
+      const severity = isError ? '❌ Error' : '⚠️ Warning';
+      markdown += `| ${issue.reference.lineNumber} | ${severity} | ${message} | ${suggestion} |\n`;
+    }
+    markdown += '\n';
+  }
+  return markdown;
+}
+
+function renderMarkdownScores(freshnessScores: ProjectScores): string {
+  let markdown = '## Freshness Scores\n\n';
+  markdown += `**Project Score:** ${freshnessScores.projectScore}/100 (Grade: ${freshnessScores.projectGrade})\n\n`;
+  markdown += '| Document | Score | Grade |\n';
+  markdown += '|----------|-------|-------|\n';
+  for (const document of freshnessScores.documents) {
+    markdown += `| \`${document.document}\` | ${document.totalScore}/100 | ${document.grade} |\n`;
+  }
+  return `${markdown}\n`;
+}
+
+function renderMarkdownReport(report: MarkdownReportContext): string {
+  const markdown = renderMarkdownBase(report);
+  return report.freshnessScores ? markdown + renderMarkdownScores(report.freshnessScores) : markdown;
+}
+
+export function generateMarkdownReport(results: ValidationResults, freshnessScores: ProjectScores | null | undefined = undefined): string {
+  return renderMarkdownReport(createMarkdownReportContext(results, freshnessScores));
+}
 
 /**
  * Markdown reporter for documentation-friendly output
  */
 export class MarkdownReporter {
   generate(results: ValidationResults): string {
-    const { summary, documents } = results;
-    let md = '';
-
-    md += '# Documentation Freshness Report\n\n';
-    md += `Generated: ${new Date().toISOString()}\n\n`;
-
-    md += '## Summary\n\n';
-    md += '| Metric | Count |\n';
-    md += '|--------|-------|\n';
-    md += `| Total Checked | ${summary.total} |\n`;
-    md += `| ✅ Valid | ${summary.valid} |\n`;
-    md += `| ❌ Errors | ${summary.errors} |\n`;
-    md += `| ⚠️ Warnings | ${summary.warnings} |\n`;
-    md += `| ⏭️ Skipped | ${summary.skipped} |\n\n`;
-
-    if (documents.length === 0) {
-      md += '✨ **All documentation is up to date!**\n';
-      return md;
-    }
-
-    md += '## Issues\n\n';
-
-    for (const doc of documents) {
-      md += `### 📄 \`${doc.path}\`\n\n`;
-      md += '| Line | Severity | Issue | Suggestion |\n';
-      md += '|------|----------|-------|------------|\n';
-
-      for (const issue of doc.issues) {
-        const severity = issue.severity === 'error' ? '❌ Error' : '⚠️ Warning';
-        const suggestion = escapeMarkdownTableCell(issue.suggestion || '-');
-        const message = escapeMarkdownTableCell(issue.message || '');
-        md += `| ${issue.reference.lineNumber} | ${severity} | ${message} | ${suggestion} |\n`;
-      }
-
-      md += '\n';
-    }
-
-    return md;
+    return generateMarkdownReport(results);
   }
 
   /**
    * Generate with freshness scores
    */
   generateWithScores(results: ValidationResults, freshnessScores: ProjectScores | null): string {
-    let md = this.generate(results);
-
-    if (freshnessScores) {
-      md += '## Freshness Scores\n\n';
-      md += `**Project Score:** ${freshnessScores.projectScore}/100 (Grade: ${freshnessScores.projectGrade})\n\n`;
-
-      md += '| Document | Score | Grade |\n';
-      md += '|----------|-------|-------|\n';
-
-      for (const doc of freshnessScores.documents) {
-        md += `| \`${doc.document}\` | ${doc.totalScore}/100 | ${doc.grade} |\n`;
-      }
-
-      md += '\n';
-    }
-
-    return md;
+    const markdown = this.generate(results);
+    return freshnessScores ? markdown + renderMarkdownScores(freshnessScores) : markdown;
   }
 }
