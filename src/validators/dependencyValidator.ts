@@ -5,6 +5,7 @@ import type { IncrementalInput } from './incrementalInputs.js';
 import type { DocFreshnessConfig, Document, Reference, ValidationResult } from '../types.js';
 import { canonicalizePythonPackageName, parsePyprojectDependencies, parseRequirementsDependencies } from '../utils/pythonDependencies.js';
 import { parseGoModRequirements } from '../utils/goMod.js';
+import { parseCargoDependencies } from '../utils/cargoDependencies.js';
 
 /**
  * Validates that mentioned dependencies exist in manifest files
@@ -106,15 +107,6 @@ const manifestDependencyParsers: Record<string, (content: string) => string[]> =
   'requirements.txt': (content) => Array.from(parseRequirementsDependencies(content).keys()),
   'pyproject.toml': (content) => Array.from(parsePyprojectDependencies(content).keys()),
   'go.mod': (content) => parseGoModRequirements(content).map(([modulePath]) => modulePath),
-  'Cargo.toml': (content) => {
-    const depsMatch = content.match(/\[dependencies\]([\s\S]*?)(?:\[|$)/);
-    if (!depsMatch) {
-      return [];
-    }
-    return depsMatch[1]
-      .split('\n')
-      .map((line) => line.match(/^([a-zA-Z0-9\-_]+)\s*=/)?.[1])
-      .filter((dep): dep is string => Boolean(dep));
-  },
+  'Cargo.toml': (content) => parseCargoDependencies(content).map(({ name }) => name),
   'pom.xml': (content) => Array.from(content.matchAll(/<artifactId>([^<]+)<\/artifactId>/g), (match) => match[1]),
 };
