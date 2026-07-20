@@ -5,6 +5,7 @@ import { resolveManifestPaths } from '../utils/manifestPaths.js';
 import type { IncrementalInput } from './incrementalInputs.js';
 import type { DocFreshnessConfig, Document, ManifestParser, Reference, ValidationResult } from '../types.js';
 import { canonicalizePythonPackageName, parsePyprojectDependencies, parseRequirementsDependencies } from '../utils/pythonDependencies.js';
+import { parseGoModRequirements } from '../utils/goMod.js';
 
 /**
  * Manifest file parsers for different ecosystems
@@ -54,15 +55,8 @@ const manifestParsers: Record<string, ManifestParser> = {
       versions.set('golang', goMatch[1]);
     }
 
-    const requireMatch = content.match(/require\s+\(([\s\S]*?)\)/);
-    if (requireMatch) {
-      for (const line of requireMatch[1].split('\n')) {
-        const match = line.trim().match(/^([^\s]+)\s+v?([^\s]+)/);
-        if (!match) {
-          continue;
-        }
-        versions.set(match[1], normalizeVersion(match[2]));
-      }
+    for (const [modulePath, version] of parseGoModRequirements(content)) {
+      versions.set(modulePath, normalizeVersion(version));
     }
 
     return versions;
