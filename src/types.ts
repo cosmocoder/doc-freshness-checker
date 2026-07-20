@@ -133,7 +133,7 @@ export interface DocFreshnessConfig {
   outputDir?: string;
   outputPath?: string;
   ignorePatterns?: string[];
-  customExtractors?: BaseExtractor[];
+  customExtractors?: Extractor[];
   customValidators?: Record<string, BaseValidator>;
   graph?: GraphConfig;
   git?: GitConfig;
@@ -242,6 +242,11 @@ export interface ValidationResults {
 export interface LanguagePattern {
   regex: RegExp;
   kind: string;
+}
+
+export interface Extractor {
+  supportsFormat(format: DocumentFormat): boolean;
+  extract(document: Document): Reference[];
 }
 
 export interface BaseExtractor {

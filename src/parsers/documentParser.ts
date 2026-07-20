@@ -1,15 +1,14 @@
 import fs from 'fs';
 import path from 'path';
 import { glob } from 'glob';
-import type { DocFreshnessConfig, Document, DocumentFormat } from '../types.js';
-import type { BaseExtractor } from './extractors/baseExtractor.js';
+import type { DocFreshnessConfig, Document, DocumentFormat, Extractor } from '../types.js';
 
 /**
  * Parses documentation files and extracts references for validation
  */
 export class DocumentParser {
   private config: DocFreshnessConfig;
-  private extractors: BaseExtractor[];
+  private extractors: Extractor[];
 
   constructor(config: DocFreshnessConfig) {
     this.config = config;
@@ -19,7 +18,7 @@ export class DocumentParser {
   /**
    * Register reference extractors
    */
-  registerExtractor(extractor: BaseExtractor): void {
+  registerExtractor(extractor: Extractor): void {
     this.extractors.push(extractor);
   }
 
