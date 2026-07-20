@@ -1,7 +1,7 @@
 import { BaseExtractor } from './baseExtractor.js';
-import type { Document, Reference } from '../../types.js';
+import type { Document, Reference, SupportedSnippetLanguage } from '../../types.js';
 
-const LANGUAGE_ALIASES: Record<string, string[]> = {
+const LANGUAGE_ALIASES: Record<SupportedSnippetLanguage, string[]> = {
   javascript: ['javascript', 'js', 'jsx', 'mjs', 'cjs'],
   typescript: ['typescript', 'ts', 'tsx'],
   python: ['python', 'py'],
@@ -204,10 +204,10 @@ export class CodeSnippetExtractor extends BaseExtractor {
     return references;
   }
 
-  private normalizeLanguage(tag: string): string | null {
+  private normalizeLanguage(tag: string): SupportedSnippetLanguage | null {
     for (const [lang, aliases] of Object.entries(LANGUAGE_ALIASES)) {
       if (aliases.includes(tag)) {
-        return lang;
+        return lang as SupportedSnippetLanguage;
       }
     }
     return null;
@@ -217,7 +217,7 @@ export class CodeSnippetExtractor extends BaseExtractor {
   // Import extraction
   // ---------------------------------------------------------------------------
 
-  private extractImports(content: string, lang: string, blockLine: number, doc: Document): Reference[] {
+  private extractImports(content: string, lang: SupportedSnippetLanguage, blockLine: number, doc: Document): Reference[] {
     const refs: Reference[] = [];
 
     if (lang === 'javascript' || lang === 'typescript') {
@@ -233,7 +233,7 @@ export class CodeSnippetExtractor extends BaseExtractor {
     return refs;
   }
 
-  private extractJsImports(content: string, lang: string, blockLine: number, doc: Document, refs: Reference[]): void {
+  private extractJsImports(content: string, lang: SupportedSnippetLanguage, blockLine: number, doc: Document, refs: Reference[]): void {
     // Handles default, named, namespace, and default+named imports.
     const importPattern = /^[ \t]*import[ \t]+(?:type[ \t]+)?((?:[^ \t'"\n]+[ \t]+)*[^ \t'"\n]+)[ \t]+from[ \t]+['"]([^'"]+)['"]/gm;
     let match: RegExpExecArray | null;
@@ -294,7 +294,7 @@ export class CodeSnippetExtractor extends BaseExtractor {
     }
   }
 
-  private extractPythonImports(content: string, lang: string, blockLine: number, doc: Document, refs: Reference[]): void {
+  private extractPythonImports(content: string, lang: SupportedSnippetLanguage, blockLine: number, doc: Document, refs: Reference[]): void {
     const fromImportPattern = /from\s+([\w.]+)\s+import\s+(.+)/g;
     let match: RegExpExecArray | null;
     while ((match = fromImportPattern.exec(content)) !== null) {
@@ -320,7 +320,7 @@ export class CodeSnippetExtractor extends BaseExtractor {
     }
   }
 
-  private extractGoImports(content: string, lang: string, blockLine: number, doc: Document, refs: Reference[]): void {
+  private extractGoImports(content: string, lang: SupportedSnippetLanguage, blockLine: number, doc: Document, refs: Reference[]): void {
     // Single import
     const singlePattern = /import\s+"([^"]+)"/g;
     let match: RegExpExecArray | null;
@@ -362,7 +362,7 @@ export class CodeSnippetExtractor extends BaseExtractor {
   // Function call extraction
   // ---------------------------------------------------------------------------
 
-  private extractFunctionCalls(content: string, lang: string, blockLine: number, doc: Document): Reference[] {
+  private extractFunctionCalls(content: string, lang: SupportedSnippetLanguage, blockLine: number, doc: Document): Reference[] {
     const refs: Reference[] = [];
     const lines = content.split('\n');
 
@@ -605,7 +605,7 @@ export class CodeSnippetExtractor extends BaseExtractor {
   // Config key extraction
   // ---------------------------------------------------------------------------
 
-  private extractConfigKeys(content: string, lang: string, blockLine: number, doc: Document): Reference[] {
+  private extractConfigKeys(content: string, lang: SupportedSnippetLanguage, blockLine: number, doc: Document): Reference[] {
     if (lang !== 'javascript' && lang !== 'typescript') {
       return [];
     }

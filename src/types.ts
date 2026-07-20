@@ -290,6 +290,12 @@ export interface SourceFileData {
   language: string;
 }
 
+export interface FunctionSignature {
+  params: string[];
+  requiredParams: number;
+  filePath: string;
+}
+
 export interface CodeFile {
   path: string;
   content: string;
@@ -413,6 +419,10 @@ export type ManifestParser = (filePath: string) => Promise<Map<string, string>>;
 // ============================================================================
 // Language Config Types
 // ============================================================================
+
+export type SupportedLanguage = 'javascript' | 'typescript' | 'python' | 'go' | 'rust' | 'java';
+
+export type SupportedSnippetLanguage = Extract<SupportedLanguage, 'javascript' | 'typescript' | 'python' | 'go'>;
 
 export interface LanguageConfig {
   extensions: string[];

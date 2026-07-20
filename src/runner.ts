@@ -13,9 +13,7 @@ import { FileValidator } from './validators/fileValidator.js';
 import { UrlValidator } from './validators/urlValidator.js';
 import { VersionValidator } from './validators/versionValidator.js';
 import { DirectoryValidator } from './validators/directoryValidator.js';
-import { CodePatternValidator } from './validators/codePatternValidator.js';
 import { DependencyValidator } from './validators/dependencyValidator.js';
-import { CodeSnippetValidator } from './validators/codeSnippetValidator.js';
 import { ConsoleReporter } from './reporters/consoleReporter.js';
 import { JsonReporter } from './reporters/jsonReporter.js';
 import { MarkdownReporter } from './reporters/markdownReporter.js';
@@ -26,6 +24,8 @@ import { CacheManager } from './cache/cacheManager.js';
 import { FreshnessScorer } from './scoring/freshnessScorer.js';
 import { IncrementalChecker } from './utils/incremental.js';
 import { VectorSearch } from './semantic/vectorSearch.js';
+import { SourceIndex } from './source/sourceIndex.js';
+import { createSourceValidators } from './source/sourceValidators.js';
 import { loadConfig } from './config/loader.js';
 import { BUILT_IN_RULE_TYPES } from './config/defaults.js';
 import type { BuiltInRuleType } from './config/defaults.js';
@@ -89,7 +89,9 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
   }
 
   // Register validators
-  const codePatternValidator = new CodePatternValidator();
+  const sourceIndex = new SourceIndex();
+  const sourceValidators = createSourceValidators(sourceIndex);
+  const codePatternValidator = sourceValidators.pattern;
   const urlValidator = new UrlValidator();
   const builtInValidators: Record<BuiltInRuleType, BaseValidator> = {
     'file-path': new FileValidator(),
@@ -97,7 +99,7 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
     version: new VersionValidator(),
     'directory-structure': new DirectoryValidator(),
     'code-pattern': codePatternValidator,
-    'code-snippet': new CodeSnippetValidator(),
+    'code-snippet': sourceValidators.snippet,
     dependency: new DependencyValidator(),
   };
   for (const type of BUILT_IN_RULE_TYPES) {
@@ -179,17 +181,17 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
   let graph: CodeDocGraph | null = null;
   let gitTracker: GitChangeTracker | null = null;
   let freshnessScores: ProjectScores | null = null;
+  let sourceIndexLoadedByGraph = false;
 
   if (config.graph?.enabled !== false) {
     gitTracker = new GitChangeTracker(config);
 
-    // Build source code index for graph
-    await codePatternValidator.buildSourceIndex(config);
-    const codeIndex = codePatternValidator.getSourceIndex();
+    const sourceSnapshot = await sourceIndex.load(config, 'pattern');
+    sourceIndexLoadedByGraph = true;
 
     // Build graph
     const graphBuilder = new GraphBuilder(config);
-    graph = await graphBuilder.buildGraph(allDocuments, codeIndex);
+    graph = await graphBuilder.buildGraph(allDocuments, sourceSnapshot.symbols);
 
     if (gitTracker.isGitRepo()) {
       graph.gitCommit = gitTracker.getCurrentCommit();
@@ -216,16 +218,11 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
     }
     await vectorSearch.indexDocumentation(allDocuments);
 
-    // Ensure source index is built (may already be built if graph is enabled)
-    if (!codePatternValidator.getSourceIndex()) {
-      if (config.verbose) {
-        console.log('  Building source code index...');
-      }
-      await codePatternValidator.buildSourceIndex(config);
+    if (!sourceIndexLoadedByGraph && codePatternValidator.getSourceIndex() === null && config.verbose) {
+      console.log('  Building source code index...');
     }
 
-    // Index code comments from source files
-    const sourceFiles = codePatternValidator.getSourceFiles();
+    const sourceFiles = (await sourceIndex.load(config, 'pattern')).patternFiles;
     if (sourceFiles && sourceFiles.size > 0) {
       if (config.verbose) {
         console.log(`  Indexing code comments from ${sourceFiles.size} source files...`);

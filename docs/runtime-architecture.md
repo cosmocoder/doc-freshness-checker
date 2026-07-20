@@ -13,6 +13,7 @@ flowchart TD
     extractors[Reference Extractors]
     engine[Validation Engine]
     validators[Validators]
+    sourceIndex[Internal Source Index]
     graphBuild[Graph Builder]
     scoring[Freshness Scorer]
     vectorSearch[Vector Search]
@@ -24,9 +25,11 @@ flowchart TD
     parser --> extractors
     extractors --> engine
     engine --> validators
-    validators --> graphBuild
+    runner --> sourceIndex
+    sourceIndex --> validators
+    sourceIndex --> graphBuild
     graphBuild --> scoring
-    validators --> vectorSearch
+    sourceIndex --> vectorSearch
     scoring --> reporters
     vectorSearch --> reporters
     validators --> reporters
@@ -48,6 +51,13 @@ flowchart TD
 - `src/runner.ts`
   - Orchestrates parsing, validation, optional advanced features, and reporting.
   - Handles cache loading/saving and optional cache clearing.
+  - Creates one internal source index shared by code validators, graph building, and vector search.
+
+- `src/source/sourceIndex.ts`
+  - Starts the code-pattern and code-snippet discovery/glob passes independently on demand, preserving their distinct views.
+  - Deduplicates physical reads so each matched absolute source file is read at most once per run.
+  - Supplies symbol data directly to graph building and source-file content directly to vector search.
+  - Remains an internal runtime module rather than part of the package's public API.
 
 ## Parsing and Extraction
 

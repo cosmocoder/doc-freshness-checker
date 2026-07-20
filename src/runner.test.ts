@@ -4,7 +4,10 @@ import path from 'path';
 import { glob } from 'glob';
 import { run, runWithConfig } from './runner.js';
 import { BUILT_IN_RULE_TYPES } from './config/defaults.js';
+import { GraphBuilder } from './graph/graphBuilder.js';
 import { VectorSearch } from './semantic/vectorSearch.js';
+import { SourceIndex } from './source/sourceIndex.js';
+import { DocumentParser } from './parsers/documentParser.js';
 import { ValidationEngine } from './validators/validationEngine.js';
 import { IncrementalChecker } from './utils/incremental.js';
 import { FileValidator } from './validators/fileValidator.js';
@@ -1077,6 +1080,7 @@ describe('runner', () => {
       const output = spy.mock.calls.flat().join('\n');
       expect(output).toContain('Indexing documentation');
       expect(output).toContain('Finding semantic mismatches');
+      expect(output).not.toContain('Building source code index');
     });
   });
 
@@ -1095,6 +1099,8 @@ describe('runner', () => {
   });
 
   describe('vector search without prior graph', () => {
+    afterEach(() => vi.restoreAllMocks());
+
     it('builds source index independently when graph not enabled', async () => {
       const spy = captureLog();
       await run({
@@ -1106,6 +1112,112 @@ describe('runner', () => {
       });
       const output = spy.mock.calls.flat().join('\n');
       expect(output).toContain('Building source code index');
+    });
+
+    it('does not report index building when code-pattern validation already loaded it', async () => {
+      vi.spyOn(DocumentParser.prototype, 'scanDocuments').mockResolvedValue([
+        {
+          path: 'doc.md',
+          absolutePath: '/doc.md',
+          content: '',
+          format: 'markdown',
+          lines: [],
+          references: [{ type: 'code-pattern', value: 'RealSymbol', lineNumber: 1, raw: 'RealSymbol', sourceFile: 'doc.md' }],
+        },
+      ]);
+      const spy = captureLog();
+      await run({
+        ...baseConfig,
+        rules: { ...baseConfig.rules, 'code-pattern': { enabled: true } },
+        vectorSearch: { enabled: true },
+        graph: { enabled: false },
+        verbose: true,
+      });
+      expect(spy.mock.calls.flat().join('\n')).not.toContain('Building source code index');
+    });
+  });
+
+  describe('shared source index', () => {
+    afterEach(() => vi.restoreAllMocks());
+
+    it('does not load source when no validator, graph, or vector consumer needs it', async () => {
+      const load = vi.spyOn(SourceIndex.prototype, 'load');
+      await run(baseConfig);
+      expect(load).not.toHaveBeenCalled();
+    });
+
+    it('uses one index instance for both built-in validators', async () => {
+      vi.spyOn(DocumentParser.prototype, 'scanDocuments').mockResolvedValue([
+        {
+          path: 'doc.md',
+          absolutePath: '/doc.md',
+          content: '',
+          format: 'markdown',
+          lines: [],
+          references: [
+            { type: 'code-pattern', value: 'RealSymbol', lineNumber: 1, raw: 'RealSymbol', sourceFile: 'doc.md' },
+            { type: 'code-snippet', kind: 'function-call', value: 'realFunction', lineNumber: 2, raw: '', sourceFile: 'doc.md' },
+          ],
+        },
+      ]);
+      const load = vi.spyOn(SourceIndex.prototype, 'load');
+      await run({
+        ...baseConfig,
+        rules: {
+          ...baseConfig.rules,
+          'code-pattern': { enabled: true },
+          'code-snippet': { enabled: true },
+        },
+      });
+      expect(load).toHaveBeenCalledTimes(2);
+      expect(new Set(load.mock.contexts).size).toBe(1);
+    });
+
+    it('feeds symbols to graph and all pattern files to vector search', async () => {
+      const symbols = new Map();
+      const patternFiles = new Map([['src/no-symbol.ts', { content: '// a useful comment', language: 'typescript' }]]);
+      const snapshot = {
+        symbols,
+        patternFiles,
+        snippetFiles: new Map(),
+        functionSignatures: new Map(),
+        interfaceKeys: new Map(),
+        exportsByFile: new Map(),
+        patternInputs: [],
+      };
+      const load = vi.spyOn(SourceIndex.prototype, 'load').mockResolvedValue(snapshot);
+      const buildGraph = vi.spyOn(GraphBuilder.prototype, 'buildGraph');
+      const indexCodeComments = vi.spyOn(VectorSearch.prototype, 'indexCodeComments');
+      captureLog();
+      await run({ ...baseConfig, graph: { enabled: true }, vectorSearch: { enabled: true } });
+      expect(buildGraph).toHaveBeenCalledWith([], symbols);
+      expect(indexCodeComments).toHaveBeenCalledWith([
+        { path: 'src/no-symbol.ts', content: '// a useful comment', language: 'typescript' },
+      ]);
+      expect(new Set(load.mock.contexts).size).toBe(1);
+    });
+
+    it('keeps custom validator overwrite independent from graph source loading', async () => {
+      const validateBatch = vi.fn().mockResolvedValue([]);
+      vi.spyOn(DocumentParser.prototype, 'scanDocuments').mockResolvedValue([
+        {
+          path: 'doc.md',
+          absolutePath: '/doc.md',
+          content: '',
+          format: 'markdown',
+          lines: [],
+          references: [{ type: 'code-pattern', value: 'Custom', lineNumber: 1, raw: 'Custom', sourceFile: 'doc.md' }],
+        },
+      ]);
+      const load = vi.spyOn(SourceIndex.prototype, 'load');
+      await run({
+        ...baseConfig,
+        graph: { enabled: true },
+        rules: { ...baseConfig.rules, 'code-pattern': { enabled: true } },
+        customValidators: { 'code-pattern': { validateBatch } },
+      });
+      expect(validateBatch).toHaveBeenCalledOnce();
+      expect(load).toHaveBeenCalledOnce();
     });
   });
 

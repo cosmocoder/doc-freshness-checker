@@ -1,79 +1,13 @@
-import fs from 'fs';
-import path from 'path';
-import { glob } from 'glob';
 import { findSimilar } from '../utils/similarity.js';
+import { SourceIndex, languageConfigs as sourceLanguageConfigs } from '../source/sourceIndex.js';
+import type { SourceIndexSnapshot } from '../source/sourceIndex.js';
 import type { IncrementalInput } from './incrementalInputs.js';
-import type {
-  DocFreshnessConfig,
-  Document,
-  LanguageConfig,
-  Reference,
-  SourceFileData,
-  SymbolLocation,
-  ValidationResult,
-} from '../types.js';
-
-/**
- * Language-specific source file patterns and code symbol extractors
- */
-const languageConfigs: Record<string, LanguageConfig> = {
-  javascript: {
-    extensions: ['js', 'jsx', 'mjs', 'cjs'],
-    patterns: [
-      { regex: /\bclass\s+([A-Z][a-zA-Z0-9]+)/g, kind: 'class' },
-      { regex: /\bexport\s+(?:async\s+)?function\s+([a-zA-Z][a-zA-Z0-9]+)/g, kind: 'function' },
-      { regex: /\bexport\s+const\s+([A-Z][a-zA-Z0-9]+)/g, kind: 'const' },
-      { regex: /\bfunction\s+([a-zA-Z][a-zA-Z0-9]+)/g, kind: 'function' },
-    ],
-  },
-  typescript: {
-    extensions: ['ts', 'tsx'],
-    patterns: [
-      { regex: /\bclass\s+([A-Z][a-zA-Z0-9]+)/g, kind: 'class' },
-      { regex: /\binterface\s+([A-Z][a-zA-Z0-9]+)/g, kind: 'interface' },
-      { regex: /\btype\s+([A-Z][a-zA-Z0-9]+)\s*=/g, kind: 'type' },
-      { regex: /\bexport\s+(?:async\s+)?function\s+([a-zA-Z][a-zA-Z0-9]+)/g, kind: 'function' },
-      { regex: /\bexport\s+const\s+([A-Z][a-zA-Z0-9]+)/g, kind: 'const' },
-      { regex: /\bfunction\s+([a-zA-Z][a-zA-Z0-9]+)/g, kind: 'function' },
-    ],
-  },
-  python: {
-    extensions: ['py'],
-    patterns: [
-      { regex: /\bclass\s+([A-Z][a-zA-Z0-9]+)/g, kind: 'class' },
-      { regex: /\bdef\s+([a-z_][a-zA-Z0-9_]*)/g, kind: 'function' },
-    ],
-  },
-  go: {
-    extensions: ['go'],
-    patterns: [
-      { regex: /\btype\s+([A-Z][a-zA-Z0-9]+)\s+struct/g, kind: 'struct' },
-      { regex: /\btype\s+([A-Z][a-zA-Z0-9]+)\s+interface/g, kind: 'interface' },
-      { regex: /\bfunc\s+(?:\([^)]+\)\s+)?([A-Z][a-zA-Z0-9]+)/g, kind: 'function' },
-    ],
-  },
-  rust: {
-    extensions: ['rs'],
-    patterns: [
-      { regex: /\bstruct\s+([A-Z][a-zA-Z0-9]+)/g, kind: 'struct' },
-      { regex: /\benum\s+([A-Z][a-zA-Z0-9]+)/g, kind: 'enum' },
-      { regex: /\btrait\s+([A-Z][a-zA-Z0-9]+)/g, kind: 'trait' },
-      { regex: /\bpub\s+fn\s+([a-z_][a-zA-Z0-9_]*)/g, kind: 'function' },
-      { regex: /\bfn\s+([a-z_][a-zA-Z0-9_]*)/g, kind: 'function' },
-    ],
-  },
-  java: {
-    extensions: ['java'],
-    patterns: [
-      { regex: /\bclass\s+([A-Z][a-zA-Z0-9]+)/g, kind: 'class' },
-      { regex: /\binterface\s+([A-Z][a-zA-Z0-9]+)/g, kind: 'interface' },
-      { regex: /\benum\s+([A-Z][a-zA-Z0-9]+)/g, kind: 'enum' },
-    ],
-  },
-};
+import type { DocFreshnessConfig, Document, Reference, SourceFileData, SymbolLocation, ValidationResult } from '../types.js';
 
 import { isIllustrativeSymbol } from '../utils/illustrativePatterns.js';
 import { createIllustrativeSkippedResult, getRuleSeverity, severityForIllustrative } from '../utils/validation.js';
+
+const languageConfigs = sourceLanguageConfigs;
 
 /**
  * Validates code patterns exist in source files
@@ -85,16 +19,13 @@ export class CodePatternValidator {
   readonly incrementalInputsRequiredForGraph = true;
   private sourceIndex: Map<string, SymbolLocation[]> | null;
   private sourceFiles: Map<string, SourceFileData> | null; // Stores file content for vector search
-  private sourceInputs: Map<string, string> | null;
-  private sourceInputsAvailable: boolean;
-  private capturedInputs: IncrementalInput[] | null;
+  private incrementalInputs: IncrementalInput[] | null;
 
-  constructor() {
+  constructor();
+  constructor(private readonly index = new SourceIndex()) {
     this.sourceIndex = null;
     this.sourceFiles = null;
-    this.sourceInputs = null;
-    this.sourceInputsAvailable = false;
-    this.capturedInputs = null;
+    this.incrementalInputs = null;
   }
 
   async buildSourceIndex(config: DocFreshnessConfig): Promise<void> {
@@ -102,78 +33,19 @@ export class CodePatternValidator {
       return;
     }
 
-    this.sourceIndex = new Map();
-    this.sourceFiles = new Map();
-    this.sourceInputs = new Map();
-    this.sourceInputsAvailable = true;
-
-    // Use configured source patterns or detect automatically
-    const sourcePatterns = config.sourcePatterns || this.detectSourcePatterns();
-
-    for (const pattern of sourcePatterns) {
-      try {
-        const files = await glob(pattern, {
-          cwd: config.rootDir,
-          absolute: true,
-          nodir: true,
-          ignore: ['**/*.test.*', '**/*.spec.*', '**/*.d.ts', '**/node_modules/**', '**/vendor/**'],
-        });
-
-        for (const file of files) {
-          const absolutePath = path.resolve(file);
-          if (this.sourceInputs.has(absolutePath)) {
-            continue;
-          }
-          try {
-            const content = await fs.promises.readFile(absolutePath, 'utf-8');
-            const relativePath = path.relative(config.rootDir || process.cwd(), absolutePath);
-            const lang = this.detectLanguage(absolutePath);
-
-            this.indexContent(content, relativePath, lang);
-
-            // Store file content for vector search
-            this.sourceFiles.set(relativePath, { content, language: lang });
-            this.sourceInputs.set(absolutePath, content);
-          }
-          catch {
-            // Skip unreadable files
-            this.sourceInputsAvailable = false;
-          }
-        }
-      }
-      catch {
-        // Skip invalid patterns
-        this.sourceInputsAvailable = false;
-      }
+    try {
+      this.useSnapshot(await this.index.load(config, 'pattern'));
     }
-    this.capturedInputs = this.sourceInputsAvailable
-      ? [...this.sourceInputs].map(([sourcePath, content]) => ({ path: sourcePath, content }))
-      : null;
+    catch (error) {
+      this.useSnapshot(await this.index.load(config, 'pattern'));
+      throw error;
+    }
   }
 
-  private detectSourcePatterns(): string[] {
-    // Auto-detect based on what files exist
-    const patterns: string[] = [];
-
-    for (const conf of Object.values(languageConfigs)) {
-      for (const ext of conf.extensions) {
-        patterns.push(`**/*.${ext}`);
-      }
-    }
-
-    return patterns;
-  }
-
-  private detectLanguage(filePath: string): string {
-    const ext = path.extname(filePath).slice(1).toLowerCase();
-
-    for (const [lang, conf] of Object.entries(languageConfigs)) {
-      if (conf.extensions.includes(ext)) {
-        return lang;
-      }
-    }
-
-    return 'javascript';
+  private useSnapshot(snapshot: SourceIndexSnapshot): void {
+    this.sourceIndex = snapshot.symbols;
+    this.sourceFiles = snapshot.patternFiles;
+    this.incrementalInputs = snapshot.patternInputs;
   }
 
   /** @internal */
@@ -183,27 +55,7 @@ export class CodePatternValidator {
     config: DocFreshnessConfig
   ): Promise<IncrementalInput[] | null> {
     await this.buildSourceIndex(config);
-    return this.capturedInputs;
-  }
-
-  private indexContent(content: string, filePath: string, language: string): void {
-    const langConfig = languageConfigs[language];
-    if (!langConfig) {
-      return;
-    }
-
-    for (const { regex, kind } of langConfig.patterns) {
-      let match: RegExpExecArray | null;
-      // Clone regex to avoid state issues
-      const re = new RegExp(regex.source, regex.flags);
-      while ((match = re.exec(content)) !== null) {
-        const name = match[1];
-        if (!this.sourceIndex!.has(name)) {
-          this.sourceIndex!.set(name, []);
-        }
-        this.sourceIndex!.get(name)!.push({ filePath, kind, language });
-      }
-    }
+    return this.incrementalInputs;
   }
 
   async validateBatch(references: Reference[], _document: Document, config: DocFreshnessConfig): Promise<ValidationResult[]> {
