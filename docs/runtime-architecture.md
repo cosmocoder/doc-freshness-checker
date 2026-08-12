@@ -103,7 +103,7 @@ Cache behavior is controlled by `config.cache` and the `--no-cache` / `--clear-c
 
 ## Reporting
 
-Report generation is handled in `runner.ts` via reporters in `src/reporters/`:
+`runner.ts` owns reporter selection and stdout/file routing. Each reporter in `src/reporters/` owns its input preparation and rendering policy, while the root-exported reporter classes preserve the direct-call interface:
 
 - `console`
 - `json`

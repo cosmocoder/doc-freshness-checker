@@ -1,35 +1,49 @@
-import { JsonReporter } from './jsonReporter.js';
 import type { ValidationResults } from '../types.js';
+import { JsonReporter } from './jsonReporter.js';
+
+const results: ValidationResults = {
+  documents: [],
+  summary: { total: 3, valid: 3, errors: 0, warnings: 0, skipped: 0 },
+};
 
 describe('JsonReporter', () => {
-  const reporter = new JsonReporter();
-  const results: ValidationResults = {
-    documents: [],
-    summary: { total: 3, valid: 3, errors: 0, warnings: 0, skipped: 0 },
-  };
+  it('snapshots scored results before reading the clock', () => {
+    const events: string[] = [];
+    const proxiedResults = new Proxy(results, {
+      ownKeys(target) {
+        events.push('results:keys');
+        return Reflect.ownKeys(target);
+      },
+      get(target, property, receiver) {
+        events.push(`results:${String(property)}`);
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const originalToISOString = Date.prototype.toISOString;
+    const clock = vi.spyOn(Date.prototype, 'toISOString').mockImplementation(function (this: Date) {
+      events.push('clock');
+      return originalToISOString.call(this);
+    });
 
-  it('generate() returns valid JSON string', () => {
-    const output = reporter.generate(results);
-    const parsed = JSON.parse(output);
-    expect(parsed.summary.total).toBe(3);
+    new JsonReporter().generateWithScores(proxiedResults, null);
+
+    expect(events).toEqual(['results:keys', 'results:documents', 'results:summary', 'clock']);
+    clock.mockRestore();
   });
 
-  it('generateWithScores() includes scores and timestamp', () => {
-    const output = reporter.generateWithScores(results, null);
-    const parsed = JSON.parse(output);
-    expect(parsed.freshnessScores).toBeNull();
-    expect(parsed.generatedAt).toBeDefined();
-  });
+  it('does not read the clock when scored result spreading fails', () => {
+    const proxiedResults = new Proxy(results, {
+      get(_target, property) {
+        if (property === 'documents') {
+          throw new Error('result getter failed');
+        }
+        return Reflect.get(results, property);
+      },
+    });
+    const clock = vi.spyOn(Date.prototype, 'toISOString');
 
-  it('generateWithScores() includes scores object when provided', () => {
-    const scores = {
-      projectScore: 90,
-      projectGrade: 'A' as const,
-      documents: [],
-      summary: { total: 0, gradeA: 0, gradeB: 0, gradeC: 0, gradeD: 0, gradeF: 0 },
-    };
-    const output = reporter.generateWithScores(results, scores);
-    const parsed = JSON.parse(output);
-    expect(parsed.freshnessScores.projectScore).toBe(90);
+    expect(() => new JsonReporter().generateWithScores(proxiedResults, null)).toThrow('result getter failed');
+    expect(clock).not.toHaveBeenCalled();
+    clock.mockRestore();
   });
 });

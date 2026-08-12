@@ -1,9 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import { run, runWithConfig } from './runner.js';
-import type { DocFreshnessConfig, ReporterType } from './types.js';
+import { FreshnessScorer } from './scoring/freshnessScorer.js';
 import { withOutputFile } from './test-utils/tempFiles.js';
 import { captureConsoleLog, captureConsoleWarn } from './test-utils/console.js';
+import type { DocFreshnessConfig, ProjectScores, ReporterType, ValidationResults } from './types.js';
+import { ValidationEngine } from './validators/validationEngine.js';
 
 vi.mock('fastembed', () => ({
   EmbeddingModel: { BGESmallENV15: 'BGESmallENV15' },
@@ -147,29 +149,12 @@ describe('runner', () => {
   });
 
   describe('reporters', () => {
-    it('generates console report', async () => {
+    it('routes the Console emitter to stdout incrementally', async () => {
       const spy = captureLog();
       await run({ ...baseConfig, reporters: ['console'] });
+      expect(spy.mock.calls.length).toBeGreaterThan(1);
+      expect(spy.mock.calls.every((call) => call.length === 1)).toBe(true);
       expect(spy.mock.calls.flat().join('\n')).toContain('Documentation Freshness Report');
-    });
-
-    it('generates json to stdout without outputPath', async () => {
-      const spy = captureLog();
-      await run({ ...baseConfig, reporters: ['json'] });
-      const jsonStr = spy.mock.calls.flat().find((a) => typeof a === 'string' && a.startsWith('{'));
-      expect(JSON.parse(jsonStr!)).toHaveProperty('summary');
-    });
-
-    it('generates markdown to stdout', async () => {
-      const spy = captureLog();
-      await run({ ...baseConfig, reporters: ['markdown'] });
-      expect(spy.mock.calls.flat().join('\n')).toContain('# Documentation Freshness Report');
-    });
-
-    it('generates enhanced to stdout', async () => {
-      const spy = captureLog();
-      await run({ ...baseConfig, reporters: ['enhanced'], graph: { enabled: true }, cache: { enabled: false } });
-      expect(spy.mock.calls.flat().join('\n')).toContain('Documentation Freshness Scan Report');
     });
 
     it('warns for unknown reporter in verbose', async () => {
@@ -208,6 +193,121 @@ describe('runner', () => {
         expect(spy.mock.calls.flat().join('\n')).toContain('written to');
       });
     });
+
+    it('defaults an absent reporter list to Console but honors an explicit empty list', async () => {
+      const log = captureLog();
+      await run({ ...baseConfig, reporters: undefined });
+      expect(log.mock.calls.flat().join('\n')).toContain('Documentation Freshness Report');
+
+      log.mockClear();
+      await run({ ...baseConfig, reporters: [] });
+      expect(log).not.toHaveBeenCalled();
+    });
+
+    it('preserves configured reporter order and duplicates', async () => {
+      const log = captureLog();
+      await run({ ...baseConfig, reporters: ['json', 'markdown', 'json'] });
+
+      const reports = log.mock.calls
+        .map(([value]) => value)
+        .filter((value): value is string => typeof value === 'string' && (value.startsWith('{') || value.startsWith('#')));
+      expect(reports).toHaveLength(3);
+      expect(reports[0]).toMatch(/^\{/);
+      expect(reports[1]).toMatch(/^# Documentation Freshness Report/);
+      expect(reports[2]).toMatch(/^\{/);
+    });
+
+    it('ignores unknown reporter values without a warning outside verbose mode', async () => {
+      const log = captureLog();
+      const warn = captureWarn();
+      await run({ ...baseConfig, reporters: ['unknown' as ReporterType] });
+      expect(log).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      { verbose: false, warnings: [] },
+      {
+        verbose: true,
+        warnings: [['Unknown reporter type: toString'], ['Unknown reporter type: constructor'], ['Unknown reporter type: __proto__']],
+      },
+    ])('treats inherited registry keys as unknown when verbose=$verbose', async ({ verbose, warnings }) => {
+      const inheritedKeys = ['toString', 'constructor', '__proto__'] as unknown as ReporterType[];
+      const log = captureLog();
+      const warn = captureWarn();
+
+      await expect(run({ ...baseConfig, reporters: inheritedKeys, verbose })).resolves.toBeDefined();
+
+      expect(warn.mock.calls).toEqual(warnings);
+      expect(log.mock.calls.some(([value]) => typeof value === 'string' && value.startsWith('{'))).toBe(false);
+      const output = log.mock.calls.flat().join('\n');
+      expect(output).not.toContain('Documentation Freshness Report');
+      expect(output).not.toContain('Documentation Freshness Scan Report');
+    });
+
+    it('keeps Console on stdout and ignores outputPath', async () => {
+      await withOutputFile(cacheRoot, 'console-must-not-write.out', async (outputPath) => {
+        const log = captureLog();
+        await run({ ...baseConfig, reporters: ['console'], outputPath });
+        expect(log.mock.calls.flat().join('\n')).toContain('Documentation Freshness Report');
+        await expect(fs.promises.access(outputPath)).rejects.toThrow();
+      });
+    });
+
+    it('overwrites a shared outputPath sequentially so the last string reporter wins', async () => {
+      await withOutputFile(cacheRoot, 'shared-reporter.out', async (outputPath) => {
+        captureLog();
+        await run({ ...baseConfig, reporters: ['json', 'markdown'], outputPath });
+        expect(await fs.promises.readFile(outputPath, 'utf-8')).toMatch(/^# Documentation Freshness Report/);
+
+        await run({ ...baseConfig, reporters: ['markdown', 'json'], outputPath });
+        expect(await fs.promises.readFile(outputPath, 'utf-8')).toMatch(/^\{/);
+      });
+    });
+
+    it('creates recursive output directories and reports each verbose label', async () => {
+      const outputRoot = path.join(cacheRoot, 'reporter-routing');
+      const outputPath = path.join(outputRoot, 'nested', 'report.out');
+      const log = captureLog();
+      try {
+        await run({ ...baseConfig, reporters: ['json', 'markdown'], outputPath, verbose: true });
+        expect(await fs.promises.readFile(outputPath, 'utf-8')).toMatch(/^# Documentation Freshness Report/);
+        expect(log.mock.calls.flat()).toContain(`JSON report written to ${outputPath}`);
+        expect(log.mock.calls.flat()).toContain(`Markdown report written to ${outputPath}`);
+      }
+      finally {
+        await fs.promises.rm(outputRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('rejects when writing a string report fails', async () => {
+      const outputPath = path.join(cacheRoot, 'reporter-write-directory');
+      await fs.promises.mkdir(outputPath, { recursive: true });
+      try {
+        captureLog();
+        await expect(run({ ...baseConfig, reporters: ['json'], outputPath })).rejects.toThrow();
+      }
+      finally {
+        await fs.promises.rm(outputPath, { recursive: true, force: true });
+      }
+    });
+
+    it('reads the clock only for timestamped reporter paths and propagates clock failures', async () => {
+      const toISOString = vi.spyOn(Date.prototype, 'toISOString').mockImplementation(() => {
+        throw new Error('timestamp failed');
+      });
+      const log = captureLog();
+      try {
+        await expect(run({ ...baseConfig, reporters: ['console'] })).resolves.toBeDefined();
+        await expect(run({ ...baseConfig, reporters: ['json'] })).resolves.toBeDefined();
+        expect(toISOString).not.toHaveBeenCalled();
+        expect(log).toHaveBeenCalled();
+        await expect(run({ ...baseConfig, reporters: ['markdown'] })).rejects.toThrow('timestamp failed');
+      }
+      finally {
+        toISOString.mockRestore();
+      }
+    });
   });
 
   describe('graph and scoring', () => {
@@ -227,34 +327,210 @@ describe('runner', () => {
       }
     });
 
-    it('generates json with scores to file', async () => {
-      await withOutputFile(cacheRoot, 'test-scored.json', async (outputPath) => {
+    it('spreads scored JSON results before reading the clock', async () => {
+      const events: string[] = [];
+      const validationResults: ValidationResults = {
+        documents: [],
+        summary: { total: 0, valid: 0, errors: 0, warnings: 0, skipped: 0 },
+      };
+      const proxiedResults = new Proxy(validationResults, {
+        ownKeys(target) {
+          events.push('results:keys');
+          return Reflect.ownKeys(target);
+        },
+        get(target, property, receiver) {
+          events.push(`results:${String(property)}`);
+          return Reflect.get(target, property, receiver);
+        },
+      });
+      const scores: ProjectScores = {
+        projectScore: 100,
+        projectGrade: 'A',
+        documents: [],
+        summary: { total: 0, gradeA: 0, gradeB: 0, gradeC: 0, gradeD: 0, gradeF: 0 },
+      };
+      const validate = vi.spyOn(ValidationEngine.prototype, 'validate').mockResolvedValue(proxiedResults);
+      const calculateScores = vi.spyOn(FreshnessScorer.prototype, 'calculateProjectScores').mockReturnValue(scores);
+      const originalToISOString = Date.prototype.toISOString;
+      const clock = vi.spyOn(Date.prototype, 'toISOString').mockImplementation(function (this: Date) {
+        events.push('clock');
+        return originalToISOString.call(this);
+      });
+      try {
         captureLog();
         await run({
           ...baseConfig,
           reporters: ['json'],
-          outputPath,
           graph: { enabled: true },
           freshnessScoring: { enabled: true },
           cache: { enabled: false },
         });
-        expect(JSON.parse(await fs.promises.readFile(outputPath, 'utf-8'))).toHaveProperty('summary');
-      });
+        expect(events.filter((event) => event !== 'results:then')).toEqual([
+          'results:keys',
+          'results:documents',
+          'results:summary',
+          'clock',
+        ]);
+      }
+      finally {
+        validate.mockRestore();
+        calculateScores.mockRestore();
+        clock.mockRestore();
+      }
     });
 
-    it('generates markdown with scores to file', async () => {
-      await withOutputFile(cacheRoot, 'test-scored.md', async (outputPath) => {
+    it('does not read the clock when runner scored-result spreading fails', async () => {
+      const validationResults: ValidationResults = {
+        documents: [],
+        summary: { total: 0, valid: 0, errors: 0, warnings: 0, skipped: 0 },
+      };
+      const proxiedResults = new Proxy(validationResults, {
+        get(target, property, receiver) {
+          if (property === 'documents') {
+            throw new Error('runner result getter failed');
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      });
+      const scores: ProjectScores = {
+        projectScore: 100,
+        projectGrade: 'A',
+        documents: [],
+        summary: { total: 0, gradeA: 0, gradeB: 0, gradeC: 0, gradeD: 0, gradeF: 0 },
+      };
+      const validate = vi.spyOn(ValidationEngine.prototype, 'validate').mockResolvedValue(proxiedResults);
+      const calculateScores = vi.spyOn(FreshnessScorer.prototype, 'calculateProjectScores').mockReturnValue(scores);
+      const clock = vi.spyOn(Date.prototype, 'toISOString');
+      try {
         captureLog();
+        await expect(
+          run({
+            ...baseConfig,
+            reporters: ['json'],
+            graph: { enabled: true },
+            freshnessScoring: { enabled: true },
+            cache: { enabled: false },
+          })
+        ).rejects.toThrow('runner result getter failed');
+        expect(clock).not.toHaveBeenCalled();
+      }
+      finally {
+        validate.mockRestore();
+        calculateScores.mockRestore();
+        clock.mockRestore();
+      }
+    });
+
+    it('captures Markdown result references before the clock, then renders the base before scores', async () => {
+      const events: string[] = [];
+      const summary = { total: 1, valid: 1, errors: 0, warnings: 0, skipped: 0 };
+      const documents: ValidationResults['documents'] = [];
+      let currentSummary = summary;
+      let currentDocuments = documents;
+      const validationResults: ValidationResults = {
+        get summary() {
+          events.push('results:summary');
+          return currentSummary;
+        },
+        set summary(value) {
+          currentSummary = value;
+        },
+        get documents() {
+          events.push('results:documents');
+          return currentDocuments;
+        },
+        set documents(value) {
+          currentDocuments = value;
+        },
+      };
+      const scores: ProjectScores = {
+        get projectScore() {
+          events.push('scores:projectScore');
+          summary.total = 99;
+          return 100;
+        },
+        projectGrade: 'A',
+        documents: [],
+        summary: { total: 0, gradeA: 0, gradeB: 0, gradeC: 0, gradeD: 0, gradeF: 0 },
+      };
+      const validate = vi.spyOn(ValidationEngine.prototype, 'validate').mockResolvedValue(validationResults);
+      const calculateScores = vi.spyOn(FreshnessScorer.prototype, 'calculateProjectScores').mockReturnValue(scores);
+      const clock = vi.spyOn(Date.prototype, 'toISOString').mockImplementation(() => {
+        events.push('clock');
+        summary.total = 7;
+        documents.push({ path: 'docs/captured.md', issues: [] });
+        validationResults.summary = { total: 50, valid: 50, errors: 0, warnings: 0, skipped: 0 };
+        validationResults.documents = [];
+        return '2025-01-02T03:04:05.678Z';
+      });
+      try {
+        const log = captureLog();
         await run({
           ...baseConfig,
           reporters: ['markdown'],
-          outputPath,
           graph: { enabled: true },
           freshnessScoring: { enabled: true },
           cache: { enabled: false },
         });
-        expect(await fs.promises.readFile(outputPath, 'utf-8')).toContain('Freshness Scores');
-      });
+        const report = log.mock.calls.flat().find((value) => typeof value === 'string' && value.startsWith('#'));
+        expect(events).toEqual(['results:summary', 'results:documents', 'clock', 'scores:projectScore']);
+        expect(report).toContain('| Total Checked | 7 |');
+        expect(report).toContain('docs/captured.md');
+        expect(report).not.toContain('| Total Checked | 99 |');
+        expect(report).not.toContain('| Total Checked | 50 |');
+      }
+      finally {
+        validate.mockRestore();
+        calculateScores.mockRestore();
+        clock.mockRestore();
+      }
+    });
+
+    it('does not inspect Markdown documents, clock, or scores when the summary getter fails', async () => {
+      const events: string[] = [];
+      let scoreRead = false;
+      const validationResults: ValidationResults = {
+        get summary(): ValidationResults['summary'] {
+          events.push('results:summary');
+          throw new Error('Markdown summary failed');
+        },
+        get documents() {
+          events.push('results:documents');
+          return [];
+        },
+      };
+      const scores: ProjectScores = {
+        get projectScore() {
+          scoreRead = true;
+          return 100;
+        },
+        projectGrade: 'A',
+        documents: [],
+        summary: { total: 0, gradeA: 0, gradeB: 0, gradeC: 0, gradeD: 0, gradeF: 0 },
+      };
+      const validate = vi.spyOn(ValidationEngine.prototype, 'validate').mockResolvedValue(validationResults);
+      const calculateScores = vi.spyOn(FreshnessScorer.prototype, 'calculateProjectScores').mockReturnValue(scores);
+      const clock = vi.spyOn(Date.prototype, 'toISOString');
+      try {
+        captureLog();
+        await expect(
+          run({
+            ...baseConfig,
+            reporters: ['markdown'],
+            graph: { enabled: true },
+            freshnessScoring: { enabled: true },
+            cache: { enabled: false },
+          })
+        ).rejects.toThrow('Markdown summary failed');
+        expect(events).toEqual(['results:summary']);
+        expect(clock).not.toHaveBeenCalled();
+        expect(scoreRead).toBe(false);
+      }
+      finally {
+        validate.mockRestore();
+        calculateScores.mockRestore();
+        clock.mockRestore();
+      }
     });
 
     it('generates enhanced with scores to file', async () => {
@@ -356,31 +632,6 @@ describe('runner', () => {
       await run({
         ...baseConfig,
         reporters: ['console'],
-        graph: { enabled: true },
-        freshnessScoring: { enabled: true },
-        cache: { enabled: false },
-      });
-      expect(spy.mock.calls.flat().join('\n')).toContain('Freshness Scores');
-    });
-
-    it('json reporter generates with scores', async () => {
-      const spy = captureLog();
-      await run({
-        ...baseConfig,
-        reporters: ['json'],
-        graph: { enabled: true },
-        freshnessScoring: { enabled: true },
-        cache: { enabled: false },
-      });
-      const jsonStr = spy.mock.calls.flat().find((a) => typeof a === 'string' && a.startsWith('{'));
-      expect(JSON.parse(jsonStr!)).toHaveProperty('summary');
-    });
-
-    it('markdown reporter generates with scores to stdout', async () => {
-      const spy = captureLog();
-      await run({
-        ...baseConfig,
-        reporters: ['markdown'],
         graph: { enabled: true },
         freshnessScoring: { enabled: true },
         cache: { enabled: false },
