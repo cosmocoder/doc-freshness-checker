@@ -75,5 +75,6 @@ export type {
   CodeFile,
   CodeSnippetRuleConfig,
   BaseExtractor as BaseExtractorType,
+  Extractor,
   BaseValidator,
 } from './types.js';
