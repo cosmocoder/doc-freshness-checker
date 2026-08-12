@@ -361,3 +361,70 @@ describe('manifestParsers', () => {
     expect(versions.get('spring-boot')).toBe('3.1.0');
   });
 });
+
+describe('mutable manifestParsers registry', () => {
+  const registryDir = path.join(process.cwd(), '.doc-freshness-cache', 'manifest-parser-registry');
+  const builtIns = { ...manifestParsers };
+
+  beforeAll(async () => {
+    await fs.promises.mkdir(registryDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    for (const fileName of Object.keys(manifestParsers)) {
+      delete manifestParsers[fileName];
+    }
+    Object.assign(manifestParsers, builtIns);
+    vi.restoreAllMocks();
+  });
+
+  afterAll(async () => {
+    await fs.promises.rm(registryDir, { recursive: true, force: true }).catch(() => {});
+  });
+
+  it('uses a replacement parser for a built-in basename', async () => {
+    const parser = vi.fn().mockResolvedValue(new Map([['typescript', '7.0.0']]));
+    manifestParsers['package.json'] = parser;
+    const validator = new VersionValidator();
+    const results = await validator.validateBatch([makeRef('typescript', '7.1')], doc, {
+      rootDir: registryDir,
+      manifestFiles: ['package.json'],
+    });
+    expect(results[0].valid).toBe(true);
+    expect(parser).toHaveBeenCalledWith(path.join(registryDir, 'package.json'));
+  });
+
+  it('uses an added parser for a custom basename', async () => {
+    const parser = vi.fn().mockResolvedValue(new Map([['custom', '4.0.0']]));
+    manifestParsers['custom.lock'] = parser;
+    const results = await new VersionValidator().validateBatch([makeRef('custom', '4.2')], doc, {
+      rootDir: registryDir,
+      manifestFiles: ['custom.lock'],
+    });
+    expect(results[0].valid).toBe(true);
+    expect(parser).toHaveBeenCalledWith(path.join(registryDir, 'custom.lock'));
+  });
+
+  it('skips a built-in basename when its parser is deleted', async () => {
+    await fs.promises.writeFile(path.join(registryDir, 'package.json'), JSON.stringify({ dependencies: { typescript: '1.0.0' } }));
+    delete manifestParsers['package.json'];
+    const results = await new VersionValidator().validateBatch([makeRef('typescript', '9.0')], doc, {
+      rootDir: registryDir,
+      manifestFiles: ['package.json'],
+    });
+    expect(results[0]).toMatchObject({ valid: true, message: 'Could not find typescript in dependencies' });
+  });
+
+  it('keeps the first same-config projection after the registry changes', async () => {
+    const firstParser = vi.fn().mockResolvedValue(new Map([['typescript', '1.0.0']]));
+    const secondParser = vi.fn().mockResolvedValue(new Map([['typescript', '2.0.0']]));
+    manifestParsers['package.json'] = firstParser;
+    const validator = new VersionValidator();
+    const config = { rootDir: registryDir, manifestFiles: ['package.json'] };
+    expect((await validator.validateBatch([makeRef('typescript', '1.0')], doc, config))[0].valid).toBe(true);
+    manifestParsers['package.json'] = secondParser;
+    expect((await validator.validateBatch([makeRef('typescript', '2.0')], doc, config))[0].valid).toBe(false);
+    expect(firstParser).toHaveBeenCalledOnce();
+    expect(secondParser).not.toHaveBeenCalled();
+  });
+});

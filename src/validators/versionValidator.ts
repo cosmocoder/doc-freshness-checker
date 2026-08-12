@@ -1,155 +1,16 @@
-import fs from 'fs';
-import path from 'path';
 import semver from 'semver';
-import type { DocFreshnessConfig, Document, ManifestParser, Reference, ValidationResult } from '../types.js';
+import { inventoryFor } from '../manifests/manifestInventory.js';
+import type { DocFreshnessConfig, Document, Reference, ValidationResult } from '../types.js';
 
-/**
- * Manifest file parsers for different ecosystems
- */
-const manifestParsers: Record<string, ManifestParser> = {
-  // Node.js: package.json
-  'package.json': async (filePath: string): Promise<Map<string, string>> => {
-    const content = JSON.parse(await fs.promises.readFile(filePath, 'utf-8'));
-    const versions = new Map<string, string>();
-
-    if (content.engines?.node) {
-      versions.set('node', normalizeVersion(content.engines.node));
-      versions.set('nodejs', normalizeVersion(content.engines.node));
-    }
-    if (content.engines?.npm) {
-      versions.set('npm', normalizeVersion(content.engines.npm));
-    }
-
-    const allDeps = { ...content.dependencies, ...content.devDependencies } as Record<string, string>;
-    for (const [name, version] of Object.entries(allDeps)) {
-      versions.set(name.toLowerCase(), normalizeVersion(version as string));
-    }
-
-    return versions;
-  },
-
-  // Python: requirements.txt
-  'requirements.txt': async (filePath: string): Promise<Map<string, string>> => {
-    const content = await fs.promises.readFile(filePath, 'utf-8');
-    const versions = new Map<string, string>();
-
-    for (const line of content.split('\n')) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) {
-        continue;
-      }
-      const match = trimmed.match(/^([a-zA-Z0-9\-_]+)([<>=!]+)?(.+)?$/);
-      if (!match) {
-        continue;
-      }
-      versions.set(match[1].toLowerCase(), match[3] ? normalizeVersion(match[3]) : 'any');
-    }
-
-    return versions;
-  },
-
-  // Python: pyproject.toml
-  'pyproject.toml': async (filePath: string): Promise<Map<string, string>> => {
-    const content = await fs.promises.readFile(filePath, 'utf-8');
-    const versions = new Map<string, string>();
-
-    // Basic TOML parsing for dependencies
-    const depsMatch = content.match(/\[project\.dependencies\]([\s\S]*?)(?:\[|$)/);
-    if (depsMatch) {
-      const depEntries = Array.from(depsMatch[1].matchAll(/"([^"]+)"/g), (match) => match[1]);
-      for (const dep of depEntries) {
-        const [pkg, version = 'any'] = dep.split(/[<>=!]+/);
-        if (pkg) {
-          versions.set(pkg.toLowerCase(), version);
-        }
-      }
-    }
-
-    return versions;
-  },
-
-  // Go: go.mod
-  'go.mod': async (filePath: string): Promise<Map<string, string>> => {
-    const content = await fs.promises.readFile(filePath, 'utf-8');
-    const versions = new Map<string, string>();
-
-    const goMatch = content.match(/^go\s+(\d+\.\d+)/m);
-    if (goMatch) {
-      versions.set('go', goMatch[1]);
-      versions.set('golang', goMatch[1]);
-    }
-
-    const requireMatch = content.match(/require\s+\(([\s\S]*?)\)/);
-    if (requireMatch) {
-      for (const line of requireMatch[1].split('\n')) {
-        const match = line.trim().match(/^([^\s]+)\s+v?([^\s]+)/);
-        if (!match) {
-          continue;
-        }
-        versions.set(match[1], normalizeVersion(match[2]));
-      }
-    }
-
-    return versions;
-  },
-
-  // Rust: Cargo.toml
-  'Cargo.toml': async (filePath: string): Promise<Map<string, string>> => {
-    const content = await fs.promises.readFile(filePath, 'utf-8');
-    const versions = new Map<string, string>();
-
-    const depsMatch = content.match(/\[dependencies\]([\s\S]*?)(?:\[|$)/);
-    if (depsMatch) {
-      for (const line of depsMatch[1].split('\n')) {
-        const match = line.match(/^([a-zA-Z0-9\-_]+)\s*=\s*"?([^"\n]+)"?/);
-        if (!match) {
-          continue;
-        }
-        versions.set(match[1].toLowerCase(), normalizeVersion(match[2]));
-      }
-    }
-
-    return versions;
-  },
-
-  // Java: pom.xml (basic parsing)
-  'pom.xml': async (filePath: string): Promise<Map<string, string>> => {
-    const content = await fs.promises.readFile(filePath, 'utf-8');
-    const versions = new Map<string, string>();
-
-    const javaMatch = content.match(/<java\.version>([^<]+)<\/java\.version>/);
-    if (javaMatch) {
-      versions.set('java', javaMatch[1]);
-    }
-
-    for (const match of content.matchAll(
-      /<dependency>[\s\S]*?<artifactId>([^<]+)<\/artifactId>[\s\S]*?<version>([^<]+)<\/version>[\s\S]*?<\/dependency>/g
-    )) {
-      versions.set(match[1].toLowerCase(), normalizeVersion(match[2]));
-    }
-
-    return versions;
-  },
-};
-
-function normalizeVersion(version: string): string {
-  if (!version) {
-    return 'any';
-  }
-  return version.replace(/^[\^~>=<]+/, '').replace(/\.x$/i, '.0');
-}
+export { manifestParsers } from '../manifests/manifestInventory.js';
 
 /**
  * Validates version references against manifest files
  */
 export class VersionValidator {
-  private packageVersions: Map<string, string> | null;
   private technologyMap: Record<string, string[]>;
-  private loadedFromKey: string | null;
 
   constructor() {
-    this.packageVersions = null;
-    this.loadedFromKey = null;
     this.technologyMap = {
       react: ['react'],
       typescript: ['typescript'],
@@ -162,41 +23,8 @@ export class VersionValidator {
     };
   }
 
-  private async loadPackageVersions(config: DocFreshnessConfig): Promise<void> {
-    const rootDir = config.rootDir || process.cwd();
-    const manifestFiles = config.manifestFiles || ['package.json'];
-    const configKey = `${rootDir}::${manifestFiles.join('|')}`;
-
-    if (this.packageVersions && this.loadedFromKey === configKey) {
-      return;
-    }
-
-    this.packageVersions = new Map();
-    this.loadedFromKey = configKey;
-
-    for (const manifestPath of manifestFiles) {
-      const fullPath = path.join(rootDir, manifestPath);
-      const fileName = path.basename(manifestPath);
-      const parser = manifestParsers[fileName];
-
-      if (!parser) {
-        continue;
-      }
-
-      try {
-        const versions = await parser(fullPath);
-        for (const [name, version] of versions) {
-          this.packageVersions.set(name, version);
-        }
-      }
-      catch {
-        // Manifest file not found or parse error
-      }
-    }
-  }
-
   async validateBatch(references: Reference[], _document: Document, config: DocFreshnessConfig): Promise<ValidationResult[]> {
-    await this.loadPackageVersions(config);
+    const packageVersions = await inventoryFor(this).packageVersions(config);
 
     const results: ValidationResult[] = [];
 
@@ -214,8 +42,8 @@ export class VersionValidator {
       let actualVersion: string | null = null;
 
       for (const pkgName of pkgNames) {
-        if (this.packageVersions!.has(pkgName)) {
-          actualVersion = this.packageVersions!.get(pkgName)!;
+        if (packageVersions.has(pkgName)) {
+          actualVersion = packageVersions.get(pkgName)!;
           break;
         }
       }
@@ -258,5 +86,3 @@ export class VersionValidator {
     return parsed ? parsed.major : null;
   }
 }
-
-export { manifestParsers };
