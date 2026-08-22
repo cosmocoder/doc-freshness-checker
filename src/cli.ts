@@ -141,13 +141,6 @@ export async function runCli(options: CLIOptions, deps: CliDeps = defaultDeps): 
   }
 }
 
-export async function main(argv: string[] = process.argv, deps: CliDeps = defaultDeps): Promise<number> {
-  const options = parseCliOptions(argv);
-  return runCli(options, deps);
-}
-
-// This wrapper keeps the process-exit side effect out of `main` so tests can
-// verify CLI behavior without terminating the Vitest process.
 export async function runAsCli(argv: string[] = process.argv, deps: CliDeps = defaultDeps): Promise<void> {
   const options = parseCliOptions(argv);
   const exitCode = await runCli(options, deps);
