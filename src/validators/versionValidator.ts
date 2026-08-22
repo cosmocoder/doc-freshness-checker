@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import semver from 'semver';
+import { resolveManifestPaths } from '../utils/manifestPaths.js';
+import type { IncrementalInput } from './incrementalInputs.js';
 import type { DocFreshnessConfig, Document, ManifestParser, Reference, ValidationResult } from '../types.js';
 
 /**
@@ -162,10 +164,14 @@ export class VersionValidator {
     };
   }
 
+  /** @internal */
+  async getIncrementalInputs(_references: Reference[], _document: Document, config: DocFreshnessConfig): Promise<IncrementalInput[]> {
+    return resolveManifestPaths(config).map((manifestPath) => ({ path: manifestPath }));
+  }
+
   private async loadPackageVersions(config: DocFreshnessConfig): Promise<void> {
-    const rootDir = config.rootDir || process.cwd();
-    const manifestFiles = config.manifestFiles || ['package.json'];
-    const configKey = `${rootDir}::${manifestFiles.join('|')}`;
+    const manifestPaths = resolveManifestPaths(config);
+    const configKey = manifestPaths.join('|');
 
     if (this.packageVersions && this.loadedFromKey === configKey) {
       return;
@@ -174,8 +180,7 @@ export class VersionValidator {
     this.packageVersions = new Map();
     this.loadedFromKey = configKey;
 
-    for (const manifestPath of manifestFiles) {
-      const fullPath = path.join(rootDir, manifestPath);
+    for (const manifestPath of manifestPaths) {
       const fileName = path.basename(manifestPath);
       const parser = manifestParsers[fileName];
 
@@ -184,7 +189,7 @@ export class VersionValidator {
       }
 
       try {
-        const versions = await parser(fullPath);
+        const versions = await parser(manifestPath);
         for (const [name, version] of versions) {
           this.packageVersions.set(name, version);
         }

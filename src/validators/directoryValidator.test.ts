@@ -32,6 +32,14 @@ describe('DirectoryValidator', () => {
     expect(results[0].valid).toBe(true);
   });
 
+  it('captures both root-relative and document-relative candidates', async () => {
+    const validator = new DirectoryValidator();
+    await expect(validator.getIncrementalInputs([makeRef('src')], doc, config)).resolves.toEqual([
+      { path: path.join(process.cwd(), 'src') },
+      { path: path.join(process.cwd(), 'docs', 'src') },
+    ]);
+  });
+
   it('marks missing paths as invalid', async () => {
     const validator = new DirectoryValidator();
     const results = await validator.validateBatch([makeRef('nonexistent-dir-xyz')], doc, config);

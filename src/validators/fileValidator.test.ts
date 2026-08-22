@@ -22,6 +22,12 @@ describe('FileValidator', () => {
     expect(results[0].valid).toBe(true);
   });
 
+  it('captures the same document-relative filesystem input it validates', async () => {
+    await expect(validator.getIncrementalInputs([makeRef('../package.json')], makeDoc(), config)).resolves.toEqual([
+      { path: `${process.cwd()}/package.json` },
+    ]);
+  });
+
   it('marks missing files as invalid', async () => {
     const results = await validator.validateBatch([makeRef('../nonexistent-xyz.json')], makeDoc(), { ...config, rootDir: process.cwd() });
     expect(results[0].valid).toBe(false);

@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { glob } from 'glob';
 import { findSimilar } from '../utils/similarity.js';
+import type { IncrementalInput } from './incrementalInputs.js';
 import type {
   DocFreshnessConfig,
   Document,
@@ -78,12 +79,22 @@ import { createIllustrativeSkippedResult, getRuleSeverity, severityForIllustrati
  * Validates code patterns exist in source files
  */
 export class CodePatternValidator {
+  /** @internal */
+  readonly incrementalCaptureScope = 'project';
+  /** @internal */
+  readonly incrementalInputsRequiredForGraph = true;
   private sourceIndex: Map<string, SymbolLocation[]> | null;
   private sourceFiles: Map<string, SourceFileData> | null; // Stores file content for vector search
+  private sourceInputs: Map<string, string> | null;
+  private sourceInputsAvailable: boolean;
+  private capturedInputs: IncrementalInput[] | null;
 
   constructor() {
     this.sourceIndex = null;
     this.sourceFiles = null;
+    this.sourceInputs = null;
+    this.sourceInputsAvailable = false;
+    this.capturedInputs = null;
   }
 
   async buildSourceIndex(config: DocFreshnessConfig): Promise<void> {
@@ -93,6 +104,8 @@ export class CodePatternValidator {
 
     this.sourceIndex = new Map();
     this.sourceFiles = new Map();
+    this.sourceInputs = new Map();
+    this.sourceInputsAvailable = true;
 
     // Use configured source patterns or detect automatically
     const sourcePatterns = config.sourcePatterns || this.detectSourcePatterns();
@@ -102,29 +115,40 @@ export class CodePatternValidator {
         const files = await glob(pattern, {
           cwd: config.rootDir,
           absolute: true,
+          nodir: true,
           ignore: ['**/*.test.*', '**/*.spec.*', '**/*.d.ts', '**/node_modules/**', '**/vendor/**'],
         });
 
         for (const file of files) {
+          const absolutePath = path.resolve(file);
+          if (this.sourceInputs.has(absolutePath)) {
+            continue;
+          }
           try {
-            const content = await fs.promises.readFile(file, 'utf-8');
-            const relativePath = path.relative(config.rootDir || process.cwd(), file);
-            const lang = this.detectLanguage(file);
+            const content = await fs.promises.readFile(absolutePath, 'utf-8');
+            const relativePath = path.relative(config.rootDir || process.cwd(), absolutePath);
+            const lang = this.detectLanguage(absolutePath);
 
             this.indexContent(content, relativePath, lang);
 
             // Store file content for vector search
             this.sourceFiles.set(relativePath, { content, language: lang });
+            this.sourceInputs.set(absolutePath, content);
           }
           catch {
             // Skip unreadable files
+            this.sourceInputsAvailable = false;
           }
         }
       }
       catch {
         // Skip invalid patterns
+        this.sourceInputsAvailable = false;
       }
     }
+    this.capturedInputs = this.sourceInputsAvailable
+      ? [...this.sourceInputs].map(([sourcePath, content]) => ({ path: sourcePath, content }))
+      : null;
   }
 
   private detectSourcePatterns(): string[] {
@@ -150,6 +174,16 @@ export class CodePatternValidator {
     }
 
     return 'javascript';
+  }
+
+  /** @internal */
+  async getIncrementalInputs(
+    _references: Reference[],
+    _document: Document,
+    config: DocFreshnessConfig
+  ): Promise<IncrementalInput[] | null> {
+    await this.buildSourceIndex(config);
+    return this.capturedInputs;
   }
 
   private indexContent(content: string, filePath: string, language: string): void {

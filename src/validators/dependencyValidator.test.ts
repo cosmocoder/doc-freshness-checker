@@ -31,6 +31,13 @@ describe('DependencyValidator', () => {
     await fs.promises.rm(tmpBase, { recursive: true, force: true }).catch(() => {});
   });
 
+  it('captures configured manifest inputs', async () => {
+    const validator = new DependencyValidator();
+    await expect(validator.getIncrementalInputs([], doc, { rootDir: process.cwd(), manifestFiles: ['custom.json'] })).resolves.toEqual([
+      { path: path.join(process.cwd(), 'custom.json') },
+    ]);
+  });
+
   it('validates dependencies found in package.json', async () => {
     const validator = new DependencyValidator();
     const config: DocFreshnessConfig = { rootDir: process.cwd(), manifestFiles: ['package.json'] };

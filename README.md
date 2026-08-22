@@ -134,6 +134,8 @@ Options:
   --vector-search         Enable semantic vector search for doc-code mismatches
 ```
 
+Incremental mode skips unchanged documents only after a clean run when the effective configuration and project inventory are unchanged. It conservatively revalidates all documents when filesystem or external inputs cannot be fingerprinted safely.
+
 ### Common Examples
 
 ```bash
