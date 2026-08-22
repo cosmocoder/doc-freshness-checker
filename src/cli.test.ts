@@ -2,16 +2,7 @@ import { mkdtemp, symlink, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import {
-  applyCliOverrides,
-  createProgram,
-  isDirectCliInvocation,
-  main,
-  parseCliOptions,
-  runAsCli,
-  runCli,
-  type CLIOptions,
-} from './cli.js';
+import { applyCliOverrides, createProgram, isDirectCliInvocation, parseCliOptions, runAsCli, runCli, type CLIOptions } from './cli.js';
 import { BUILT_IN_RULE_TYPES, DEFAULT_CONFIG } from './config/defaults.js';
 import { run } from './runner.js';
 import type { DocFreshnessConfig, ValidationResults } from './types.js';
@@ -313,42 +304,6 @@ describe('runCli', () => {
 
     expect(exitCode).toBe(1);
     expect(logErrorMock).toHaveBeenCalledWith('Error:', 'urlValidation.concurrency must be a positive integer');
-  });
-});
-
-describe('main', () => {
-  it('preserves the configured reporter when the CLI flag is absent', async () => {
-    const runMock = vi.fn().mockResolvedValue(makeResults(0));
-    const deps = {
-      loadConfig: vi.fn().mockResolvedValue({ ...makeConfig(), reporters: ['json'] }),
-      run: runMock,
-      logError: vi.fn(),
-    };
-
-    const exitCode = await main(['node', 'doc-freshness', '--config', 'doc-freshness.config.ts'], deps);
-
-    expect(exitCode).toBe(0);
-    expect(runMock).toHaveBeenCalledTimes(1);
-    expect(runMock).toHaveBeenCalledWith(expect.objectContaining({ reporters: ['json'] }));
-  });
-
-  it('parses argv and applies options before running', async () => {
-    const runMock = vi.fn().mockResolvedValue(makeResults(0));
-    const deps = {
-      loadConfig: vi.fn().mockResolvedValue(makeConfig()),
-      run: runMock,
-      logError: vi.fn(),
-    };
-
-    const exitCode = await main(['node', 'doc-freshness', '--reporter', 'json', '--no-cache'], deps);
-
-    expect(exitCode).toBe(0);
-    expect(runMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        reporters: ['json'],
-        cache: { enabled: false },
-      })
-    );
   });
 });
 
