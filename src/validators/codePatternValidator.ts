@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { glob } from 'glob';
+import { glob } from 'node:fs/promises';
 import { findSimilar } from '../utils/similarity.js';
 import type {
   DocFreshnessConfig,
@@ -96,19 +96,20 @@ export class CodePatternValidator {
 
     // Use configured source patterns or detect automatically
     const sourcePatterns = config.sourcePatterns || this.detectSourcePatterns();
+    const rootDir = config.rootDir || process.cwd();
 
     for (const pattern of sourcePatterns) {
       try {
-        const files = await glob(pattern, {
-          cwd: config.rootDir,
-          absolute: true,
-          ignore: ['**/*.test.*', '**/*.spec.*', '**/*.d.ts', '**/node_modules/**', '**/vendor/**'],
+        const files = glob(pattern, {
+          cwd: rootDir,
+          exclude: ['**/*.test.*', '**/*.spec.*', '**/*.d.ts', '**/node_modules/**', '**/vendor/**'],
         });
 
-        for (const file of files) {
+        for await (const relativeFile of files) {
+          const file = path.resolve(rootDir, relativeFile);
           try {
             const content = await fs.promises.readFile(file, 'utf-8');
-            const relativePath = path.relative(config.rootDir || process.cwd(), file);
+            const relativePath = path.relative(rootDir, file);
             const lang = this.detectLanguage(file);
 
             this.indexContent(content, relativePath, lang);

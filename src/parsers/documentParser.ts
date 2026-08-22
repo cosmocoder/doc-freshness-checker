@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { glob } from 'glob';
+import { glob } from 'node:fs/promises';
 import type { DocFreshnessConfig, Document, DocumentFormat } from '../types.js';
 import type { BaseExtractor } from './extractors/baseExtractor.js';
 
@@ -27,18 +27,19 @@ export class DocumentParser {
    * Scan all documentation files matching the configured patterns
    */
   async scanDocuments(): Promise<Document[]> {
-    const files = await glob(this.config.include || [], {
-      ignore: this.config.exclude,
-      cwd: this.config.rootDir,
-      absolute: true,
+    const rootDir = this.config.rootDir || process.cwd();
+    const files = glob(this.config.include || [], {
+      exclude: this.config.exclude,
+      cwd: rootDir,
     });
 
     const documents: Document[] = [];
 
-    for (const filePath of files) {
+    for await (const file of files) {
+      const filePath = path.resolve(rootDir, file);
       try {
         const content = await fs.promises.readFile(filePath, 'utf-8');
-        const relativePath = path.relative(this.config.rootDir || process.cwd(), filePath);
+        const relativePath = path.relative(rootDir, filePath);
         const format = this.detectFormat(filePath);
 
         const doc: Document = {

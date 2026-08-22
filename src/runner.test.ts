@@ -19,10 +19,6 @@ vi.mock('fastembed', () => ({
   },
 }));
 
-vi.mock('glob', () => ({
-  glob: vi.fn().mockResolvedValue([]),
-}));
-
 vi.mock('child_process', () => ({
   execFileSync: vi.fn().mockReturnValue(''),
 }));

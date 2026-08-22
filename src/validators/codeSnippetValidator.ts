@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { glob } from 'glob';
+import { glob } from 'node:fs/promises';
 import { isIllustrativePath, isIllustrativeSymbol, compilePatterns } from '../utils/illustrativePatterns.js';
 import { findSimilar } from '../utils/similarity.js';
 import { createIllustrativeSkippedResult, getRuleSeverity, severityForIllustrative } from '../utils/validation.js';
@@ -92,13 +92,13 @@ export class CodeSnippetValidator {
 
     for (const pattern of sourcePatterns) {
       try {
-        const files = await glob(pattern, {
+        const files = glob(pattern, {
           cwd: rootDir,
-          absolute: true,
-          ignore: ['**/*.test.*', '**/*.spec.*', '**/*.d.ts', '**/node_modules/**', '**/vendor/**', '**/dist/**', '**/build/**'],
+          exclude: ['**/*.test.*', '**/*.spec.*', '**/*.d.ts', '**/node_modules/**', '**/vendor/**', '**/dist/**', '**/build/**'],
         });
 
-        for (const file of files) {
+        for await (const relativeFile of files) {
+          const file = path.resolve(rootDir, relativeFile);
           try {
             const content = await fs.promises.readFile(file, 'utf-8');
             const relativePath = path.relative(rootDir, file);
