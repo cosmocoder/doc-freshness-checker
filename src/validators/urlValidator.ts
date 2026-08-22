@@ -1,4 +1,6 @@
 import dns from 'dns/promises';
+import http from 'http';
+import https from 'https';
 import net from 'net';
 import { pruneOldestEntries, setWithMaxEntries } from '../utils/boundedMap.js';
 import type { DocFreshnessConfig, Document, Reference, UrlCacheEntry, ValidationResult } from '../types.js';
@@ -21,85 +23,44 @@ const DOMAINS_REQUIRING_GET = [
 ];
 
 const MAX_URL_CACHE_ENTRIES = 5000;
+const MAX_REDIRECTS = 10;
+
+class UnsafeAddressError extends Error {}
+
+const PRIVATE_ADDRESS_BLOCK_LIST = new net.BlockList();
+const PRIVATE_ADDRESS_RANGES: Array<[string, number, 'ipv4' | 'ipv6']> = [
+  ['0.0.0.0', 8, 'ipv4'],
+  ['10.0.0.0', 8, 'ipv4'],
+  ['100.64.0.0', 10, 'ipv4'],
+  ['127.0.0.0', 8, 'ipv4'],
+  ['169.254.0.0', 16, 'ipv4'],
+  ['172.16.0.0', 12, 'ipv4'],
+  ['192.168.0.0', 16, 'ipv4'],
+  ['224.0.0.0', 4, 'ipv4'],
+  ['240.0.0.0', 4, 'ipv4'],
+  ['::', 96, 'ipv6'],
+  ['64:ff9b::', 96, 'ipv6'],
+  ['2001::', 32, 'ipv6'],
+  ['2002::', 16, 'ipv6'],
+  ['::ffff:0:0:0', 96, 'ipv6'],
+  ['fc00::', 7, 'ipv6'],
+  ['fe80::', 10, 'ipv6'],
+  ['fec0::', 10, 'ipv6'],
+  ['ff00::', 8, 'ipv6'],
+];
+PRIVATE_ADDRESS_RANGES.forEach(([address, prefix, family]) => PRIVATE_ADDRESS_BLOCK_LIST.addSubnet(address, prefix, family));
 
 /**
- * Check whether a hostname resolves to a private/internal IP range.
+ * Check whether a hostname is a private/internal address.
  * Prevents SSRF attacks against cloud metadata services, localhost, etc.
  */
 function isPrivateHostname(hostname: string): boolean {
-  // Block obvious private/reserved hostnames
-  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1' || hostname === '0.0.0.0') {
-    return true;
-  }
-
-  if (isPrivateIpAddress(hostname)) {
-    return true;
-  }
-
-  return false;
+  return hostname === 'localhost' || isPrivateIpAddress(hostname);
 }
 
 function isPrivateIpAddress(value: string): boolean {
   const ipVersion = net.isIP(value);
-
-  if (ipVersion === 4) {
-    const octets = value.split('.').map((part) => Number(part));
-    const [a, b] = octets;
-
-    if (octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
-      return true;
-    }
-    if (a === 10) {
-      return true;
-    }
-    // 10.0.0.0/8
-    if (a === 172 && b >= 16 && b <= 31) {
-      return true;
-    }
-    // 172.16.0.0/12
-    if (a === 192 && b === 168) {
-      return true;
-    }
-    // 192.168.0.0/16
-    if (a === 169 && b === 254) {
-      return true;
-    }
-    // 169.254.0.0/16
-    if (a === 127) {
-      return true;
-    }
-    // 127.0.0.0/8
-    if (a === 0) {
-      return true;
-    }
-    // 0.0.0.0/8
-    if (a >= 224) {
-      return true;
-    }
-    // Multicast/reserved
-    return false;
-  }
-
-  if (ipVersion === 6) {
-    const normalized = value.toLowerCase();
-    if (normalized === '::1' || normalized === '::') {
-      return true;
-    }
-    if (normalized.startsWith('fc') || normalized.startsWith('fd')) {
-      return true;
-    }
-    // fc00::/7
-    if (normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')) {
-      return true; // fe80::/10 link-local
-    }
-    if (normalized.startsWith('::ffff:127.')) {
-      return true;
-    }
-    // IPv4-mapped loopback
-    return false;
-  }
-
-  return false;
+  return ipVersion !== 0 && PRIVATE_ADDRESS_BLOCK_LIST.check(value, ipVersion === 4 ? 'ipv4' : 'ipv6');
 }
 
 function hostnameMatchesDomain(hostname: string, domain: string): boolean {
@@ -206,22 +167,6 @@ export class UrlValidator {
           message: 'Domain in skip list',
         };
       }
-      if (isPrivateHostname(urlObj.hostname)) {
-        return {
-          reference: ref,
-          valid: true,
-          skipped: true,
-          message: 'Skipped: private/internal address',
-        };
-      }
-      if (await this.resolvesToPrivateAddress(urlObj.hostname)) {
-        return {
-          reference: ref,
-          valid: true,
-          skipped: true,
-          message: 'Skipped: hostname resolves to private/internal address',
-        };
-      }
     }
     catch {
       return {
@@ -298,6 +243,14 @@ export class UrlValidator {
     }
     catch (error) {
       const err = error as Error;
+      if (err instanceof UnsafeAddressError) {
+        return {
+          reference: ref,
+          valid: true,
+          skipped: true,
+          message: err.message,
+        };
+      }
       const result = {
         valid: false,
         severity: (config.rules?.['external-url']?.severity || 'warning') as 'error' | 'warning' | 'info',
@@ -322,23 +275,7 @@ export class UrlValidator {
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
-      const response = await fetch(url, {
-        method,
-        signal: controller.signal,
-        headers: {
-          'User-Agent': USER_AGENT,
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-        },
-        redirect: 'follow',
-      });
-
-      const result = { ok: response.ok, status: response.status, statusText: response.statusText };
-
-      // Drain the response body to free the TCP connection
-      response.body?.cancel().catch(() => {});
-
-      return result;
+      return await this.requestWithRedirects(new URL(url), method, controller.signal);
     }
     finally {
       clearTimeout(timeoutId);
@@ -375,14 +312,86 @@ export class UrlValidator {
     return Object.fromEntries(this.cache);
   }
 
-  private async resolvesToPrivateAddress(hostname: string): Promise<boolean> {
-    try {
-      const addresses = await dns.lookup(hostname, { all: true, verbatim: true });
-      return addresses.some((entry) => isPrivateIpAddress(entry.address));
+  private async requestWithRedirects(
+    url: URL,
+    method: 'HEAD' | 'GET',
+    signal: AbortSignal,
+    redirectCount = 0
+  ): Promise<{ ok: boolean; status: number; statusText: string }> {
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      throw new Error(`Unsupported URL protocol: ${url.protocol}`);
     }
-    catch {
-      return false;
+    if (url.username || url.password) {
+      throw new Error('Request URL must not include credentials');
     }
+    const hostname = url.hostname.startsWith('[') ? url.hostname.slice(1, -1) : url.hostname;
+    // Block direct/private hostnames before DNS resolution.
+    if (isPrivateHostname(hostname)) {
+      throw new UnsafeAddressError('Skipped: private/internal address');
+    }
+
+    const addresses = await this.lookupWithAbort(hostname, signal);
+    if (addresses.length === 0 || addresses.some((entry) => isPrivateIpAddress(entry.address))) {
+      throw new UnsafeAddressError('Skipped: hostname resolves to private/internal address');
+    }
+    const pinnedAddress = addresses[0];
+    const response = await new Promise<http.IncomingMessage>((resolve, reject) => {
+      const transport = url.protocol === 'https:' ? https : http;
+      const request = transport.request(
+        url,
+        {
+          method,
+          signal,
+          agent: false,
+          family: pinnedAddress.family,
+          headers: {
+            'User-Agent': USER_AGENT,
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+          },
+          lookup: (_hostname, _options, callback) => callback(null, pinnedAddress.address, pinnedAddress.family),
+        },
+        resolve
+      );
+      request.once('error', reject);
+      request.end();
+    });
+
+    const status = response.statusCode ?? 0;
+    const location = response.headers.location;
+    response.destroy();
+
+    if ([301, 302, 303, 307, 308].includes(status) && location) {
+      if (redirectCount >= MAX_REDIRECTS) {
+        throw new Error(`Too many redirects: ${url.href}`);
+      }
+      return this.requestWithRedirects(new URL(location, url), method, signal, redirectCount + 1);
+    }
+
+    return { ok: status >= 200 && status < 300, status, statusText: response.statusMessage ?? '' };
+  }
+
+  private lookupWithAbort(hostname: string, signal: AbortSignal): Promise<Array<{ address: string; family: number }>> {
+    if (signal.aborted) {
+      return Promise.reject(signal.reason);
+    }
+    return new Promise((resolve, reject) => {
+      const onAbort = () => reject(signal.reason);
+      signal.addEventListener('abort', onAbort, { once: true });
+
+      dns.lookup(hostname, { all: true, verbatim: true }).then(
+        (addresses) => {
+          signal.removeEventListener('abort', onAbort);
+          if (!signal.aborted) {
+            resolve(addresses);
+          }
+        },
+        (error: unknown) => {
+          signal.removeEventListener('abort', onAbort);
+          reject(error);
+        }
+      );
+    });
   }
 
   private setCacheEntry(url: string, result: UrlCacheEntry['result']): void {
