@@ -23,23 +23,60 @@ describe('ExternalUrlExtractor', () => {
     expect(refs[1].value).toBe('http://test.org/path');
   });
 
-  it('strips trailing punctuation', () => {
-    const doc = makeDoc('See https://example.com. Also https://test.org,');
-    const refs = extractor.extract(doc);
-    expect(refs[0].value).toBe('https://example.com');
-    expect(refs[1].value).toBe('https://test.org');
-  });
-
-  it('preserves balanced parentheses in Wikipedia-style URLs', () => {
-    const doc = makeDoc('See https://en.wikipedia.org/wiki/Example_(disambiguation)');
-    const refs = extractor.extract(doc);
-    expect(refs[0].value).toBe('https://en.wikipedia.org/wiki/Example_(disambiguation)');
-  });
-
-  it('strips unbalanced trailing parenthesis', () => {
-    const doc = makeDoc('(visit https://example.com)');
-    const refs = extractor.extract(doc);
-    expect(refs[0].value).toBe('https://example.com');
+  it.each([
+    {
+      name: 'strips trailing punctuation',
+      content: 'See https://example.com. Also https://test.org,',
+      expected: ['https://example.com', 'https://test.org'],
+    },
+    {
+      name: 'preserves balanced parentheses in Wikipedia-style URLs',
+      content: 'See https://en.wikipedia.org/wiki/Example_(disambiguation)',
+      expected: ['https://en.wikipedia.org/wiki/Example_(disambiguation)'],
+    },
+    {
+      name: 'strips unbalanced trailing parenthesis',
+      content: '(visit https://example.com)',
+      expected: ['https://example.com'],
+    },
+    {
+      name: 'strips multiple trailing punctuation characters',
+      content: 'See https://example.com/path...',
+      expected: ['https://example.com/path'],
+    },
+    {
+      name: 'handles URL ending with semicolon and colon',
+      content: 'Visit https://example.com/page; and https://example.com/other:',
+      expected: ['https://example.com/page', 'https://example.com/other'],
+    },
+    {
+      name: 'handles multiple unbalanced trailing parens',
+      content: '(see (https://example.com))',
+      expected: ['https://example.com'],
+    },
+    {
+      name: 'preserves URL with balanced nested parens',
+      content: 'https://en.wikipedia.org/wiki/A_(B_(C))',
+      expected: ['https://en.wikipedia.org/wiki/A_(B_(C))'],
+    },
+    {
+      name: 'strips trailing bracket characters',
+      content: '[https://example.com/page]',
+      expected: ['https://example.com/page'],
+    },
+    {
+      name: 'strips trailing single and double quotes',
+      content: "see 'https://example.com/page'",
+      expected: ['https://example.com/page'],
+    },
+    {
+      name: 'strips trailing exclamation and question marks',
+      content: 'Visit https://example.com/page! or https://example.com/other?',
+      expected: ['https://example.com/page', 'https://example.com/other'],
+    },
+  ])('$name', ({ content, expected }) => {
+    const refs = extractor.extract(makeDoc(content));
+    expect(refs.map((ref) => ref.value)).toEqual(expected);
   });
 
   it('sets correct line numbers', () => {
@@ -52,49 +89,5 @@ describe('ExternalUrlExtractor', () => {
     const doc = makeDoc('https://example.com/page?foo=bar&baz=1#section');
     const refs = extractor.extract(doc);
     expect(refs[0].value).toBe('https://example.com/page?foo=bar&baz=1#section');
-  });
-
-  it('strips multiple trailing punctuation characters', () => {
-    const doc = makeDoc('See https://example.com/path...');
-    const refs = extractor.extract(doc);
-    expect(refs[0].value).toBe('https://example.com/path');
-  });
-
-  it('handles URL ending with semicolon and colon', () => {
-    const doc = makeDoc('Visit https://example.com/page; and https://example.com/other:');
-    const refs = extractor.extract(doc);
-    expect(refs[0].value).toBe('https://example.com/page');
-    expect(refs[1].value).toBe('https://example.com/other');
-  });
-
-  it('handles multiple unbalanced trailing parens', () => {
-    const doc = makeDoc('(see (https://example.com))');
-    const refs = extractor.extract(doc);
-    expect(refs[0].value).toBe('https://example.com');
-  });
-
-  it('preserves URL with balanced nested parens', () => {
-    const doc = makeDoc('https://en.wikipedia.org/wiki/A_(B_(C))');
-    const refs = extractor.extract(doc);
-    expect(refs[0].value).toBe('https://en.wikipedia.org/wiki/A_(B_(C))');
-  });
-
-  it('strips trailing bracket characters', () => {
-    const doc = makeDoc('[https://example.com/page]');
-    const refs = extractor.extract(doc);
-    expect(refs[0].value).toBe('https://example.com/page');
-  });
-
-  it('strips trailing single and double quotes', () => {
-    const doc = makeDoc("see 'https://example.com/page'");
-    const refs = extractor.extract(doc);
-    expect(refs[0].value).toBe('https://example.com/page');
-  });
-
-  it('strips trailing exclamation and question marks', () => {
-    const doc = makeDoc('Visit https://example.com/page! or https://example.com/other?');
-    const refs = extractor.extract(doc);
-    expect(refs[0].value).toBe('https://example.com/page');
-    expect(refs[1].value).toBe('https://example.com/other');
   });
 });
