@@ -4,6 +4,7 @@ import { findSimilar } from '../utils/similarity.js';
 import { isIllustrativePath, compilePatterns } from '../utils/illustrativePatterns.js';
 import { isWithinRoot, resolveDocumentDir, resolveProjectRoot } from '../utils/pathSecurity.js';
 import { createIllustrativeSkippedResult, getRuleSeverity, severityForIllustrative } from '../utils/validation.js';
+import type { IncrementalInput } from './incrementalInputs.js';
 import type { DocFreshnessConfig, Document, Reference, ValidationResult } from '../types.js';
 
 /**
@@ -18,6 +19,27 @@ export class FileValidator {
     this.customPatterns = [];
   }
 
+  /** @internal */
+  async getIncrementalInputs(references: Reference[], document: Document, config: DocFreshnessConfig): Promise<IncrementalInput[]> {
+    return references.flatMap((reference) => {
+      const { resolvedPath, rootDir } = this.resolveReferencePath(reference, document, config);
+      return isWithinRoot(resolvedPath, rootDir) ? [{ path: resolvedPath }] : [];
+    });
+  }
+
+  private resolveReferencePath(
+    reference: Reference,
+    document: Document,
+    config: DocFreshnessConfig
+  ): { resolvedPath: string; rootDir: string; docDir: string } {
+    const rootDir = resolveProjectRoot(config.rootDir);
+    const docDir = resolveDocumentDir(rootDir, document.path);
+    const resolvedPath = path.normalize(
+      path.isAbsolute(reference.value) ? path.resolve(reference.value) : path.resolve(docDir, reference.value)
+    );
+    return { resolvedPath, rootDir, docDir };
+  }
+
   /**
    * Initialize custom illustrative patterns from config
    */
@@ -29,8 +51,6 @@ export class FileValidator {
   async validateBatch(references: Reference[], document: Document, config: DocFreshnessConfig): Promise<ValidationResult[]> {
     this.initCustomPatterns(config);
     const results: ValidationResult[] = [];
-    const rootDir = resolveProjectRoot(config.rootDir);
-    const docDir = resolveDocumentDir(rootDir, document.path);
     const skipIllustrative = config.rules?.['file-path']?.skipIllustrative !== false;
 
     for (const ref of references) {
@@ -42,7 +62,8 @@ export class FileValidator {
         continue;
       }
 
-      const result = await this.validateReference(ref, docDir, rootDir, config, illustrative);
+      const { resolvedPath, rootDir, docDir } = this.resolveReferencePath(ref, document, config);
+      const result = await this.validateReference(ref, resolvedPath, docDir, rootDir, config, illustrative);
       results.push(result);
     }
 
@@ -51,22 +72,12 @@ export class FileValidator {
 
   private async validateReference(
     ref: Reference,
+    resolvedPath: string,
     docDir: string,
     rootDir: string,
     config: DocFreshnessConfig,
     isIllustrative: boolean = false
   ): Promise<ValidationResult> {
-    // Handle both relative and absolute paths
-    let resolvedPath: string;
-    if (path.isAbsolute(ref.value)) {
-      resolvedPath = path.resolve(ref.value);
-    }
-    else {
-      resolvedPath = path.resolve(docDir, ref.value);
-    }
-
-    // Normalize path
-    resolvedPath = path.normalize(resolvedPath);
     const baseSeverity = getRuleSeverity(config, 'file-path', 'error');
 
     // Prevent probing files outside the configured project root

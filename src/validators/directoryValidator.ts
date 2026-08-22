@@ -4,6 +4,7 @@ import { isIllustrativePath, compilePatterns } from '../utils/illustrativePatter
 import { similarityRatio } from '../utils/similarity.js';
 import { isWithinRoot, resolveDocumentDir, resolveProjectRoot } from '../utils/pathSecurity.js';
 import { createIllustrativeSkippedResult, getRuleSeverity, severityForIllustrative } from '../utils/validation.js';
+import type { IncrementalInput } from './incrementalInputs.js';
 import type { DocFreshnessConfig, Document, Reference, ValidationResult } from '../types.js';
 
 interface CacheEntry {
@@ -25,6 +26,28 @@ export class DirectoryValidator {
   constructor() {
     this.pathCache = new Map();
     this.customPatterns = [];
+  }
+
+  /** @internal */
+  async getIncrementalInputs(references: Reference[], document: Document, config: DocFreshnessConfig): Promise<IncrementalInput[]> {
+    return references.flatMap((reference) => {
+      const { rootDir, fullPath, relativeToDoc } = this.resolveCandidates(reference, document, config);
+      return [fullPath, relativeToDoc].filter((candidate) => isWithinRoot(candidate, rootDir)).map((candidate) => ({ path: candidate }));
+    });
+  }
+
+  private resolveCandidates(
+    reference: Reference,
+    document: Document,
+    config: DocFreshnessConfig
+  ): { rootDir: string; fullPath: string; relativeToDoc: string } {
+    const rootDir = resolveProjectRoot(config.rootDir);
+    const docDir = resolveDocumentDir(rootDir, document.path);
+    return {
+      rootDir,
+      fullPath: path.resolve(rootDir, reference.value),
+      relativeToDoc: path.resolve(docDir, reference.value),
+    };
   }
 
   /**
@@ -63,7 +86,7 @@ export class DirectoryValidator {
     isIllustrative: boolean = false
   ): Promise<ValidationResult> {
     const itemPath = ref.value;
-    const rootDir = resolveProjectRoot(config.rootDir);
+    const { rootDir, fullPath, relativeToDoc } = this.resolveCandidates(ref, document, config);
     const baseSeverity = getRuleSeverity(config, 'directory-structure', 'warning');
 
     const cacheKey = `${rootDir}::${document.path}::${itemPath}`;
@@ -83,7 +106,6 @@ export class DirectoryValidator {
 
     // Strategy 1: Check if the path exists from project root
     // This handles full paths like "frontend/src/apps/domains"
-    const fullPath = path.resolve(rootDir, itemPath);
     if (isWithinRoot(fullPath, rootDir) && (await this.pathExists(fullPath))) {
       this.pathCache.set(cacheKey, { found: true, foundAt: itemPath });
       return {
@@ -95,8 +117,6 @@ export class DirectoryValidator {
 
     // Strategy 2: The path might be relative to the document's location
     // e.g., a doc in "docs/" might reference "../src/..."
-    const docDir = resolveDocumentDir(rootDir, document.path);
-    const relativeToDoc = path.resolve(docDir, itemPath);
     if (isWithinRoot(relativeToDoc, rootDir) && (await this.pathExists(relativeToDoc))) {
       const foundAt = path.relative(rootDir, relativeToDoc);
       this.pathCache.set(cacheKey, { found: true, foundAt });

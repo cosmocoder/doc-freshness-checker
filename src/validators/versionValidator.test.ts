@@ -12,6 +12,13 @@ const doc = makeDoc();
 const tmpDir = path.join(process.cwd(), '.doc-freshness-cache', 'manifest-test');
 
 describe('VersionValidator', () => {
+  it('captures default manifest inputs', async () => {
+    const validator = new VersionValidator();
+    await expect(validator.getIncrementalInputs([], doc, { rootDir: process.cwd() })).resolves.toEqual([
+      { path: path.join(process.cwd(), 'package.json') },
+    ]);
+  });
+
   it('validates matching major versions as valid', async () => {
     const validator = new VersionValidator();
     const config: DocFreshnessConfig = { rootDir: process.cwd(), manifestFiles: ['package.json'] };

@@ -28,7 +28,14 @@ import { IncrementalChecker } from './utils/incremental.js';
 import { VectorSearch } from './semantic/vectorSearch.js';
 import { loadConfig } from './config/loader.js';
 import type { CodeDocGraph } from './graph/codeDocGraph.js';
-import type { DocFreshnessConfig, ProjectScores, ValidationResults, VectorMismatch } from './types.js';
+import type { DocFreshnessConfig, ProjectScores, ReporterType, ValidationResults, VectorMismatch } from './types.js';
+
+const REPORTER_OUTPUT: Record<ReporterType, 'console' | 'stable' | 'timestamped'> = {
+  console: 'console',
+  json: 'stable',
+  markdown: 'timestamped',
+  enhanced: 'timestamped',
+};
 
 /**
  * Main entry point - run with config object
@@ -107,27 +114,39 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
     console.log('Scanning documentation files...');
   }
 
-  let documents = await parser.scanDocuments();
+  const allDocuments = await parser.scanDocuments();
+  let documentsToValidate = allDocuments;
 
   if (config.verbose) {
-    console.log(`Found ${documents.length} documentation files.`);
+    console.log(`Found ${allDocuments.length} documentation files.`);
   }
 
   // Apply incremental checking if enabled
   let incrementalChecker: IncrementalChecker | null = null;
-  if (config.incremental?.enabled) {
-    incrementalChecker = new IncrementalChecker(config.cache?.dir || '.doc-freshness-cache');
-    const allDocs = documents;
-    documents = await incrementalChecker.filterChanged(documents);
+  if (config.incremental?.enabled && allDocuments.length > 0) {
+    const stateDir = path.resolve(config.rootDir || process.cwd(), config.cache?.dir || config.graph?.cacheDir || '.doc-freshness-cache');
+    const incrementalInputs = await validationEngine.captureIncrementalInputs(allDocuments);
+    const finalFileReporter = (config.reporters || ['console']).findLast(
+      (reporter) => REPORTER_OUTPUT[reporter] === 'stable' || REPORTER_OUTPUT[reporter] === 'timestamped'
+    );
+    const inventoryExclusions =
+      config.outputPath && finalFileReporter && REPORTER_OUTPUT[finalFileReporter] === 'timestamped'
+        ? [path.resolve(config.outputPath)]
+        : [];
+    incrementalChecker = new IncrementalChecker(stateDir);
+    documentsToValidate = await incrementalChecker.filterChanged(allDocuments, config, incrementalInputs, inventoryExclusions);
 
     if (config.verbose) {
-      const stats = incrementalChecker.getStats(allDocs.length, documents.length);
+      const stats = incrementalChecker.getStats(allDocuments.length, documentsToValidate.length);
       console.log(`Incremental mode: checking ${stats.changed} changed files, skipping ${stats.skipped} unchanged.`);
     }
   }
+  else if (config.incremental?.enabled && config.verbose) {
+    console.log('Incremental mode: checking 0 changed files, skipping 0 unchanged.');
+  }
 
   if (config.verbose) {
-    const totalRefs = documents.reduce((sum, doc) => sum + doc.references.length, 0);
+    const totalRefs = allDocuments.reduce((sum, doc) => sum + doc.references.length, 0);
     console.log(`Extracted ${totalRefs} references.`);
   }
 
@@ -136,12 +155,7 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
     console.log('Validating references...');
   }
 
-  const results = await validationEngine.validate(documents);
-
-  // Save incremental state
-  if (incrementalChecker) {
-    await incrementalChecker.saveState();
-  }
+  const results = await validationEngine.validate(documentsToValidate);
 
   // Build graph if enabled
   let graph: CodeDocGraph | null = null;
@@ -157,7 +171,7 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
 
     // Build graph
     const graphBuilder = new GraphBuilder(config);
-    graph = await graphBuilder.buildGraph(documents, codeIndex);
+    graph = await graphBuilder.buildGraph(allDocuments, codeIndex);
 
     if (gitTracker.isGitRepo()) {
       graph.gitCommit = gitTracker.getCurrentCommit();
@@ -173,7 +187,7 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
     // Calculate freshness scores if enabled
     if (config.freshnessScoring?.enabled) {
       const scorer = new FreshnessScorer(config);
-      freshnessScores = scorer.calculateProjectScores(documents, results, gitTracker, graph);
+      freshnessScores = scorer.calculateProjectScores(allDocuments, results, gitTracker, graph);
     }
   }
 
@@ -189,7 +203,7 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
     if (config.verbose) {
       console.log('  Indexing documentation sections...');
     }
-    await vectorSearch.indexDocumentation(documents);
+    await vectorSearch.indexDocumentation(allDocuments);
 
     // Ensure source index is built (may already be built if graph is enabled)
     if (!codePatternValidator.getSourceIndex()) {
@@ -234,6 +248,16 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
 
   // Generate reports
   await generateReports(results, config, graph, gitTracker, freshnessScores, vectorMismatches);
+
+  // Persist only after validation and reporting complete; findings make the next run revalidate everything.
+  if (incrementalChecker) {
+    const clean =
+      results.documents.length === 0 &&
+      !results.vectorMismatches?.length &&
+      !validationEngine.hadInvalidResults() &&
+      !validationEngine.hadIncompleteValidation();
+    await incrementalChecker.saveState(clean);
+  }
 
   return results;
 }

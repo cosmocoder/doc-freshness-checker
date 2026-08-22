@@ -1,3 +1,6 @@
+import path from 'path';
+import { getIncrementalInputProvider } from './incrementalInputs.js';
+import type { IncrementalInput, IncrementalInputProvider } from './incrementalInputs.js';
 import type { BaseValidator, DocFreshnessConfig, Document, DocumentIssues, Reference, ValidationResults } from '../types.js';
 
 /**
@@ -6,10 +9,14 @@ import type { BaseValidator, DocFreshnessConfig, Document, DocumentIssues, Refer
 export class ValidationEngine {
   private config: DocFreshnessConfig;
   private validators: Map<string, BaseValidator>;
+  private latestHadInvalidResults: boolean;
+  private latestHadIncompleteValidation: boolean;
 
   constructor(config: DocFreshnessConfig) {
     this.config = config;
     this.validators = new Map();
+    this.latestHadInvalidResults = false;
+    this.latestHadIncompleteValidation = false;
   }
 
   /**
@@ -23,6 +30,8 @@ export class ValidationEngine {
    * Validate all references from parsed documents
    */
   async validate(documents: Document[]): Promise<ValidationResults> {
+    this.latestHadInvalidResults = false;
+    this.latestHadIncompleteValidation = false;
     const results: ValidationResults = {
       documents: [],
       summary: {
@@ -55,6 +64,7 @@ export class ValidationEngine {
         const validator = this.validators.get(type);
 
         if (!validator) {
+          this.latestHadIncompleteValidation = true;
           results.summary.total += refs.length;
           results.summary.skipped += refs.length;
           continue;
@@ -64,6 +74,9 @@ export class ValidationEngine {
           const validationResults = await validator.validateBatch(refs, doc, this.config);
 
           for (const result of validationResults) {
+            if (!result.valid) {
+              this.latestHadInvalidResults = true;
+            }
             const bucket = this.classifyResult(result);
             this.incrementSummary(results, bucket);
             if (bucket === 'error' || bucket === 'warning') {
@@ -72,6 +85,7 @@ export class ValidationEngine {
           }
         }
         catch (error) {
+          this.latestHadIncompleteValidation = true;
           if (this.config.verbose) {
             console.warn(`Warning: Validator for ${type} failed: ${(error as Error).message}`);
           }
@@ -86,6 +100,88 @@ export class ValidationEngine {
     }
 
     return results;
+  }
+
+  /** @internal */
+  hadInvalidResults(): boolean {
+    return this.latestHadInvalidResults;
+  }
+
+  /** @internal */
+  hadIncompleteValidation(): boolean {
+    return this.latestHadIncompleteValidation;
+  }
+
+  /** @internal */
+  async captureIncrementalInputs(documents: Document[]): Promise<IncrementalInput[] | null> {
+    const inputs: IncrementalInput[] = [];
+    const groups: Array<{ validator: IncrementalInputProvider; references: Reference[]; document: Document }> = [];
+    try {
+      for (const document of documents) {
+        for (const [type, references] of this.groupByType(document.references)) {
+          if (this.config.rules?.[type]?.enabled === false) {
+            continue;
+          }
+          const validator = getIncrementalInputProvider(this.validators.get(type));
+          if (!validator) {
+            return null;
+          }
+          groups.push({ validator, references, document });
+        }
+      }
+
+      const projectCaptures = new Map<IncrementalInputProvider, { references: Reference[]; document: Document }>();
+      for (const group of groups) {
+        if (group.validator.incrementalCaptureScope === 'project') {
+          if (!projectCaptures.has(group.validator)) {
+            projectCaptures.set(group.validator, group);
+          }
+          continue;
+        }
+        const captured = await group.validator.getIncrementalInputs(group.references, group.document, this.config);
+        if (!captured) {
+          return null;
+        }
+        inputs.push(...captured);
+      }
+
+      const graphDocument = documents[0];
+      if (graphDocument && this.config.graph?.enabled !== false) {
+        for (const registeredValidator of new Set(this.validators.values())) {
+          const graphProvider = registeredValidator as Partial<IncrementalInputProvider>;
+          if (graphProvider.incrementalCaptureScope !== 'project' || !graphProvider.incrementalInputsRequiredForGraph) {
+            continue;
+          }
+          const validator = getIncrementalInputProvider(registeredValidator);
+          if (!validator) {
+            return null;
+          }
+          if (projectCaptures.has(validator)) {
+            continue;
+          }
+          projectCaptures.set(validator, { references: [], document: graphDocument });
+        }
+      }
+
+      for (const [validator, capture] of projectCaptures) {
+        const captured = await validator.getIncrementalInputs(capture.references, capture.document, this.config);
+        if (!captured) {
+          return null;
+        }
+        inputs.push(...captured);
+      }
+      const uniqueInputs = new Map<string, IncrementalInput>();
+      for (const input of inputs) {
+        const resolvedPath = path.resolve(input.path);
+        if (!uniqueInputs.has(resolvedPath) || input.content !== undefined) {
+          uniqueInputs.set(resolvedPath, { path: resolvedPath, ...(input.content === undefined ? {} : { content: input.content }) });
+        }
+      }
+      return [...uniqueInputs.values()];
+    }
+    catch {
+      return null;
+    }
   }
 
   /**

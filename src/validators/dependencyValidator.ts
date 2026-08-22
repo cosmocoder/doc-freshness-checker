@@ -1,5 +1,7 @@
 import fs from 'fs';
 import path from 'path';
+import { resolveManifestPaths } from '../utils/manifestPaths.js';
+import type { IncrementalInput } from './incrementalInputs.js';
 import type { DocFreshnessConfig, Document, Reference, ValidationResult } from '../types.js';
 
 /**
@@ -14,10 +16,14 @@ export class DependencyValidator {
     this.loadedFromKey = null;
   }
 
+  /** @internal */
+  async getIncrementalInputs(_references: Reference[], _document: Document, config: DocFreshnessConfig): Promise<IncrementalInput[]> {
+    return resolveManifestPaths(config).map((manifestPath) => ({ path: manifestPath }));
+  }
+
   private async loadDependencies(config: DocFreshnessConfig): Promise<void> {
-    const rootDir = config.rootDir || process.cwd();
-    const manifestFiles = config.manifestFiles || ['package.json'];
-    const configKey = `${rootDir}::${manifestFiles.join('|')}`;
+    const manifestPaths = resolveManifestPaths(config);
+    const configKey = manifestPaths.join('|');
 
     if (this.dependencies && this.loadedFromKey === configKey) {
       return;
@@ -26,12 +32,11 @@ export class DependencyValidator {
     this.dependencies = new Set();
     this.loadedFromKey = configKey;
 
-    for (const manifestPath of manifestFiles) {
-      const fullPath = path.join(rootDir, manifestPath);
+    for (const manifestPath of manifestPaths) {
       const fileName = path.basename(manifestPath);
 
       try {
-        const content = await fs.promises.readFile(fullPath, 'utf-8');
+        const content = await fs.promises.readFile(manifestPath, 'utf-8');
         const deps = await this.parseManifest(fileName, content);
         for (const dep of deps) {
           this.dependencies.add(dep.toLowerCase());
