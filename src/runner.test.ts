@@ -1,7 +1,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { glob } from 'glob';
+import { glob } from 'node:fs/promises';
 import { run, runWithConfig } from './runner.js';
 import { BUILT_IN_RULE_TYPES } from './config/defaults.js';
 import { GraphBuilder } from './graph/graphBuilder.js';
@@ -30,6 +30,32 @@ import type {
   VectorMismatch,
 } from './types.js';
 
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const original = await importOriginal<typeof import('node:fs/promises')>();
+  return { ...original, glob: vi.fn(original.glob) };
+});
+
+async function* globResults(files: string[]): AsyncGenerator<string> {
+  yield* files;
+}
+
+async function* sourceGlobResults(files: string[]): AsyncGenerator<fs.Dirent<string>, undefined> {
+  for (const file of files) {
+    yield {
+      name: path.basename(file),
+      parentPath: path.dirname(file),
+      isBlockDevice: () => false,
+      isCharacterDevice: () => false,
+      isDirectory: () => false,
+      isFIFO: () => false,
+      isFile: () => true,
+      isSocket: () => false,
+      isSymbolicLink: () => false,
+    };
+  }
+  return undefined;
+}
+
 vi.mock('fastembed', () => ({
   EmbeddingModel: { BGESmallENV15: 'BGESmallENV15' },
   FlagEmbedding: {
@@ -44,15 +70,15 @@ vi.mock('fastembed', () => ({
   },
 }));
 
-vi.mock('glob', () => ({
-  glob: vi.fn().mockResolvedValue([]),
-}));
-
 vi.mock('child_process', () => ({
   execFileSync: vi.fn().mockReturnValue(''),
 }));
 
 describe('runner', () => {
+  beforeEach(() => {
+    vi.mocked(glob).mockReturnValue(globResults([]));
+  });
+
   const cacheRoot = path.join(process.cwd(), '.doc-freshness-cache');
   const transientCacheDirs = [
     '.doc-freshness-cache/runner-inc',
@@ -68,7 +94,7 @@ describe('runner', () => {
   const captureLog = captureConsoleLog;
   const captureWarn = captureConsoleWarn;
   const mockDocumentScan = (docPath: string): void => {
-    vi.mocked(glob).mockResolvedValueOnce([docPath]);
+    vi.mocked(glob).mockReturnValueOnce(globResults([docPath]));
   };
   const withIncrementalRoot = async (name: string, test: (rootDir: string) => Promise<void>): Promise<void> => {
     const rootDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), `runner-inc-${name}-`));
@@ -76,7 +102,6 @@ describe('runner', () => {
       await test(rootDir);
     }
     finally {
-      vi.mocked(glob).mockResolvedValue([]);
       await fs.promises.rm(rootDir, { recursive: true, force: true });
     }
   };
@@ -183,7 +208,7 @@ describe('runner', () => {
     await withOutputFile(cacheRoot, 'custom-extractor.md', async (filePath) => {
       const content = '# Custom\n\nprose';
       await fs.promises.writeFile(filePath, content, 'utf-8');
-      vi.mocked(glob).mockResolvedValueOnce([filePath]);
+      vi.mocked(glob).mockReturnValueOnce(globResults([filePath]));
 
       const reference: Reference = {
         type: 'file-path',
@@ -224,7 +249,7 @@ describe('runner', () => {
         references: [reference],
       };
 
-      expect(vi.mocked(glob).mock.calls).toEqual([[['**/*.md'], { ignore: [], cwd: cacheRoot, absolute: true }]]);
+      expect(vi.mocked(glob).mock.calls).toEqual([[['**/*.md'], { exclude: [], followSymlinks: true, cwd: cacheRoot }]]);
       expect(customExtractor.supportsFormat.mock.calls).toEqual([['markdown']]);
       expect(customExtractor.extract.mock.calls).toEqual([[document]]);
       expect(customValidator.validateBatch.mock.calls).toEqual([[[reference], document, config]]);
@@ -236,7 +261,7 @@ describe('runner', () => {
   });
 
   it.each(['supportsFormat', 'extract'] as const)('propagates custom extractor %s failures', async (hook) => {
-    vi.mocked(glob).mockResolvedValueOnce([path.join(process.cwd(), 'README.md')]);
+    vi.mocked(glob).mockReturnValueOnce(globResults([path.join(process.cwd(), 'README.md')]));
     const failure = (): never => {
       throw new Error(`${hook} crashed`);
     };
@@ -261,7 +286,7 @@ describe('runner', () => {
       raw: 'value',
       sourceFile: 'README.md',
     };
-    vi.mocked(glob).mockResolvedValueOnce([path.join(process.cwd(), 'README.md')]);
+    vi.mocked(glob).mockReturnValueOnce(globResults([path.join(process.cwd(), 'README.md')]));
 
     await expect(
       run({
@@ -282,7 +307,7 @@ describe('runner', () => {
       raw: './src/index.ts',
       sourceFile: 'README.md',
     };
-    vi.mocked(glob).mockResolvedValueOnce([path.join(process.cwd(), 'README.md')]);
+    vi.mocked(glob).mockReturnValueOnce(globResults([path.join(process.cwd(), 'README.md')]));
     const validateSpy = vi.spyOn(FileValidator.prototype, 'validateBatch').mockRejectedValueOnce(new Error('file validator crashed'));
 
     try {
@@ -300,7 +325,7 @@ describe('runner', () => {
   });
 
   it('propagates matched-document read failures', async () => {
-    vi.mocked(glob).mockResolvedValueOnce([path.join(process.cwd(), 'README.md')]);
+    vi.mocked(glob).mockReturnValueOnce(globResults([path.join(process.cwd(), 'README.md')]));
     const readSpy = vi.spyOn(fs.promises, 'readFile').mockRejectedValueOnce(new Error('Permission denied'));
 
     try {
@@ -322,7 +347,7 @@ describe('runner', () => {
     await withOutputFile(cacheRoot, 'runner-info.md', async (docPath) => {
       await fs.promises.mkdir(cacheRoot, { recursive: true });
       await fs.promises.writeFile(docPath, 'Dependency check');
-      vi.mocked(glob).mockResolvedValueOnce([docPath]);
+      vi.mocked(glob).mockReturnValueOnce(globResults([docPath]));
 
       const results = await run({
         ...baseConfig,
@@ -824,7 +849,7 @@ describe('runner', () => {
         const docPath = path.join(rootDir, 'README.md');
         await fs.promises.mkdir(rootDir, { recursive: true });
         await fs.promises.writeFile(docPath, '# Test');
-        vi.mocked(glob).mockResolvedValueOnce([docPath]);
+        vi.mocked(glob).mockReturnValueOnce(globResults([docPath]));
 
         await run({
           ...baseConfig,
@@ -1035,7 +1060,7 @@ describe('runner', () => {
         });
         const mockScans = (): void => {
           mockDocumentScan(docPath);
-          vi.mocked(glob).mockResolvedValueOnce([sourcePath]);
+          vi.mocked(glob).mockReturnValueOnce(sourceGlobResults([sourcePath]));
         };
 
         mockScans();
@@ -1063,7 +1088,7 @@ describe('runner', () => {
         });
         const mockScans = (): void => {
           mockDocumentScan(docPath);
-          vi.mocked(glob).mockResolvedValueOnce([sourcePath]);
+          vi.mocked(glob).mockReturnValueOnce(sourceGlobResults([sourcePath]));
         };
         const validateSpy = vi.spyOn(ValidationEngine.prototype, 'validate');
         const readSpy = vi.spyOn(fs.promises, 'readFile');
@@ -1100,7 +1125,9 @@ describe('runner', () => {
         const readSpy = vi.spyOn(fs.promises, 'readFile');
         vi.mocked(glob).mockClear();
         try {
-          vi.mocked(glob).mockResolvedValueOnce([]).mockResolvedValueOnce([sourcePath]);
+          vi.mocked(glob)
+            .mockReturnValueOnce(globResults([]))
+            .mockReturnValueOnce(sourceGlobResults([sourcePath]));
           await run(config);
 
           expect(filterSpy).not.toHaveBeenCalled();
@@ -1338,7 +1365,7 @@ describe('runner', () => {
       await fs.promises.mkdir(path.dirname(stateFile), { recursive: true });
       await fs.promises.writeFile(docPath, '# Test');
       await fs.promises.writeFile(stateFile, 'sentinel');
-      vi.mocked(glob).mockResolvedValueOnce([docPath]);
+      vi.mocked(glob).mockReturnValueOnce(globResults([docPath]));
       const readSpy = vi.spyOn(fs.promises, 'readFile');
       const spy = captureLog();
 

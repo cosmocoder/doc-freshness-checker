@@ -65,6 +65,27 @@ describe('SourceIndex', () => {
     });
   });
 
+  it('indexes source files through symlinked directories', async () => {
+    const rootDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'doc-freshness-source-symlink-'));
+    const targetDir = path.join(rootDir, 'source-target');
+    const linkedDir = path.join(rootDir, 'src', 'linked');
+
+    try {
+      await fs.promises.mkdir(path.dirname(linkedDir), { recursive: true });
+      await fs.promises.mkdir(targetDir);
+      await fs.promises.writeFile(path.join(targetDir, 'api.ts'), 'export class LinkedApi {}');
+      await fs.promises.symlink(targetDir, linkedDir, 'dir');
+
+      const snapshot = await loadBoth(new SourceIndex(), { rootDir, sourcePatterns: ['src/**/*.ts'] });
+
+      expect(snapshot.patternFiles.has(path.join('src', 'linked', 'api.ts'))).toBe(true);
+      expect(snapshot.snippetFiles.has(path.join('src', 'linked', 'api.ts'))).toBe(true);
+    }
+    finally {
+      await fs.promises.rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
   it("starts only the requested view and performs only that view's reads", async () => {
     await withSources({ 'src/api.ts': 'class TypeScript {}', 'src/api.rs': 'struct Rust {}' }, async (rootDir) => {
       const readFile = vi.spyOn(fs.promises, 'readFile');
