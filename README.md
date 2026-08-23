@@ -121,7 +121,7 @@ doc-freshness [options]
 
 Options:
   -c, --config <path>     Path to config file
-  -r, --reporter <type>   Reporter type (console, json, markdown, enhanced)
+  -r, --reporter <type>   Reporter type (choices: "console", "json", "markdown", "enhanced")
   -o, --output <path>     Output file path for reports
   -v, --verbose           Enable verbose logging
   --only <types>          Only check specific reference types (comma-separated)
@@ -137,6 +137,8 @@ Options:
 ```
 
 Incremental mode skips unchanged documents only after a clean run when the effective configuration and project inventory are unchanged. It conservatively revalidates all documents when filesystem or external inputs cannot be fingerprinted safely.
+
+`--reporter` accepts only the four choices shown above. An unsupported value prints an error and exits with status `1`.
 
 ### Common Examples
 

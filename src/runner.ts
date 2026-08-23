@@ -281,7 +281,7 @@ async function generateReports(
   freshnessScores: ProjectScores | null,
   _vectorMismatches: VectorMismatch[] | null
 ): Promise<void> {
-  const reporters = config.reporters || ['console'];
+  const reporters = config.reporters?.length ? config.reporters : ['console'];
 
   const emitOutput = async (output: string, reportName: string): Promise<void> => {
     if (config.outputPath) {
@@ -329,9 +329,7 @@ async function generateReports(
       }
 
       default:
-        if (config.verbose) {
-          console.warn(`Unknown reporter type: ${reporterType}`);
-        }
+        console.warn(`Unknown reporter type: ${reporterType}`);
     }
   }
 }
