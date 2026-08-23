@@ -5,7 +5,8 @@ import { glob } from 'glob';
 import { run, runWithConfig } from './runner.js';
 import { ValidationEngine } from './validators/validationEngine.js';
 import { IncrementalChecker } from './utils/incremental.js';
-import type { BaseExtractor, BaseValidator, DocFreshnessConfig, ReporterType } from './types.js';
+import { FileValidator } from './validators/fileValidator.js';
+import type { BaseExtractor, BaseValidator, DocFreshnessConfig, Reference, ReporterType } from './types.js';
 import { withOutputFile } from './test-utils/tempFiles.js';
 import { captureConsoleLog, captureConsoleWarn } from './test-utils/console.js';
 
@@ -135,6 +136,84 @@ describe('runner', () => {
       customValidators: { custom: { validateBatch } } as unknown as DocFreshnessConfig['customValidators'],
     });
     expect(true).toBe(true);
+  });
+
+  it.each(['supportsFormat', 'extract'] as const)('propagates custom extractor %s failures', async (hook) => {
+    vi.mocked(glob).mockResolvedValueOnce([path.join(process.cwd(), 'README.md')]);
+    const failure = (): never => {
+      throw new Error(`${hook} crashed`);
+    };
+    const extractor = {
+      supportsFormat: hook === 'supportsFormat' ? failure : () => true,
+      extract: hook === 'extract' ? failure : () => [],
+    };
+
+    await expect(
+      run({
+        ...baseConfig,
+        customExtractors: [extractor] as unknown as DocFreshnessConfig['customExtractors'],
+      })
+    ).rejects.toThrow(`${hook} crashed`);
+  });
+
+  it('propagates custom validator execution failures', async () => {
+    const reference: Reference = {
+      type: 'custom',
+      value: 'value',
+      lineNumber: 1,
+      raw: 'value',
+      sourceFile: 'README.md',
+    };
+    vi.mocked(glob).mockResolvedValueOnce([path.join(process.cwd(), 'README.md')]);
+
+    await expect(
+      run({
+        ...baseConfig,
+        customExtractors: [{ extract: () => [reference], supportsFormat: () => true }] as unknown as DocFreshnessConfig['customExtractors'],
+        customValidators: {
+          custom: { validateBatch: vi.fn().mockRejectedValue(new Error('custom validator crashed')) },
+        },
+      })
+    ).rejects.toThrow('custom validator crashed');
+  });
+
+  it('propagates built-in validator execution failures', async () => {
+    const reference: Reference = {
+      type: 'file-path',
+      value: './src/index.ts',
+      lineNumber: 1,
+      raw: './src/index.ts',
+      sourceFile: 'README.md',
+    };
+    vi.mocked(glob).mockResolvedValueOnce([path.join(process.cwd(), 'README.md')]);
+    const validateSpy = vi.spyOn(FileValidator.prototype, 'validateBatch').mockRejectedValueOnce(new Error('file validator crashed'));
+
+    try {
+      await expect(
+        run({
+          ...baseConfig,
+          rules: { ...baseConfig.rules, 'file-path': { enabled: true } },
+          customExtractors: [
+            { extract: () => [reference], supportsFormat: () => true },
+          ] as unknown as DocFreshnessConfig['customExtractors'],
+        })
+      ).rejects.toThrow('file validator crashed');
+    }
+    finally {
+      validateSpy.mockRestore();
+    }
+  });
+
+  it('propagates matched-document read failures', async () => {
+    vi.mocked(glob).mockResolvedValueOnce([path.join(process.cwd(), 'README.md')]);
+    const readSpy = vi.spyOn(fs.promises, 'readFile').mockRejectedValueOnce(new Error('Permission denied'));
+
+    try {
+      await expect(run(baseConfig)).rejects.toThrow('Permission denied');
+    }
+    finally {
+      readSpy.mockRestore();
+    }
   });
 
   describe('verbose mode', () => {
@@ -415,7 +494,7 @@ describe('runner', () => {
         });
         await fs.promises.writeFile(docPath, '[target](target.ts)');
         mockDocumentScan(docPath);
-        await run(throwingConfig);
+        await expect(run(throwingConfig)).rejects.toThrow('validator failed');
         expect(JSON.parse(await fs.promises.readFile(path.join(cacheDir, 'file-hashes.json'), 'utf-8')).clean).toBe(false);
       });
     });

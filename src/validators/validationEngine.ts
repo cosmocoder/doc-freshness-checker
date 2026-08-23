@@ -70,27 +70,17 @@ export class ValidationEngine {
           continue;
         }
 
-        try {
-          const validationResults = await validator.validateBatch(refs, doc, this.config);
+        const validationResults = await validator.validateBatch(refs, doc, this.config);
 
-          for (const result of validationResults) {
-            if (!result.valid) {
-              this.latestHadInvalidResults = true;
-            }
-            const bucket = this.classifyResult(result);
-            this.incrementSummary(results, bucket);
-            if (bucket === 'error' || bucket === 'warning') {
-              docResult.issues.push(result);
-            }
+        for (const result of validationResults) {
+          if (!result.valid) {
+            this.latestHadInvalidResults = true;
           }
-        }
-        catch (error) {
-          this.latestHadIncompleteValidation = true;
-          if (this.config.verbose) {
-            console.warn(`Warning: Validator for ${type} failed: ${(error as Error).message}`);
+          const bucket = this.classifyResult(result);
+          this.incrementSummary(results, bucket);
+          if (bucket === 'error' || bucket === 'warning') {
+            docResult.issues.push(result);
           }
-          results.summary.total += refs.length;
-          results.summary.skipped += refs.length;
         }
       }
 

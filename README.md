@@ -352,6 +352,8 @@ const results = await run(config);
 console.log(results.summary);
 ```
 
+`run()` and `runWithConfig()` reject when a matched document cannot be read or an extractor or validator throws. Matched paths confirmed to have disappeared between discovery and reading are ignored as a normal filesystem race.
+
 Key exports:
 
 | Export                                                                    | Purpose                                              |

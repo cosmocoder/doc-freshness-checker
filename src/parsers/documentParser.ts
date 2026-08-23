@@ -36,35 +36,46 @@ export class DocumentParser {
     const documents: Document[] = [];
 
     for (const filePath of files) {
+      let content: string;
       try {
-        const content = await fs.promises.readFile(filePath, 'utf-8');
-        const relativePath = path.relative(this.config.rootDir || process.cwd(), filePath);
-        const format = this.detectFormat(filePath);
-
-        const doc: Document = {
-          path: relativePath,
-          absolutePath: filePath,
-          content,
-          format,
-          lines: content.split('\n'),
-          references: [],
-        };
-
-        // Extract all reference types
-        for (const extractor of this.extractors) {
-          if (extractor.supportsFormat(format)) {
-            const refs = extractor.extract(doc);
-            doc.references.push(...refs);
-          }
-        }
-
-        documents.push(doc);
+        content = await fs.promises.readFile(filePath, 'utf-8');
       }
       catch (error) {
-        if (this.config.verbose) {
-          console.warn(`Warning: Could not read ${filePath}: ${(error as Error).message}`);
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error;
+        }
+        try {
+          await fs.promises.lstat(filePath);
+        }
+        catch (statError) {
+          if ((statError as NodeJS.ErrnoException).code === 'ENOENT') {
+            continue;
+          }
+          throw error;
+        }
+        throw error;
+      }
+      const relativePath = path.relative(this.config.rootDir || process.cwd(), filePath);
+      const format = this.detectFormat(filePath);
+
+      const doc: Document = {
+        path: relativePath,
+        absolutePath: filePath,
+        content,
+        format,
+        lines: content.split('\n'),
+        references: [],
+      };
+
+      // Extract all reference types
+      for (const extractor of this.extractors) {
+        if (extractor.supportsFormat(format)) {
+          const refs = extractor.extract(doc);
+          doc.references.push(...refs);
         }
       }
+
+      documents.push(doc);
     }
 
     return documents;
