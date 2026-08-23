@@ -24,10 +24,16 @@ describe('EnhancedReporter', () => {
             severity: 'warning',
             message: 'URL returned 404',
           },
+          {
+            reference: { type: 'dependency', value: 'missing-pkg', lineNumber: 20, raw: 'missing-pkg', sourceFile: 'api.md' },
+            valid: false,
+            severity: 'info',
+            message: 'Package not found',
+          },
         ],
       },
     ],
-    summary: { total: 3, valid: 1, errors: 1, warnings: 1, skipped: 0 },
+    summary: { total: 4, valid: 1, errors: 1, warnings: 1, info: 1, skipped: 0 },
   };
 
   const emptyResults: ValidationResults = {
@@ -38,9 +44,10 @@ describe('EnhancedReporter', () => {
   it('generates scan report with validation summary', () => {
     const report = reporter.generateScanReport(results, null, null, null);
     expect(report).toContain('Documentation Freshness Scan Report');
-    expect(report).toContain('Total References:** 3');
+    expect(report).toContain('Total References:** 4');
     expect(report).toContain('Errors:** 1');
     expect(report).toContain('Warnings:** 1');
+    expect(report).toContain('Info:** 1');
   });
 
   it('includes freshness scores with grade table', () => {
@@ -116,10 +123,11 @@ describe('EnhancedReporter', () => {
     expect(report).toContain('Grade: B');
   });
 
-  it('shows issues table with both error and warning severity, plus suggestions', () => {
+  it('shows error, warning, and info findings distinctly', () => {
     const report = reporter.generateScanReport(results, null, null, null);
     expect(report).toContain('❌');
     expect(report).toContain('⚠️');
+    expect(report).toContain('ℹ️ dependency');
     expect(report).toContain('File not found');
     expect(report).toContain('missing.tsx');
     expect(report).toContain('URL returned 404');
@@ -128,6 +136,7 @@ describe('EnhancedReporter', () => {
   it('omits affected documents section when no documents have issues', () => {
     const report = reporter.generateScanReport(emptyResults, null, null, null);
     expect(report).not.toContain('Affected Documents');
+    expect(report).toContain('Info:** 0');
   });
 
   it('shows recent code changes impacting docs when git is available', () => {

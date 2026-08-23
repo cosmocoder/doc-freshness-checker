@@ -215,6 +215,8 @@ export interface ValidationSummary {
   valid: number;
   errors: number;
   warnings: number;
+  /** Informational findings. Optional so older ValidationResults object literals remain assignable. */
+  info?: number;
   skipped: number;
 }
 

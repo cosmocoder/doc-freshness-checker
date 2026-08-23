@@ -158,6 +158,7 @@ describe('DirectoryValidator', () => {
     };
     const results = await validator.validateBatch([makeRef('ExampleProject/nonexistent-file-zzz.ts')], doc, noSkipConfig);
     expect(results[0].valid).toBe(false);
+    expect(results[0].severity).toBe('info');
     expect(results[0].message).toContain('illustrative');
   });
 
@@ -169,6 +170,7 @@ describe('DirectoryValidator', () => {
     };
     const results = await validator.validateBatch([makeRef('../../../../etc/YourProject')], doc, noSkipConfig);
     expect(results[0].valid).toBe(false);
+    expect(results[0].severity).toBe('info');
     expect(results[0].message).toContain('escapes project root');
   });
 

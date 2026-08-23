@@ -28,10 +28,16 @@ describe('ConsoleReporter', () => {
             severity: 'warning',
             message: 'URL returned 404',
           },
+          {
+            reference: { type: 'dependency', value: 'missing-pkg', lineNumber: 30, raw: 'missing-pkg', sourceFile: 'api.md' },
+            valid: false,
+            severity: 'info',
+            message: 'Package not found',
+          },
         ],
       },
     ],
-    summary: { total: 5, valid: 3, errors: 1, warnings: 1, skipped: 0 },
+    summary: { total: 6, valid: 3, errors: 1, warnings: 1, info: 1, skipped: 0 },
   };
 
   it('generate() logs summary and "up to date" for clean results', () => {
@@ -39,16 +45,19 @@ describe('ConsoleReporter', () => {
     reporter.generate(cleanResults);
     const output = spy.mock.calls.flat().join('\n');
     expect(output).toContain('Valid: 5');
+    expect(output).toContain('Info: 0');
     expect(output).toContain('up to date');
   });
 
-  it('generate() logs issues with error and warning icons', () => {
+  it('generate() logs error, warning, and info findings distinctly', () => {
     const spy = captureConsoleLog();
     reporter.generate(resultsWithIssues);
     const output = spy.mock.calls.flat().join('\n');
     expect(output).toContain('File not found');
     expect(output).toContain('missing.tsx');
     expect(output).toContain('URL returned 404');
+    expect(output).toContain('Info: 1');
+    expect(output).toContain('ℹ️ Line 30: Package not found');
     expect(output).toContain('Line 10');
     expect(output).toContain('Line 20');
   });

@@ -22,14 +22,15 @@ function makeConfig(): DocFreshnessConfig {
   };
 }
 
-function makeResults(errors: number): ValidationResults {
+function makeResults(errors: number, info: number = 0): ValidationResults {
   return {
     documents: [],
     summary: {
-      total: 0,
+      total: errors + info,
       valid: 0,
       errors,
       warnings: 0,
+      info,
       skipped: 0,
     },
   };
@@ -129,6 +130,19 @@ describe('runCli', () => {
     );
 
     expect(exitCode).toBe(1);
+  });
+
+  it('returns 0 when validation reports only info findings', async () => {
+    const exitCode = await runCli(
+      {},
+      {
+        loadConfig: vi.fn().mockResolvedValue(makeConfig()),
+        run: vi.fn().mockResolvedValue(makeResults(0, 2)),
+        logError: vi.fn(),
+      }
+    );
+
+    expect(exitCode).toBe(0);
   });
 
   it('returns 1 and logs error details on exception', async () => {
