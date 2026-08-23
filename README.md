@@ -352,6 +352,10 @@ const results = await run(config);
 console.log(results.summary);
 ```
 
+> [!WARNING]
+> `Plugin` is deprecated because it is not consumed by `run()` and is planned for removal in v3.0.0. Use
+> `DocFreshnessConfig.customExtractors` and `DocFreshnessConfig.customValidators` for supported extensions.
+
 Key exports:
 
 | Export                                                                    | Purpose                                              |
