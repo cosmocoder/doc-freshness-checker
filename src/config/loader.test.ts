@@ -9,6 +9,7 @@ describe('DEFAULT_CONFIG', () => {
     expect(DEFAULT_CONFIG.urlValidation?.enabled).toBe(true);
     expect(DEFAULT_CONFIG.urlValidation?.timeout).toBe(10000);
     expect(DEFAULT_CONFIG.rules?.['file-path']?.enabled).toBe(true);
+    expect(DEFAULT_CONFIG.rules?.dependency).toMatchObject({ enabled: true, severity: 'info' });
     expect(DEFAULT_CONFIG.reporters).toEqual(['console']);
     expect(DEFAULT_CONFIG.verbose).toBe(false);
   });

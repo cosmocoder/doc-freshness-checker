@@ -39,7 +39,8 @@ export class EnhancedReporter {
     report += `- **Total References:** ${results.summary.total}\n`;
     report += `- **Valid:** ${results.summary.valid}\n`;
     report += `- **Errors:** ${results.summary.errors}\n`;
-    report += `- **Warnings:** ${results.summary.warnings}\n\n`;
+    report += `- **Warnings:** ${results.summary.warnings}\n`;
+    report += `- **Info:** ${results.summary.info ?? 0}\n\n`;
 
     // Affected Documents (DeepDocs-style)
     if (results.documents.length > 0) {
@@ -68,7 +69,7 @@ export class EnhancedReporter {
         report += '|------|------|-------|------------|\n';
 
         for (const issue of doc.issues) {
-          const severity = issue.severity === 'error' ? '❌' : '⚠️';
+          const severity = issue.severity === 'error' ? '❌' : issue.severity === 'info' ? 'ℹ️' : '⚠️';
           const suggestion = escapeMarkdownTableCell(issue.suggestion || '-');
           const message = escapeMarkdownTableCell(issue.message || '');
           report += `| ${issue.reference.lineNumber} | ${severity} ${issue.reference.type} | ${message} | ${suggestion} |\n`;

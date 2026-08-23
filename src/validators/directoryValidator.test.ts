@@ -85,6 +85,30 @@ describe('DirectoryValidator', () => {
     expect(results[0].valid).toBe(false);
   });
 
+  it.each([
+    ['non-illustrative then illustrative', [false, true]],
+    ['illustrative then non-illustrative', [true, false]],
+  ] as const)('derives cache-hit severity and message from the current reference: %s', async (_case, illustrative) => {
+    const validator = new DirectoryValidator();
+    const noSkipConfig: DocFreshnessConfig = {
+      ...config,
+      rules: { 'directory-structure': { enabled: true, severity: 'warning', skipIllustrative: false } },
+    };
+    const itemPath = 'missing-mixed-cache-path';
+    const results = await validator.validateBatch(
+      illustrative.map((isIllustrative, index) => makeRef(itemPath, { isIllustrative, lineNumber: index + 1 })),
+      doc,
+      noSkipConfig
+    );
+
+    expect(results.map(({ severity, message }) => ({ severity, message }))).toEqual(
+      illustrative.map((isIllustrative) => ({
+        severity: isIllustrative ? 'info' : 'warning',
+        message: isIllustrative ? `Directory/file not found (illustrative): ${itemPath}` : `Directory/file not found: ${itemPath}`,
+      }))
+    );
+  });
+
   it('provides suggestions for similar paths (e.g., case mismatch)', async () => {
     const validator = new DirectoryValidator();
     const results = await validator.validateBatch([makeRef('SRC')], doc, config);
@@ -158,6 +182,7 @@ describe('DirectoryValidator', () => {
     };
     const results = await validator.validateBatch([makeRef('ExampleProject/nonexistent-file-zzz.ts')], doc, noSkipConfig);
     expect(results[0].valid).toBe(false);
+    expect(results[0].severity).toBe('info');
     expect(results[0].message).toContain('illustrative');
   });
 
@@ -169,6 +194,7 @@ describe('DirectoryValidator', () => {
     };
     const results = await validator.validateBatch([makeRef('../../../../etc/YourProject')], doc, noSkipConfig);
     expect(results[0].valid).toBe(false);
+    expect(results[0].severity).toBe('info');
     expect(results[0].message).toContain('escapes project root');
   });
 

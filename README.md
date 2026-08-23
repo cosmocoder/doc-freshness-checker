@@ -75,10 +75,11 @@ Example console output:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 📊 Summary:
-   Total references checked: 42
+   Total references checked: 43
    ✅ Valid: 38
    ❌ Errors: 2
    ⚠️  Warnings: 2
+   ℹ️  Info: 1
    ⏭️  Skipped: 0
 
 📋 Issues by Document:
@@ -94,6 +95,7 @@ Example console output:
   ❌ Line 45: Broken URL: https://example.com/dead-link (404)
   ⚠️  Line 82: Symbol not found in source: calculateTotal()
      💡 Symbol may have been renamed or removed
+  ℹ️  Line 96: Package not found in dependencies: optional-package
 ```
 
 Create a minimal config:

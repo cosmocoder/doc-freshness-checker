@@ -216,6 +216,33 @@ describe('runner', () => {
     }
   });
 
+  it('preserves dependency info findings in run results', async () => {
+    const reference: Reference = {
+      type: 'dependency',
+      value: 'definitely-not-installed-doc-freshness-package',
+      lineNumber: 1,
+      raw: 'definitely-not-installed-doc-freshness-package',
+      sourceFile: 'README.md',
+    };
+    await withOutputFile(cacheRoot, 'runner-info.md', async (docPath) => {
+      await fs.promises.mkdir(cacheRoot, { recursive: true });
+      await fs.promises.writeFile(docPath, 'Dependency check');
+      vi.mocked(glob).mockResolvedValueOnce([docPath]);
+
+      const results = await run({
+        ...baseConfig,
+        rules: { ...baseConfig.rules, dependency: { enabled: true, severity: 'info' } },
+        customExtractors: [{ extract: () => [reference], supportsFormat: () => true }] as unknown as DocFreshnessConfig['customExtractors'],
+      });
+
+      expect(results.summary.info).toBe(1);
+      expect(results.documents[0].issues[0]).toMatchObject({
+        severity: 'info',
+        message: 'Package not found in dependencies: definitely-not-installed-doc-freshness-package',
+      });
+    });
+  });
+
   describe('verbose mode', () => {
     it('logs config file path and source patterns', async () => {
       const spy = captureLog();

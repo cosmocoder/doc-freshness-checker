@@ -19,6 +19,7 @@ export class MarkdownReporter {
     md += `| ✅ Valid | ${summary.valid} |\n`;
     md += `| ❌ Errors | ${summary.errors} |\n`;
     md += `| ⚠️ Warnings | ${summary.warnings} |\n`;
+    md += `| ℹ️ Info | ${summary.info ?? 0} |\n`;
     md += `| ⏭️ Skipped | ${summary.skipped} |\n\n`;
 
     if (documents.length === 0) {
@@ -34,7 +35,7 @@ export class MarkdownReporter {
       md += '|------|----------|-------|------------|\n';
 
       for (const issue of doc.issues) {
-        const severity = issue.severity === 'error' ? '❌ Error' : '⚠️ Warning';
+        const severity = issue.severity === 'error' ? '❌ Error' : issue.severity === 'info' ? 'ℹ️ Info' : '⚠️ Warning';
         const suggestion = escapeMarkdownTableCell(issue.suggestion || '-');
         const message = escapeMarkdownTableCell(issue.message || '');
         md += `| ${issue.reference.lineNumber} | ${severity} | ${message} | ${suggestion} |\n`;

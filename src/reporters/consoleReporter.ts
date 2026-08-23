@@ -15,6 +15,7 @@ export class ConsoleReporter {
     console.log(`   ✅ Valid: ${summary.valid}`);
     console.log(`   ❌ Errors: ${summary.errors}`);
     console.log(`   ⚠️  Warnings: ${summary.warnings}`);
+    console.log(`   ℹ️  Info: ${summary.info ?? 0}`);
     console.log(`   ⏭️  Skipped: ${summary.skipped}`);
 
     if (documents.length === 0) {
@@ -29,7 +30,7 @@ export class ConsoleReporter {
       console.log('─'.repeat(40));
 
       for (const issue of doc.issues) {
-        const icon = issue.severity === 'error' ? '❌' : '⚠️';
+        const icon = issue.severity === 'error' ? '❌' : issue.severity === 'info' ? 'ℹ️' : '⚠️';
         const ref = issue.reference;
         console.log(`  ${icon} Line ${ref.lineNumber}: ${issue.message}`);
         if (issue.suggestion) {

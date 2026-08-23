@@ -27,25 +27,33 @@ describe('MarkdownReporter', () => {
             severity: 'warning',
             message: 'URL returned 404',
           },
+          {
+            reference: { type: 'dependency', value: 'missing-pkg', lineNumber: 30, raw: 'missing-pkg', sourceFile: 'api.md' },
+            valid: false,
+            severity: 'info',
+            message: 'Package not found',
+          },
         ],
       },
     ],
-    summary: { total: 2, valid: 0, errors: 1, warnings: 1, skipped: 0 },
+    summary: { total: 3, valid: 0, errors: 1, warnings: 1, info: 1, skipped: 0 },
   };
 
   it('generates markdown with summary table', () => {
     const md = reporter.generate(cleanResults);
     expect(md).toContain('# Documentation Freshness Report');
     expect(md).toContain('Total Checked | 2');
+    expect(md).toContain('Info | 0');
     expect(md).toContain('up to date');
   });
 
-  it('generates issues table with error and warning severities', () => {
+  it('generates issues table with error, warning, and info severities', () => {
     const md = reporter.generate(resultsWithIssues);
     expect(md).toContain('## Issues');
     expect(md).toContain('docs/api.md');
     expect(md).toContain('❌ Error');
     expect(md).toContain('⚠️ Warning');
+    expect(md).toContain('| 30 | ℹ️ Info |');
     expect(md).toContain('File not found');
     expect(md).toContain('missing.tsx');
     expect(md).toContain('URL returned 404');

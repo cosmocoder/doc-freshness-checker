@@ -39,6 +39,7 @@ export class ValidationEngine {
         valid: 0,
         errors: 0,
         warnings: 0,
+        info: 0,
         skipped: 0,
       },
     };
@@ -78,7 +79,7 @@ export class ValidationEngine {
           }
           const bucket = this.classifyResult(result);
           this.incrementSummary(results, bucket);
-          if (bucket === 'error' || bucket === 'warning') {
+          if (bucket === 'error' || bucket === 'warning' || bucket === 'info') {
             docResult.issues.push(result);
           }
         }
@@ -192,11 +193,11 @@ export class ValidationEngine {
     skipped?: boolean;
     valid: boolean;
     severity?: 'error' | 'warning' | 'info';
-  }): 'valid' | 'error' | 'warning' | 'skipped' {
+  }): 'valid' | 'error' | 'warning' | 'info' | 'skipped' {
     if (result.skipped) {
       return 'skipped';
     }
-    if (result.valid || result.severity === 'info') {
+    if (result.valid) {
       return 'valid';
     }
     if (result.severity === 'error') {
@@ -205,10 +206,13 @@ export class ValidationEngine {
     if (result.severity === 'warning') {
       return 'warning';
     }
-    return 'valid';
+    if (result.severity === 'info') {
+      return 'info';
+    }
+    return 'warning';
   }
 
-  private incrementSummary(results: ValidationResults, bucket: 'valid' | 'error' | 'warning' | 'skipped'): void {
+  private incrementSummary(results: ValidationResults, bucket: 'valid' | 'error' | 'warning' | 'info' | 'skipped'): void {
     results.summary.total++;
     switch (bucket) {
       case 'valid':
@@ -219,6 +223,9 @@ export class ValidationEngine {
         break;
       case 'warning':
         results.summary.warnings++;
+        break;
+      case 'info':
+        results.summary.info = (results.summary.info ?? 0) + 1;
         break;
       case 'skipped':
         results.summary.skipped++;

@@ -52,24 +52,31 @@ describe('ValidationEngine', () => {
     expect(engine.hadInvalidResults()).toBe(false);
   });
 
-  it('counts errors, warnings, and skipped correctly', async () => {
+  it('counts valid, error, warning, info, and skipped results independently', async () => {
     const engine = new ValidationEngine(config);
-    const refs = [makeRef('file-path', 'a.ts'), makeRef('file-path', 'b.ts'), makeRef('file-path', 'c.ts'), makeRef('file-path', 'd.ts')];
+    const refs = [
+      makeRef('file-path', 'a.ts'),
+      makeRef('file-path', 'b.ts'),
+      makeRef('file-path', 'c.ts'),
+      makeRef('file-path', 'd.ts'),
+      makeRef('file-path', 'e.ts'),
+    ];
 
     engine.registerValidator(
       'file-path',
       new StubValidator([
-        { reference: refs[0], valid: true },
+        { reference: refs[0], valid: true, severity: 'info' },
         { reference: refs[1], valid: false, severity: 'error', message: 'not found' },
         { reference: refs[2], valid: false, severity: 'warning', message: 'stale' },
-        { reference: refs[3], valid: true, skipped: true },
+        { reference: refs[3], valid: false, severity: 'info', message: 'not installed' },
+        { reference: refs[4], valid: true, skipped: true },
       ])
     );
 
     const results = await engine.validate([makeDoc(refs)]);
-    expect(results.summary).toMatchObject({ total: 4, valid: 1, errors: 1, warnings: 1, skipped: 1 });
+    expect(results.summary).toEqual({ total: 5, valid: 1, errors: 1, warnings: 1, info: 1, skipped: 1 });
     expect(results.documents).toHaveLength(1);
-    expect(results.documents[0].issues).toHaveLength(2);
+    expect(results.documents[0].issues).toHaveLength(3);
     expect(engine.hadIncompleteValidation()).toBe(false);
   });
 
@@ -190,19 +197,30 @@ describe('ValidationEngine', () => {
     await expect(engine.validate([makeDoc([makeRef('file-path', 'a.ts')])])).rejects.toThrow('validator crashed');
   });
 
-  it('treats info-level issues as valid', async () => {
+  it('preserves invalid info-level findings', async () => {
     const engine = new ValidationEngine(config);
     const ref = makeRef('file-path', 'a.ts');
     engine.registerValidator('file-path', new StubValidator([{ reference: ref, valid: false, severity: 'info', message: 'info only' }]));
 
     const results = await engine.validate([makeDoc([ref])]);
-    expect(results.summary.valid).toBe(1);
+    expect(results.summary.valid).toBe(0);
+    expect(results.summary.info).toBe(1);
     expect(results.summary.errors).toBe(0);
-    expect(results.documents).toHaveLength(0);
+    expect(results.documents[0].issues[0].message).toBe('info only');
     expect(engine.hadInvalidResults()).toBe(true);
 
     engine.registerValidator('file-path', new StubValidator([{ reference: ref, valid: true }]));
     await engine.validate([makeDoc([ref])]);
     expect(engine.hadInvalidResults()).toBe(false);
+  });
+
+  it('reports invalid results without a severity as warnings', async () => {
+    const engine = new ValidationEngine(config);
+    const ref = makeRef('file-path', 'a.ts');
+    engine.registerValidator('file-path', new StubValidator([{ reference: ref, valid: false, message: 'invalid result' }]));
+
+    const results = await engine.validate([makeDoc([ref])]);
+    expect(results.summary).toMatchObject({ valid: 0, warnings: 1 });
+    expect(results.documents[0].issues[0].message).toBe('invalid result');
   });
 });

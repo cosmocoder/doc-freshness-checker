@@ -5,7 +5,7 @@ import type { ProjectScores, ValidationResults } from '../types.js';
  */
 export class JsonReporter {
   generate(results: ValidationResults): string {
-    return JSON.stringify(results, null, 2);
+    return JSON.stringify({ ...results, summary: { ...results.summary, info: results.summary.info ?? 0 } }, null, 2);
   }
 
   /**
@@ -14,6 +14,7 @@ export class JsonReporter {
   generateWithScores(results: ValidationResults, freshnessScores: ProjectScores | null): string {
     const output = {
       ...results,
+      summary: { ...results.summary, info: results.summary.info ?? 0 },
       freshnessScores: freshnessScores || null,
       generatedAt: new Date().toISOString(),
     };

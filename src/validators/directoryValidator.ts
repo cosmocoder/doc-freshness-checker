@@ -98,8 +98,12 @@ export class DirectoryValidator {
         reference: ref,
         valid: cached.found,
         foundAt: cached.foundAt,
-        severity: cached.found ? undefined : baseSeverity,
-        message: cached.found ? undefined : `Directory/file not found: ${itemPath}`,
+        severity: cached.found ? undefined : severityForIllustrative(isIllustrative, baseSeverity),
+        message: cached.found
+          ? undefined
+          : isIllustrative
+            ? `Directory/file not found (illustrative): ${itemPath}`
+            : `Directory/file not found: ${itemPath}`,
         suggestion: cached.suggestion,
       };
     }
