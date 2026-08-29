@@ -58,11 +58,9 @@ export async function loadConfig(configPath?: string): Promise<DocFreshnessConfi
 async function loadESMConfig(content: string, filePath: string): Promise<DocFreshnessConfig> {
   const transformedContent = transformConfigContent(content);
 
-  const tempDir = path.join(path.dirname(filePath), '.doc-freshness-cache');
-  const tempFile = path.join(tempDir, `temp-config-${Date.now()}-${crypto.randomUUID()}.mjs`);
+  const tempFile = path.join(path.dirname(filePath), `.doc-freshness-temp-config-${Date.now()}-${crypto.randomUUID()}.mjs`);
 
   try {
-    await fs.promises.mkdir(tempDir, { recursive: true });
     await fs.promises.writeFile(tempFile, transformedContent, 'utf-8');
 
     const configUrl = pathToFileURL(tempFile).href;
