@@ -66,6 +66,7 @@ Manifest candidate list includes:
 - `--reporter` accepts `console`, `json`, `markdown`, or `enhanced`; other values print an error and exit with status `1`.
 - An empty configured reporter list falls back to `console` so a successful run still produces output.
 - `--only` accepts built-in rules and configured custom rule keys.
+- `--only` trims rule names, ignores empty comma-separated segments, and rejects empty or unknown selections while listing valid choices.
 - `--files`, `--manifest`, and `--source` are comma-split lists and replace prior values.
 - `--no-cache` disables cache usage; `--clear-cache` still requests cache clearing early in runtime.
 - `--output` controls file output for reporters that emit string payloads (`json`, `markdown`, `enhanced`).

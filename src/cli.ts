@@ -86,12 +86,23 @@ export function applyCliOverrides(config: DocFreshnessConfig, options: CLIOption
     config.urlValidation ??= {};
     config.urlValidation.enabled = false;
   }
-  if (options.only) {
-    const types = options.only.split(',');
+  if (options.only !== undefined) {
+    const types = options.only
+      .split(',')
+      .map((type) => type.trim())
+      .filter(Boolean);
     const rules = (config.rules ??= {});
-    const knownRules = new Set<string>([...BUILT_IN_RULE_TYPES, ...Object.keys(rules), ...Object.keys(config.customValidators ?? {})]);
-    for (const rule of knownRules) {
-      (rules[rule] ??= {}).enabled = types.includes(rule);
+    const selectableRules = new Set<string>([...BUILT_IN_RULE_TYPES, ...Object.keys(config.customValidators ?? {})]);
+    const validRuleTypes = [...selectableRules].join(', ');
+    if (types.length === 0) {
+      throw new Error(`At least one rule type is required. Valid rule types: ${validRuleTypes}`);
+    }
+    const unknownTypes = types.filter((type) => !selectableRules.has(type));
+    if (unknownTypes.length > 0) {
+      throw new Error(`Unknown rule type: ${unknownTypes.join(', ')}. Valid rule types: ${validRuleTypes}`);
+    }
+    for (const rule of new Set([...Object.keys(rules), ...selectableRules])) {
+      (rules[rule] ??= {}).enabled = selectableRules.has(rule) && types.includes(rule);
     }
   }
   if (options.files) {
