@@ -1,5 +1,17 @@
 import type { DocFreshnessConfig } from '../types.js';
 
+export const BUILT_IN_RULE_TYPES = [
+  'file-path',
+  'external-url',
+  'version',
+  'directory-structure',
+  'code-pattern',
+  'code-snippet',
+  'dependency',
+] as const;
+
+export type BuiltInRuleType = (typeof BUILT_IN_RULE_TYPES)[number];
+
 /**
  * Default configuration values for Documentation Freshness Checker
  */
@@ -74,6 +86,10 @@ export const DEFAULT_CONFIG: DocFreshnessConfig = {
       skipIllustrative: true,
     },
     'code-pattern': {
+      enabled: true,
+      severity: 'warning',
+    },
+    'code-snippet': {
       enabled: true,
       severity: 'warning',
     },

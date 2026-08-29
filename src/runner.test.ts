@@ -3,6 +3,7 @@ import os from 'os';
 import path from 'path';
 import { glob } from 'glob';
 import { run, runWithConfig } from './runner.js';
+import { BUILT_IN_RULE_TYPES } from './config/defaults.js';
 import { ValidationEngine } from './validators/validationEngine.js';
 import { IncrementalChecker } from './utils/incremental.js';
 import { FileValidator } from './validators/fileValidator.js';
@@ -62,14 +63,7 @@ describe('runner', () => {
     include: [],
     exclude: [],
     urlValidation: { enabled: false },
-    rules: {
-      'file-path': { enabled: false },
-      'external-url': { enabled: false },
-      version: { enabled: false },
-      'directory-structure': { enabled: false },
-      'code-pattern': { enabled: false },
-      dependency: { enabled: false },
-    },
+    rules: Object.fromEntries(BUILT_IN_RULE_TYPES.map((rule) => [rule, { enabled: false }])),
     graph: { enabled: false },
     git: { enabled: false },
     freshnessScoring: { enabled: false },

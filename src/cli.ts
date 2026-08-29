@@ -6,6 +6,7 @@ import { loadConfig } from './config/loader.js';
 import { readFileSync, realpathSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join, resolve } from 'path';
+import { BUILT_IN_RULE_TYPES } from './config/defaults.js';
 import type { DocFreshnessConfig, ValidationResults } from './types.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -85,13 +86,23 @@ export function applyCliOverrides(config: DocFreshnessConfig, options: CLIOption
     config.urlValidation ??= {};
     config.urlValidation.enabled = false;
   }
-  if (options.only) {
-    const types = options.only.split(',');
+  if (options.only !== undefined) {
+    const types = options.only
+      .split(',')
+      .map((type) => type.trim())
+      .filter(Boolean);
     const rules = (config.rules ??= {});
-    for (const [rule, ruleConfig] of Object.entries(rules)) {
-      if (ruleConfig) {
-        ruleConfig.enabled = types.includes(rule);
-      }
+    const selectableRules = new Set<string>([...BUILT_IN_RULE_TYPES, ...Object.keys(config.customValidators ?? {})]);
+    const validRuleTypes = [...selectableRules].join(', ');
+    if (types.length === 0) {
+      throw new Error(`At least one rule type is required. Valid rule types: ${validRuleTypes}`);
+    }
+    const unknownTypes = types.filter((type) => !selectableRules.has(type));
+    if (unknownTypes.length > 0) {
+      throw new Error(`Unknown rule type: ${unknownTypes.join(', ')}. Valid rule types: ${validRuleTypes}`);
+    }
+    for (const rule of new Set([...Object.keys(rules), ...selectableRules])) {
+      (rules[rule] ??= {}).enabled = selectableRules.has(rule) && types.includes(rule);
     }
   }
   if (options.files) {

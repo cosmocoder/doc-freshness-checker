@@ -27,8 +27,10 @@ import { FreshnessScorer } from './scoring/freshnessScorer.js';
 import { IncrementalChecker } from './utils/incremental.js';
 import { VectorSearch } from './semantic/vectorSearch.js';
 import { loadConfig } from './config/loader.js';
+import { BUILT_IN_RULE_TYPES } from './config/defaults.js';
+import type { BuiltInRuleType } from './config/defaults.js';
 import type { CodeDocGraph } from './graph/codeDocGraph.js';
-import type { DocFreshnessConfig, ProjectScores, ReporterType, ValidationResults, VectorMismatch } from './types.js';
+import type { BaseValidator, DocFreshnessConfig, ProjectScores, ReporterType, ValidationResults, VectorMismatch } from './types.js';
 
 const REPORTER_OUTPUT: Record<ReporterType, 'console' | 'stable' | 'timestamped'> = {
   console: 'console',
@@ -86,14 +88,18 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
   // Register validators
   const codePatternValidator = new CodePatternValidator();
   const urlValidator = new UrlValidator();
-
-  validationEngine.registerValidator('file-path', new FileValidator());
-  validationEngine.registerValidator('external-url', urlValidator);
-  validationEngine.registerValidator('version', new VersionValidator());
-  validationEngine.registerValidator('directory-structure', new DirectoryValidator());
-  validationEngine.registerValidator('code-pattern', codePatternValidator);
-  validationEngine.registerValidator('dependency', new DependencyValidator());
-  validationEngine.registerValidator('code-snippet', new CodeSnippetValidator());
+  const builtInValidators: Record<BuiltInRuleType, BaseValidator> = {
+    'file-path': new FileValidator(),
+    'external-url': urlValidator,
+    version: new VersionValidator(),
+    'directory-structure': new DirectoryValidator(),
+    'code-pattern': codePatternValidator,
+    'code-snippet': new CodeSnippetValidator(),
+    dependency: new DependencyValidator(),
+  };
+  for (const type of BUILT_IN_RULE_TYPES) {
+    validationEngine.registerValidator(type, builtInValidators[type]);
+  }
 
   // Register custom validators
   if (config.customValidators) {

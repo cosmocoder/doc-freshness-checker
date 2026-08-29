@@ -12,6 +12,7 @@ import {
   runCli,
   type CLIOptions,
 } from './cli.js';
+import { BUILT_IN_RULE_TYPES, DEFAULT_CONFIG } from './config/defaults.js';
 import type { DocFreshnessConfig, ValidationResults } from './types.js';
 
 afterEach(() => {
@@ -84,6 +85,63 @@ describe('CLI option parsing', () => {
 });
 
 describe('applyCliOverrides', () => {
+  it('selects built-in and configured custom rules', () => {
+    const config = structuredClone(DEFAULT_CONFIG);
+    delete config.rules!['code-snippet'];
+    config.rules!.custom = { enabled: false };
+    const validator = {
+      async validateBatch() {
+        return [];
+      },
+    };
+    config.customValidators!.custom = validator;
+    config.customValidators!.validatorOnly = validator;
+
+    applyCliOverrides(config, { only: 'file-path,custom,validatorOnly' });
+
+    for (const rule of BUILT_IN_RULE_TYPES) {
+      expect(config.rules?.[rule]?.enabled).toBe(rule === 'file-path');
+    }
+    expect(config.rules!.custom!.enabled).toBe(true);
+    expect(config.rules!.validatorOnly!.enabled).toBe(true);
+  });
+
+  it('rejects stale configured rule keys without changing rule selection', () => {
+    const config = structuredClone(DEFAULT_CONFIG);
+    config.rules!.filepath = { enabled: true };
+    const initialRules = structuredClone(config.rules);
+
+    expect(() => applyCliOverrides(config, { only: 'filepath' })).toThrow(
+      `Unknown rule type: filepath. Valid rule types: ${BUILT_IN_RULE_TYPES.join(', ')}`
+    );
+    expect(config.rules).toEqual(initialRules);
+  });
+
+  it.each([
+    ['file-path,', ['file-path']],
+    ['file-path,,version', ['file-path', 'version']],
+    ['file-path, version', ['file-path', 'version']],
+    [' file-path ', ['file-path']],
+  ])('normalizes --only value %j', (only, enabledRules) => {
+    const config = structuredClone(DEFAULT_CONFIG);
+
+    applyCliOverrides(config, { only });
+
+    for (const rule of BUILT_IN_RULE_TYPES) {
+      expect(config.rules?.[rule]?.enabled).toBe(enabledRules.includes(rule));
+    }
+  });
+
+  it.each(['', ', ,'])('rejects empty --only selection %j without changing rule selection', (only) => {
+    const config = structuredClone(DEFAULT_CONFIG);
+    const initialRules = structuredClone(config.rules);
+
+    expect(() => applyCliOverrides(config, { only })).toThrow(
+      `At least one rule type is required. Valid rule types: ${BUILT_IN_RULE_TYPES.join(', ')}`
+    );
+    expect(config.rules).toEqual(initialRules);
+  });
+
   it('applies all overrideable CLI options to config', () => {
     const config = makeConfig();
     const options: CLIOptions = {
@@ -155,6 +213,24 @@ describe('runCli', () => {
     );
 
     expect(exitCode).toBe(1);
+  });
+
+  it('returns 1 without running validation for an unknown rule type', async () => {
+    const runMock = vi.fn();
+    const logErrorMock = vi.fn();
+
+    const exitCode = await runCli(
+      { only: 'filepath' },
+      {
+        loadConfig: vi.fn().mockResolvedValue(makeConfig()),
+        run: runMock,
+        logError: logErrorMock,
+      }
+    );
+
+    expect(exitCode).toBe(1);
+    expect(runMock).not.toHaveBeenCalled();
+    expect(logErrorMock).toHaveBeenCalledWith('Error:', `Unknown rule type: filepath. Valid rule types: ${BUILT_IN_RULE_TYPES.join(', ')}`);
   });
 
   it('returns 0 when validation reports only info findings', async () => {
