@@ -1,7 +1,12 @@
 import fs from 'fs';
+import { tmpdir } from 'os';
 import path from 'path';
 import { loadConfig, DEFAULT_CONFIG } from './loader.js';
 import { BUILT_IN_RULE_TYPES } from './defaults.js';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('DEFAULT_CONFIG', () => {
   it('has sensible default values', () => {
@@ -19,7 +24,7 @@ describe('DEFAULT_CONFIG', () => {
 });
 
 describe('loadConfig', () => {
-  const tmpDir = path.join(process.cwd(), '.doc-freshness-cache', 'config-test');
+  let tmpDir: string;
   const unlinkIfExists = async (filePath: string) => {
     await fs.promises.unlink(filePath).catch(() => {});
   };
@@ -41,17 +46,44 @@ describe('loadConfig', () => {
   }
 
   beforeAll(async () => {
-    await fs.promises.mkdir(tmpDir, { recursive: true });
+    tmpDir = await fs.promises.mkdtemp(path.join(tmpdir(), 'doc-freshness-config-'));
   });
 
   afterAll(async () => {
     await fs.promises.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
   });
 
-  it('returns defaults with auto-detection when no config file exists', async () => {
-    const config = await loadConfig('/nonexistent/path.json');
-    expect(config.include).toEqual(DEFAULT_CONFIG.include);
-    expect(config._noConfigFile).toBe(true);
+  it('uses defaults only when no explicit or discovered config exists', async () => {
+    const emptyProject = path.join(tmpDir, 'no-config-project');
+    await fs.promises.mkdir(emptyProject, { recursive: true });
+    vi.spyOn(process, 'cwd').mockReturnValue(emptyProject);
+    const defaultSnapshot = structuredClone(DEFAULT_CONFIG);
+
+    try {
+      const first = await loadConfig();
+      first.include!.push('mutated/**/*.md');
+      first.rules!.dependency!.enabled = false;
+
+      const second = await loadConfig();
+      expect(second.include).toEqual(defaultSnapshot.include);
+      expect(second.rules?.dependency?.enabled).toBe(defaultSnapshot.rules?.dependency?.enabled);
+      expect(second._noConfigFile).toBe(true);
+      expect(DEFAULT_CONFIG).toEqual(defaultSnapshot);
+    }
+    finally {
+      Object.assign(DEFAULT_CONFIG, structuredClone(defaultSnapshot));
+    }
+  });
+
+  it('rejects a discovered config with a missing dependency', async () => {
+    await withTempConfig('.doc-freshness.config.js', `import './missing-auto-dependency.mjs'; export default {};`, async () => {
+      vi.spyOn(process, 'cwd').mockReturnValue(tmpDir);
+      await expect(loadConfig()).rejects.toThrow('missing-auto-dependency.mjs');
+    });
+  });
+
+  it.each(['missing.json', 'missing.cjs'])('rejects an explicitly requested missing %s config', async (fileName) => {
+    await expect(loadConfig(path.join(tmpDir, fileName))).rejects.toThrow(fileName);
   });
 
   it('loads JSON config file and merges with defaults', async () => {
@@ -180,25 +212,6 @@ describe('loadConfig', () => {
     }
   });
 
-  it('isolates defaults when an explicit config file is missing', async () => {
-    const defaultSnapshot = structuredClone(DEFAULT_CONFIG);
-
-    try {
-      const missingConfig = path.join(tmpDir, 'missing-config.json');
-      const first = await loadConfig(missingConfig);
-      first.include!.push('mutated/**/*.md');
-      first.rules!.dependency!.enabled = false;
-
-      const second = await loadConfig(missingConfig);
-      expect(second.include).toEqual(defaultSnapshot.include);
-      expect(second.rules?.dependency?.enabled).toBe(defaultSnapshot.rules?.dependency?.enabled);
-      expect(DEFAULT_CONFIG).toEqual(defaultSnapshot);
-    }
-    finally {
-      Object.assign(DEFAULT_CONFIG, structuredClone(defaultSnapshot));
-    }
-  });
-
   it('auto-detects manifest files', async () => {
     const config = await loadConfig();
     expect(config.manifestFiles).toBeDefined();
@@ -255,7 +268,35 @@ describe('loadConfig', () => {
     );
   });
 
-  it('returns defaults when config file throws non-ENOENT error', async () => {
+  it('loads an ESM config with a relative import', async () => {
+    const dependencyPath = path.join(tmpDir, 'shared-config-value.mjs');
+    await fs.promises.writeFile(dependencyPath, 'export const verbose = true;');
+
+    try {
+      await withTempConfig(
+        'relative-import-config.mjs',
+        `import { verbose } from './shared-config-value.mjs'; export default { verbose };`,
+        async (tmpConfig) => {
+          expect((await loadConfig(tmpConfig)).verbose).toBe(true);
+          expect((await fs.promises.readdir(tmpDir)).some((name) => name.startsWith('.doc-freshness-temp-config-'))).toBe(false);
+        }
+      );
+    }
+    finally {
+      await unlinkIfExists(dependencyPath);
+    }
+  });
+
+  it.each([
+    ['CJS', 'missing-dependency.cjs', `require('./missing-dependency.cjs'); module.exports = {};`],
+    ['ESM', 'missing-dependency.mjs', `import './missing-dependency.mjs'; export default {};`],
+  ])('rejects an existing %s config with a missing dependency', async (moduleType, missingDependency, content) => {
+    await withTempConfig(`missing-dependency-config.${moduleType === 'CJS' ? 'cjs' : 'mjs'}`, content, async (tmpConfig) => {
+      await expect(loadConfig(tmpConfig)).rejects.toThrow(missingDependency);
+    });
+  });
+
+  it('rejects an invalid JSON config', async () => {
     await withTempConfig('bad-config.json', 'not valid json!!!', async (tmpConfig) => {
       await expect(loadConfig(tmpConfig)).rejects.toThrow();
     });
@@ -321,11 +362,6 @@ describe('loadConfig', () => {
       expect(config.verbose).toBe(true);
       expect(config.include).toEqual(DEFAULT_CONFIG.include);
     });
-  });
-
-  it('handles ENOENT (module not found) error code', async () => {
-    const config = await loadConfig('/nonexistent/deep/path/config.json');
-    expect(config._noConfigFile).toBe(true);
   });
 
   it('loads config without explicit path, using auto-detection', async () => {
