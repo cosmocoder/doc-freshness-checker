@@ -75,6 +75,127 @@ describe('loadConfig', () => {
     );
   });
 
+  it('isolates sequential loads and the default config from mutations', async () => {
+    const defaultSnapshot = structuredClone(DEFAULT_CONFIG);
+
+    try {
+      await withTempConfig('isolated-config.json', {}, async (tmpConfig) => {
+        const first = await loadConfig(tmpConfig);
+
+        first.include!.push('mutated/**/*.md');
+        first.reporters!.push('json');
+        first.urlValidation!.skipDomains!.push('mutated.example');
+        first.rules!['file-path']!.illustrativePatterns!.push('mutated-pattern');
+        first.rules!.dependency!.enabled = false;
+        first.freshnessScoring!.weights!.referenceValidity = 0;
+        first.cache!.enabled = false;
+
+        const second = await loadConfig(tmpConfig);
+
+        expect(second.include).toEqual(defaultSnapshot.include);
+        expect(second.reporters).toEqual(defaultSnapshot.reporters);
+        expect(second.urlValidation?.skipDomains).toEqual(defaultSnapshot.urlValidation?.skipDomains);
+        expect(second.rules?.['file-path']?.illustrativePatterns).toEqual(defaultSnapshot.rules?.['file-path']?.illustrativePatterns);
+        expect(second.rules?.dependency?.enabled).toBe(defaultSnapshot.rules?.dependency?.enabled);
+        expect(second.freshnessScoring?.weights?.referenceValidity).toBe(defaultSnapshot.freshnessScoring?.weights?.referenceValidity);
+        expect(second.cache?.enabled).toBe(defaultSnapshot.cache?.enabled);
+        expect(second.rules).not.toBe(first.rules);
+        expect(second.rules?.['file-path']).not.toBe(first.rules?.['file-path']);
+        expect(DEFAULT_CONFIG).toEqual(defaultSnapshot);
+      });
+    }
+    finally {
+      Object.assign(DEFAULT_CONFIG, structuredClone(defaultSnapshot));
+    }
+  });
+
+  it('preserves functions in custom extractors and validators', async () => {
+    await withTempConfig(
+      'custom-functions.cjs',
+      `module.exports = {
+        customExtractors: [{
+          type: 'custom',
+          supportedFormats: ['markdown'],
+          supportsFormat() { return true; },
+          extract() { return []; },
+          findLineNumber() { return 1; },
+          getContext() { return ''; }
+        }],
+        customValidators: { custom: { async validateBatch() { return []; } } }
+      };`,
+      async (tmpConfig) => {
+        const config = await loadConfig(tmpConfig);
+        expect(config.customExtractors?.[0].supportsFormat('markdown')).toBe(true);
+        await expect(config.customValidators?.custom.validateBatch([], {} as never, config)).resolves.toEqual([]);
+      }
+    );
+  });
+
+  it('preserves custom extractor class instances', async () => {
+    await withTempConfig(
+      'custom-extractor-class.cjs',
+      `class CustomExtractor {
+        constructor() {
+          this.type = 'custom';
+          this.supportedFormats = ['markdown'];
+        }
+        supportsFormat(format) { return format === 'markdown'; }
+        extract() { return []; }
+        findLineNumber() { return 1; }
+        getContext() { return ''; }
+      }
+      module.exports = { customExtractors: [new CustomExtractor()] };`,
+      async (tmpConfig) => {
+        const extractor = (await loadConfig(tmpConfig)).customExtractors?.[0];
+        expect(extractor?.constructor.name).toBe('CustomExtractor');
+        expect(extractor?.supportsFormat('markdown')).toBe(true);
+      }
+    );
+  });
+
+  it('isolates arrays and plain objects exported by config dependencies', async () => {
+    const sharedValuesPath = path.join(tmpDir, 'shared-values.cjs');
+    await fs.promises.writeFile(sharedValuesPath, `module.exports = { include: ['docs/**/*.md'], customValidators: {} };`);
+
+    try {
+      await withTempConfig('shared-config.cjs', `module.exports = require('./shared-values.cjs');`, async (tmpConfig) => {
+        const first = await loadConfig(tmpConfig);
+        first.include!.push('mutated/**/*.md');
+        first.customValidators!.mutated = {
+          async validateBatch() {
+            return [];
+          },
+        };
+
+        const second = await loadConfig(tmpConfig);
+        expect(second.include).toEqual(['docs/**/*.md']);
+        expect(second.customValidators).toEqual({});
+      });
+    }
+    finally {
+      await unlinkIfExists(sharedValuesPath);
+    }
+  });
+
+  it('isolates defaults when an explicit config file is missing', async () => {
+    const defaultSnapshot = structuredClone(DEFAULT_CONFIG);
+
+    try {
+      const missingConfig = path.join(tmpDir, 'missing-config.json');
+      const first = await loadConfig(missingConfig);
+      first.include!.push('mutated/**/*.md');
+      first.rules!.dependency!.enabled = false;
+
+      const second = await loadConfig(missingConfig);
+      expect(second.include).toEqual(defaultSnapshot.include);
+      expect(second.rules?.dependency?.enabled).toBe(defaultSnapshot.rules?.dependency?.enabled);
+      expect(DEFAULT_CONFIG).toEqual(defaultSnapshot);
+    }
+    finally {
+      Object.assign(DEFAULT_CONFIG, structuredClone(defaultSnapshot));
+    }
+  });
+
   it('auto-detects manifest files', async () => {
     const config = await loadConfig();
     expect(config.manifestFiles).toBeDefined();

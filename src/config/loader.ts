@@ -26,7 +26,7 @@ export async function loadConfig(configPath?: string): Promise<DocFreshnessConfi
   if (!configFile) {
     // Note: We can't check verbose here as config isn't loaded yet
     // This message will only show in verbose mode from the runner
-    return await autoDetectConfig({ ...DEFAULT_CONFIG, _noConfigFile: true });
+    return await autoDetectConfig(mergeConfig(DEFAULT_CONFIG, { _noConfigFile: true }));
   }
 
   const fullPath = path.resolve(process.cwd(), configFile);
@@ -55,7 +55,7 @@ export async function loadConfig(configPath?: string): Promise<DocFreshnessConfi
     const err = error as NodeJS.ErrnoException;
     if (err.code === 'ENOENT' || err.code === 'ERR_MODULE_NOT_FOUND') {
       console.log('Config file not found, using defaults');
-      return await autoDetectConfig({ ...DEFAULT_CONFIG, _noConfigFile: true });
+      return await autoDetectConfig(mergeConfig(DEFAULT_CONFIG, { _noConfigFile: true }));
     }
     throw error;
   }
@@ -281,7 +281,7 @@ function containsSourceFiles(dirPath: string, extensions: string[]): boolean {
  * Deep merge user config with defaults
  */
 function mergeConfig(defaults: DocFreshnessConfig, user: DocFreshnessConfig): DocFreshnessConfig {
-  const result = { ...defaults } as Record<string, unknown>;
+  const result = cloneConfigValue(defaults) as Record<string, unknown>;
 
   for (const key of Object.keys(user)) {
     const userValue = (user as Record<string, unknown>)[key];
@@ -291,21 +291,33 @@ function mergeConfig(defaults: DocFreshnessConfig, user: DocFreshnessConfig): Do
       continue;
     }
 
-    if (
-      typeof userValue === 'object' &&
-      userValue !== null &&
-      !Array.isArray(userValue) &&
-      typeof defaultValue === 'object' &&
-      defaultValue !== null
-    ) {
+    if (isPlainObject(userValue) && isPlainObject(defaultValue)) {
       result[key] = mergeConfig(defaultValue as DocFreshnessConfig, userValue as DocFreshnessConfig);
     }
     else {
-      result[key] = userValue;
+      result[key] = cloneConfigValue(userValue);
     }
   }
 
   return result as DocFreshnessConfig;
+}
+
+function cloneConfigValue<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map(cloneConfigValue) as T;
+  }
+  if (isPlainObject(value)) {
+    return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, cloneConfigValue(nested)])) as T;
+  }
+  return value;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 function loadCjsConfig(fullPath: string): DocFreshnessConfig {
