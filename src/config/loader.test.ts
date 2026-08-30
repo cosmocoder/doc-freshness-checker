@@ -1,12 +1,38 @@
 import fs from 'fs';
+import { execFile } from 'child_process';
 import { tmpdir } from 'os';
 import path from 'path';
+import { promisify } from 'util';
+import { pathToFileURL } from 'url';
+import ts from 'typescript';
 import { loadConfig, DEFAULT_CONFIG } from './loader.js';
 import { BUILT_IN_RULE_TYPES } from './defaults.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+const execFileAsync = promisify(execFile);
+
+async function transpilePublicLoader(outputDir: string): Promise<string> {
+  const sourceFiles = ['config/loader.ts', 'config/esm-loader.ts', 'config/defaults.ts'];
+  await fs.promises.mkdir(path.join(outputDir, 'config'), { recursive: true });
+  await fs.promises.writeFile(path.join(outputDir, 'package.json'), JSON.stringify({ type: 'module' }));
+
+  await Promise.all(
+    sourceFiles.map(async (relativePath) => {
+      const sourcePath = path.join(process.cwd(), 'src', relativePath);
+      const source = await fs.promises.readFile(sourcePath, 'utf8');
+      const { outputText } = ts.transpileModule(source, {
+        fileName: sourcePath,
+        compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2023 },
+      });
+      await fs.promises.writeFile(path.join(outputDir, relativePath.replace(/\.ts$/, '.js')), outputText);
+    })
+  );
+
+  return path.join(outputDir, 'config', 'loader.js');
+}
 
 describe('DEFAULT_CONFIG', () => {
   it('has sensible default values', () => {
@@ -257,15 +283,98 @@ describe('loadConfig', () => {
     });
   });
 
-  it('handles config file importing defineConfig', async () => {
-    await withTempConfig(
-      'test-define.js',
-      `import { defineConfig } from 'doc-freshness-checker';\nexport default defineConfig({ verbose: true });`,
-      async (tmpConfig) => {
-        const config = await loadConfig(tmpConfig);
-        expect(config.verbose).toBe(true);
-      }
-    );
+  it('loads symlinked cache-busted ESM .js configs from CommonJS projects without a local package', async () => {
+    const projectDir = await fs.promises.mkdtemp(path.join(tmpdir(), 'doc-freshness-commonjs-'));
+    try {
+      const buildDir = path.join(projectDir, '.loader-build');
+      const targetDir = path.join(projectDir, 'config-target');
+      const linkDir = path.join(projectDir, 'config-link');
+      const targetConfigPath = path.join(targetDir, 'doc-freshness.config.js');
+      const configPath = path.join(linkDir, 'doc-freshness.config.js');
+      const concurrentConfigPath = path.join(targetDir, 'concurrent.config.js');
+      await Promise.all([fs.promises.mkdir(targetDir, { recursive: true }), fs.promises.mkdir(linkDir, { recursive: true })]);
+      await fs.promises.writeFile(path.join(projectDir, 'package.json'), JSON.stringify({ type: 'commonjs' }));
+      await fs.promises.writeFile(path.join(targetDir, 'config-value.mjs'), `export const include = ['from-sibling/**/*.md'];`);
+      await fs.promises.writeFile(path.join(targetDir, 'config-value.txt'), 'from-asset');
+      await fs.promises.writeFile(
+        targetConfigPath,
+        [
+          `import { defineConfig } from 'doc-freshness-checker';`,
+          `import { include } from './config-value.mjs';`,
+          `import { readFileSync } from 'node:fs';`,
+          `export default defineConfig({ include, outputDir: readFileSync(new URL('./config-value.txt', import.meta.url), 'utf8'), outputPath: import.meta.filename });`,
+        ].join('\n')
+      );
+      await fs.promises.writeFile(
+        concurrentConfigPath,
+        `import { defineConfig } from 'doc-freshness-checker';\nexport default defineConfig({ outputDir: 'concurrent' });`
+      );
+      await fs.promises.symlink(targetConfigPath, configPath, 'file');
+
+      expect(fs.existsSync(path.join(projectDir, 'node_modules'))).toBe(false);
+      const loaderUrl = pathToFileURL(await transpilePublicLoader(buildDir)).href;
+      const reloadedSource = `import { defineConfig } from 'doc-freshness-checker';\nexport default defineConfig({ outputDir: 'reloaded' });`;
+      const script = `
+        import { writeFile } from 'node:fs/promises';
+        import { loadConfig } from ${JSON.stringify(loaderUrl)};
+        const [configPath, concurrentConfigPath, reloadedSource] = process.argv.slice(1);
+        const [config, concurrentConfig] = await Promise.all([loadConfig(configPath), loadConfig(concurrentConfigPath)]);
+        await writeFile(configPath, "throw new Error('config failed');");
+        let errorMessage;
+        try { await loadConfig(configPath); } catch (error) { errorMessage = error.message; }
+        await writeFile(configPath, reloadedSource);
+        const reloadedConfig = await loadConfig(configPath);
+        process.stdout.write(JSON.stringify({ config, concurrentConfig, errorMessage, reloadedConfig }));
+      `;
+      const { stdout } = await execFileAsync(
+        process.execPath,
+        ['--input-type=module', '--eval', script, configPath, concurrentConfigPath, reloadedSource],
+        { cwd: projectDir }
+      );
+      const result = JSON.parse(stdout);
+      const canonicalConfigPath = await fs.promises.realpath(configPath);
+      const canonicalTargetPath = await fs.promises.realpath(targetConfigPath);
+
+      expect(canonicalConfigPath).toBe(canonicalTargetPath);
+      expect(canonicalConfigPath).not.toBe(configPath);
+      expect(result.config.include).toEqual(['from-sibling/**/*.md']);
+      expect(result.config.outputDir).toBe('from-asset');
+      expect(result.config.outputPath).toBe(canonicalConfigPath);
+      expect(result.concurrentConfig.outputDir).toBe('concurrent');
+      expect(result.errorMessage).toBe('config failed');
+      expect(result.reloadedConfig.outputDir).toBe('reloaded');
+    }
+    finally {
+      await fs.promises.rm(projectDir, { recursive: true, force: true });
+    }
+  });
+
+  it('loads a discovered ESM config from its original directory', async () => {
+    const siblingModule = path.join(tmpDir, 'discovered-value.mjs');
+    await fs.promises.writeFile(siblingModule, `export const outputDir = 'discovered-sibling';`);
+
+    try {
+      await withTempConfig(
+        '.doc-freshness.config.js',
+        [`import { outputDir } from './discovered-value.mjs';`, `export default { outputDir, outputPath: import.meta.filename };`].join(
+          '\n'
+        ),
+        async (configPath) => {
+          const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(tmpDir);
+          try {
+            const config = await loadConfig();
+            expect(config.outputDir).toBe('discovered-sibling');
+            expect(config.outputPath).toBe(await fs.promises.realpath(configPath));
+          }
+          finally {
+            cwdSpy.mockRestore();
+          }
+        }
+      );
+    }
+    finally {
+      await unlinkIfExists(siblingModule);
+    }
   });
 
   it('loads an ESM config with a relative import', async () => {
