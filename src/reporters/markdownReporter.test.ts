@@ -100,6 +100,37 @@ describe('MarkdownReporter', () => {
     expect(md).toMatch(/Not found \| -/);
   });
 
+  it('includes vector mismatches without a contradictory success message', () => {
+    const results: ValidationResults = {
+      ...cleanResults,
+      vectorMismatches: [
+        {
+          docPath: 'docs/vector-api.md',
+          docSection: 'Vector API',
+          docText: 'The API returns a vector',
+          bestMatchScore: 0.2,
+          bestMatch: { type: 'code', path: 'src/vector.ts', symbol: 'search', text: 'search implementation' },
+          suggestion: 'Update the API documentation',
+        },
+      ],
+    };
+
+    const md = reporter.generate(results);
+    expect(md).toContain('Semantic Analysis');
+    expect(md).toContain('src/vector.ts (search)');
+    expect(md).not.toContain('up to date');
+    expect(md.match(/docs\/vector-api\.md/g)).toHaveLength(1);
+
+    const scores: ProjectScores = {
+      projectScore: 100,
+      projectGrade: 'A',
+      documents: [],
+      summary: { total: 0, gradeA: 0, gradeB: 0, gradeC: 0, gradeD: 0, gradeF: 0 },
+    };
+    const scoredMd = reporter.generateWithScores(results, scores);
+    expect(scoredMd.indexOf('Freshness Scores')).toBeLessThan(scoredMd.indexOf('Semantic Analysis'));
+  });
+
   it('generateWithScores includes freshness section', () => {
     const scores: ProjectScores = {
       projectScore: 92,

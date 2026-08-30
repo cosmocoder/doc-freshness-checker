@@ -2,6 +2,7 @@ import type { ProjectScores, ValidationResults } from '../types.js';
 import type { CodeDocGraph } from '../graph/codeDocGraph.js';
 import type { GitChangeTracker } from '../git/changeTracker.js';
 import { escapeMarkdownTableCell } from '../utils/escapeMarkdownTableCell.js';
+import { formatVectorMismatches } from './formatVectorMismatches.js';
 
 /**
  * Enhanced reporter with DeepDocs-style output
@@ -78,6 +79,8 @@ export class EnhancedReporter {
         report += '\n';
       }
     }
+
+    report += formatVectorMismatches(results.vectorMismatches);
 
     // Code Change Impact (if git available)
     if (gitTracker?.isGitRepo() && graph) {
