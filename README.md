@@ -331,6 +331,14 @@ export default {
 
 </details>
 
+The `urlValidation`, `freshnessScoring`, `freshnessScoring.weights`, and `freshnessScoring.thresholds` sections must be plain objects.
+Numeric settings are validated before a run starts. `urlValidation.timeout` must be a positive finite number no greater
+than `2147483647` milliseconds (Node.js's maximum timer delay), and `urlValidation.concurrency` must be a positive
+integer. Effective freshness-scoring weights—including defaults for omitted factors—must each be finite values from 0
+through 1. Omitted factors retain their defaults; weights are not normalized, and final freshness scores are capped to the
+documented `0..100` range. Grade thresholds must be finite values from 0
+through 100 in strictly descending order: `gradeA > gradeB > gradeC > gradeD`.
+
 For details on CLI-to-config mapping and precedence, see [CLI and Configuration Precedence](docs/cli-and-config-precedence.md). For the internal execution pipeline, see [Runtime Architecture](docs/runtime-architecture.md).
 
 ## CI Integration

@@ -10,6 +10,7 @@ import type {
 } from '../types.js';
 import type { CodeDocGraph } from '../graph/codeDocGraph.js';
 import type { GitChangeTracker } from '../git/changeTracker.js';
+import { DEFAULT_CONFIG } from '../config/defaults.js';
 
 /**
  * Calculates freshness scores for documentation
@@ -19,19 +20,21 @@ export class FreshnessScorer {
   private thresholds: Required<FreshnessScoringThresholds>;
 
   constructor(config: DocFreshnessConfig) {
+    const defaults = DEFAULT_CONFIG.freshnessScoring;
+
     // Configurable weights for different factors
     this.weights = {
-      referenceValidity: config.freshnessScoring?.weights?.referenceValidity ?? 0.4,
-      gitTimeDelta: config.freshnessScoring?.weights?.gitTimeDelta ?? 0.3,
-      codeChangeFrequency: config.freshnessScoring?.weights?.codeChangeFrequency ?? 0.15,
-      symbolCoverage: config.freshnessScoring?.weights?.symbolCoverage ?? 0.15,
+      referenceValidity: config.freshnessScoring?.weights?.referenceValidity ?? defaults.weights.referenceValidity,
+      gitTimeDelta: config.freshnessScoring?.weights?.gitTimeDelta ?? defaults.weights.gitTimeDelta,
+      codeChangeFrequency: config.freshnessScoring?.weights?.codeChangeFrequency ?? defaults.weights.codeChangeFrequency,
+      symbolCoverage: config.freshnessScoring?.weights?.symbolCoverage ?? defaults.weights.symbolCoverage,
     };
 
     this.thresholds = {
-      gradeA: config.freshnessScoring?.thresholds?.gradeA ?? 90,
-      gradeB: config.freshnessScoring?.thresholds?.gradeB ?? 80,
-      gradeC: config.freshnessScoring?.thresholds?.gradeC ?? 70,
-      gradeD: config.freshnessScoring?.thresholds?.gradeD ?? 60,
+      gradeA: config.freshnessScoring?.thresholds?.gradeA ?? defaults.thresholds.gradeA,
+      gradeB: config.freshnessScoring?.thresholds?.gradeB ?? defaults.thresholds.gradeB,
+      gradeC: config.freshnessScoring?.thresholds?.gradeC ?? defaults.thresholds.gradeC,
+      gradeD: config.freshnessScoring?.thresholds?.gradeD ?? defaults.thresholds.gradeD,
     };
   }
 
@@ -53,11 +56,12 @@ export class FreshnessScorer {
     };
 
     // Calculate weighted total
-    const totalScore =
+    const rawTotalScore =
       scores.referenceValidity * this.weights.referenceValidity +
       scores.gitTimeDelta * this.weights.gitTimeDelta +
       scores.codeChangeFrequency * this.weights.codeChangeFrequency +
       scores.symbolCoverage * this.weights.symbolCoverage;
+    const totalScore = Number.isNaN(rawTotalScore) ? 0 : Math.max(0, Math.min(100, rawTotalScore));
 
     return {
       document: doc.path,

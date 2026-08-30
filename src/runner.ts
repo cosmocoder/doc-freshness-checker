@@ -29,6 +29,7 @@ import { VectorSearch } from './semantic/vectorSearch.js';
 import { loadConfig } from './config/loader.js';
 import { BUILT_IN_RULE_TYPES } from './config/defaults.js';
 import type { BuiltInRuleType } from './config/defaults.js';
+import { validateConfig } from './config/validateConfig.js';
 import type { CodeDocGraph } from './graph/codeDocGraph.js';
 import type { BaseValidator, DocFreshnessConfig, ProjectScores, ReporterType, ValidationResults, VectorMismatch } from './types.js';
 
@@ -43,6 +44,8 @@ const REPORTER_OUTPUT: Record<ReporterType, 'console' | 'stable' | 'timestamped'
  * Main entry point - run with config object
  */
 export async function run(config: DocFreshnessConfig): Promise<ValidationResults> {
+  validateConfig(config);
+
   // Show config file status in verbose mode
   if (config.verbose) {
     if (config._configFile) {

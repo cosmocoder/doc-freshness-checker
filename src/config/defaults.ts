@@ -1,4 +1,18 @@
-import type { DocFreshnessConfig } from '../types.js';
+import type {
+  DocFreshnessConfig,
+  FreshnessScoringConfig,
+  FreshnessScoringThresholds,
+  FreshnessScoringWeights,
+  UrlValidationConfig,
+} from '../types.js';
+
+type DefaultConfig = DocFreshnessConfig & {
+  urlValidation: Required<UrlValidationConfig>;
+  freshnessScoring: FreshnessScoringConfig & {
+    weights: Required<FreshnessScoringWeights>;
+    thresholds: Required<FreshnessScoringThresholds>;
+  };
+};
 
 export const BUILT_IN_RULE_TYPES = [
   'file-path',
@@ -15,7 +29,7 @@ export type BuiltInRuleType = (typeof BUILT_IN_RULE_TYPES)[number];
 /**
  * Default configuration values for Documentation Freshness Checker
  */
-export const DEFAULT_CONFIG: DocFreshnessConfig = {
+export const DEFAULT_CONFIG: DefaultConfig = {
   // Root directory for resolving paths (defaults to process.cwd())
   rootDir: process.cwd(),
 

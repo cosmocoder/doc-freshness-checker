@@ -13,6 +13,7 @@ import {
   type CLIOptions,
 } from './cli.js';
 import { BUILT_IN_RULE_TYPES, DEFAULT_CONFIG } from './config/defaults.js';
+import { run } from './runner.js';
 import type { DocFreshnessConfig, ValidationResults } from './types.js';
 
 afterEach(() => {
@@ -294,6 +295,24 @@ describe('runCli', () => {
 
     expect(exitCode).toBe(1);
     expect(logErrorMock).toHaveBeenCalledWith('Error:', 'validator crashed');
+  });
+
+  it('returns 1 when the effective config has invalid numeric settings', async () => {
+    const config = makeConfig();
+    config.urlValidation!.concurrency = 0;
+    const logErrorMock = vi.fn();
+
+    const exitCode = await runCli(
+      {},
+      {
+        loadConfig: vi.fn().mockResolvedValue(config),
+        run,
+        logError: logErrorMock,
+      }
+    );
+
+    expect(exitCode).toBe(1);
+    expect(logErrorMock).toHaveBeenCalledWith('Error:', 'urlValidation.concurrency must be a positive integer');
   });
 });
 
