@@ -290,6 +290,16 @@ export default defineConfig({
 });
 ```
 
+The following accepted configuration options are deprecated no-ops and are planned for removal in v3.0.0:
+
+| Option                                                           | Current behavior / migration                                                                                                       |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `rules.version.allowMinorDrift`                                  | Ignored; version validation compares major versions only.                                                                          |
+| `outputDir`                                                      | Ignored; use `outputPath` with the JSON, Markdown, or Enhanced reporter. Console output remains on stdout.                         |
+| `ignorePatterns`                                                 | Ignored; `include` and `exclude` only select documentation files and are not a replacement for semantic reference-ignore behavior. |
+| `git`, `git.enabled`, `git.trackChanges`, `git.changeWindow`     | Ignored; Git availability is auto-detected during graph processing, and Enhanced reports use a fixed seven-day change window.      |
+| `vectorSearch.indexCodeComments`, `vectorSearch.indexDocstrings` | Ignored; enabled vector search follows its built-in indexing behavior.                                                             |
+
 <details>
 <summary>Full configuration example</summary>
 

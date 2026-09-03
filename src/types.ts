@@ -48,6 +48,7 @@ export interface CodeSnippetRuleConfig extends RuleConfig {
 }
 
 export interface VersionRuleConfig extends RuleConfig {
+  /** @deprecated Ignored; version validation compares major versions only. Planned for removal in v3.0.0. */
   allowMinorDrift?: boolean;
 }
 
@@ -76,9 +77,16 @@ export interface GraphConfig {
   cacheMaxAge?: number;
 }
 
+/**
+ * @deprecated Ignored; Git availability is auto-detected during graph processing and
+ * Enhanced reporting uses a fixed seven-day change window. Planned for removal in v3.0.0.
+ */
 export interface GitConfig {
+  /** @deprecated Ignored; Git availability is auto-detected during graph processing. Planned for removal in v3.0.0. */
   enabled?: boolean;
+  /** @deprecated Ignored; Git change tracking is not configurable. Planned for removal in v3.0.0. */
   trackChanges?: boolean;
+  /** @deprecated Ignored; Enhanced reporting uses a fixed seven-day change window. Planned for removal in v3.0.0. */
   changeWindow?: number;
 }
 
@@ -105,7 +113,9 @@ export interface FreshnessScoringConfig {
 export interface VectorSearchConfig {
   enabled?: boolean;
   similarityThreshold?: number;
+  /** @deprecated Ignored; enabled vector search indexes available code comments unconditionally. Planned for removal in v3.0.0. */
   indexCodeComments?: boolean;
+  /** @deprecated Ignored; there is no configurable docstring-indexing path. Planned for removal in v3.0.0. */
   indexDocstrings?: boolean;
 }
 
@@ -130,12 +140,24 @@ export interface DocFreshnessConfig {
   urlValidation?: UrlValidationConfig;
   rules?: RulesConfig;
   reporters?: ReporterType[];
+  /**
+   * @deprecated Ignored; use outputPath with the JSON, Markdown, or Enhanced reporter.
+   * Console output remains on stdout. Planned for removal in v3.0.0.
+   */
   outputDir?: string;
   outputPath?: string;
+  /**
+   * @deprecated Ignored; include and exclude select documentation files but do not
+   * provide semantic reference-ignore behavior. Planned for removal in v3.0.0.
+   */
   ignorePatterns?: string[];
   customExtractors?: BaseExtractor[];
   customValidators?: Record<string, BaseValidator>;
   graph?: GraphConfig;
+  /**
+   * @deprecated Ignored; Git availability is auto-detected during graph processing and
+   * Enhanced reporting uses a fixed seven-day change window. Planned for removal in v3.0.0.
+   */
   git?: GitConfig;
   freshnessScoring?: FreshnessScoringConfig;
   vectorSearch?: VectorSearchConfig;
