@@ -32,6 +32,7 @@ export class FilePathExtractor extends BaseExtractor {
     };
 
     const pattern = patterns[document.format] || patterns.markdown;
+    const isMarkdownLike = document.format !== 'asciidoc' && document.format !== 'restructuredtext';
 
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(document.content)) !== null) {
@@ -47,17 +48,18 @@ export class FilePathExtractor extends BaseExtractor {
         continue;
       }
 
+      // Extract line metadata, then strip ordinary Markdown fragments from file paths
+      const { path: pathWithoutLineRef, lineRef } = this.extractLineReference(refPath);
+      const cleanPath = isMarkdownLike ? pathWithoutLineRef.split('#', 1)[0] : pathWithoutLineRef;
+
       // For markdown, only accept relative paths or paths with file extensions
-      if (document.format !== 'asciidoc' && document.format !== 'restructuredtext') {
-        const isRelative = refPath.startsWith('../') || refPath.startsWith('.\\') || refPath.startsWith('./');
-        const hasExtension = /^[a-zA-Z0-9_\-/\\]+\.[a-zA-Z]{1,10}$/.test(refPath);
+      if (isMarkdownLike) {
+        const isRelative = cleanPath.startsWith('../') || cleanPath.startsWith('.\\') || cleanPath.startsWith('./');
+        const hasExtension = /^[a-zA-Z0-9_\-/\\]+\.[a-zA-Z]{1,10}$/.test(cleanPath);
         if (!isRelative && !hasExtension) {
           continue;
         }
       }
-
-      // Extract and strip line number suffixes
-      const { path: cleanPath, lineRef } = this.extractLineReference(refPath);
 
       references.push({
         type: this.type,
@@ -79,7 +81,7 @@ export class FilePathExtractor extends BaseExtractor {
    * Examples:
    *   "../src/file.ts:1" -> { path: "../src/file.ts", lineRef: "1" }
    *   "../src/file.ts:26-38" -> { path: "../src/file.ts", lineRef: "26-38" }
-   *   "../src/file.ts#L123" -> { path: "../src/file.ts", lineRef: "L123" }
+   *   "../src/file.ts#L123" -> { path: "../src/file.ts", lineRef: "123" }
    */
   private extractLineReference(refPath: string): { path: string; lineRef?: string } {
     for (const pattern of LINE_NUMBER_PATTERNS) {
