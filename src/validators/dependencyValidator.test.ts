@@ -1,8 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import { DependencyValidator } from './dependencyValidator.js';
+import { DependencyExtractor } from '../parsers/extractors/dependencyExtractor.js';
 import type { DocFreshnessConfig } from '../types.js';
 import { makeDoc, makeRef as makeBaseRef } from '../test-utils/factories.js';
+import { PEP621_PYPROJECT_FIXTURES } from '../test-utils/manifestFixtures.js';
 
 function makeRef(value: string) {
   return makeBaseRef('dependency', value, { ecosystem: 'npm' });
@@ -94,11 +96,25 @@ describe('DependencyValidator', () => {
       expect(results).toEqual([true, true, true]);
     });
 
-    it('parses pyproject.toml', async () => {
-      const results = await writeAndValidate('pyproject.toml', '[project.dependencies]\n"fastapi>=0.100"\n"uvicorn"', [
-        'fastapi',
-        'uvicorn',
-      ]);
+    it('parses dotted requirements names and validates their Python aliases', async () => {
+      const dir = path.join(tmpBase, 'requirements-dotted-name');
+      const filePath = path.join(dir, 'requirements.txt');
+      await fs.promises.mkdir(dir, { recursive: true });
+      await fs.promises.writeFile(filePath, 'foo.bar==7\n');
+      const validator = new DependencyValidator();
+      const config: DocFreshnessConfig = {
+        rootDir: process.cwd(),
+        manifestFiles: [path.relative(process.cwd(), filePath)],
+      };
+      const references = ['foo.bar', 'foo_bar', 'foo-bar'].map((value) => makeBaseRef('dependency', value, { ecosystem: 'pypi' }));
+
+      const results = await validator.validateBatch(references, doc, config);
+
+      expect(results.map((result) => result.valid)).toEqual([true, true, true]);
+    });
+
+    it('parses PEP 621 core and optional dependencies', async () => {
+      const results = await writeAndValidate('pyproject.toml', PEP621_PYPROJECT_FIXTURES[0].content, ['fastapi', 'pytest']);
       expect(results).toEqual([true, true]);
     });
 
@@ -131,6 +147,34 @@ describe('DependencyValidator', () => {
     const config: DocFreshnessConfig = { rootDir: process.cwd(), manifestFiles: ['package.json'] };
     const results = await validator.validateBatch([makeRef('Vitest'), makeRef('VITEST')], doc, config);
     expect(results.every((r) => r.valid)).toBe(true);
+  });
+
+  it('validates extracted PyPI aliases without treating npm names as equivalent', async () => {
+    const dir = path.join(tmpBase, 'mixed-ecosystems');
+    await fs.promises.mkdir(dir, { recursive: true });
+    const packageJson = path.join(dir, 'package.json');
+    const pyproject = path.join(dir, 'pyproject.toml');
+    await fs.promises.writeFile(packageJson, JSON.stringify({ dependencies: { foo_bar: '1.0.0', 'foo.bar': '1.0.0' } }));
+    await fs.promises.writeFile(pyproject, '[project]\ndependencies = ["python-name==1.0"]\n');
+    const validator = new DependencyValidator();
+    const config: DocFreshnessConfig = {
+      rootDir: process.cwd(),
+      manifestFiles: [path.relative(process.cwd(), packageJson), path.relative(process.cwd(), pyproject)],
+    };
+    const content = 'Use `python_name`, `python.name`, `foo_bar`, and `foo.bar`';
+    const integrationDoc = makeDoc({ content, lines: [content] });
+    const references = new DependencyExtractor({ ecosystems: ['pypi'] }).extract(integrationDoc);
+    integrationDoc.references = references;
+
+    const results = await validator.validateBatch(references, integrationDoc, config);
+
+    expect(references.map(({ value, ecosystem }) => ({ value, ecosystem }))).toEqual([
+      { value: 'python_name', ecosystem: 'pypi' },
+      { value: 'python.name', ecosystem: 'pypi' },
+      { value: 'foo_bar', ecosystem: 'pypi' },
+      { value: 'foo.bar', ecosystem: 'pypi' },
+    ]);
+    expect(results.map((result) => result.valid)).toEqual([true, true, false, false]);
   });
 
   describe('manifest edge cases', () => {

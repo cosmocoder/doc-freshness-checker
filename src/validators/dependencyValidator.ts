@@ -3,16 +3,19 @@ import path from 'path';
 import { resolveManifestPaths } from '../utils/manifestPaths.js';
 import type { IncrementalInput } from './incrementalInputs.js';
 import type { DocFreshnessConfig, Document, Reference, ValidationResult } from '../types.js';
+import { canonicalizePythonPackageName, parsePyprojectDependencies, parseRequirementsDependencies } from '../utils/pythonDependencies.js';
 
 /**
  * Validates that mentioned dependencies exist in manifest files
  */
 export class DependencyValidator {
   private dependencies: Set<string> | null;
+  private pythonDependencies: Set<string>;
   private loadedFromKey: string | null;
 
   constructor() {
     this.dependencies = null;
+    this.pythonDependencies = new Set();
     this.loadedFromKey = null;
   }
 
@@ -30,6 +33,7 @@ export class DependencyValidator {
     }
 
     this.dependencies = new Set();
+    this.pythonDependencies = new Set();
     this.loadedFromKey = configKey;
 
     for (const manifestPath of manifestPaths) {
@@ -40,6 +44,9 @@ export class DependencyValidator {
         const deps = await this.parseManifest(fileName, content);
         for (const dep of deps) {
           this.dependencies.add(dep.toLowerCase());
+          if (fileName === 'pyproject.toml' || fileName === 'requirements.txt') {
+            this.pythonDependencies.add(canonicalizePythonPackageName(dep));
+          }
         }
       }
       catch {
@@ -62,7 +69,10 @@ export class DependencyValidator {
       const pkg = ref.value.toLowerCase();
 
       // Check if package exists in dependencies
-      const found = this.dependencies!.has(pkg);
+      const found =
+        ref.ecosystem === 'pypi'
+          ? this.pythonDependencies.has(canonicalizePythonPackageName(pkg))
+          : this.dependencies!.has(pkg) || (!ref.ecosystem && this.pythonDependencies.has(canonicalizePythonPackageName(pkg)));
 
       if (found) {
         results.push({
@@ -89,20 +99,8 @@ const manifestDependencyParsers: Record<string, (content: string) => string[]> =
     const json = JSON.parse(content) as Record<string, Record<string, unknown>>;
     return ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'].flatMap((key) => Object.keys(json[key] || {}));
   },
-  'requirements.txt': (content) =>
-    content
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith('#'))
-      .map((line) => line.match(/^([a-zA-Z0-9\-_]+)/)?.[1])
-      .filter((dep): dep is string => Boolean(dep)),
-  'pyproject.toml': (content) => {
-    const depsMatch = content.match(/\[project\.dependencies\]([\s\S]*?)(?:\[|$)/);
-    if (!depsMatch) {
-      return [];
-    }
-    return Array.from(depsMatch[1].matchAll(/"([^"<>=!]+)/g), (match) => match[1].split(/[<>=!]/)[0]);
-  },
+  'requirements.txt': (content) => Array.from(parseRequirementsDependencies(content).keys()),
+  'pyproject.toml': (content) => Array.from(parsePyprojectDependencies(content).keys()),
   'go.mod': (content) => {
     const requireMatch = content.match(/require\s+\(([\s\S]*?)\)/);
     if (!requireMatch) {

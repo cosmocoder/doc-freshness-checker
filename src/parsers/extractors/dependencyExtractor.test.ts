@@ -29,6 +29,31 @@ describe('DependencyExtractor', () => {
     expect(values).toContain('commander');
   });
 
+  it('extracts underscore PyPI names without treating dotted names as packages by default', () => {
+    const refs = extractor.extract(makeDoc('Use `foo_bar`, `foo.bar`, and `foo-bar`'));
+    expect(refs.map(({ value, ecosystem }) => ({ value, ecosystem }))).toEqual([
+      { value: 'foo_bar', ecosystem: 'pypi' },
+      { value: 'foo-bar', ecosystem: 'npm' },
+    ]);
+  });
+
+  it('assigns ordinary packages to PyPI when npm is disabled', () => {
+    const pypiOnly = new DependencyExtractor({ ecosystems: ['pypi'] });
+    const refs = pypiOnly.extract(makeDoc('Use `requests`, `pytest-cov`, `foo_bar`, and `foo.bar`'));
+    expect(refs.map(({ value, ecosystem }) => ({ value, ecosystem }))).toEqual([
+      { value: 'foo_bar', ecosystem: 'pypi' },
+      { value: 'foo.bar', ecosystem: 'pypi' },
+      { value: 'requests', ecosystem: 'pypi' },
+      { value: 'pytest-cov', ecosystem: 'pypi' },
+    ]);
+  });
+
+  it.each(['go', 'crates'])('filters dotted names when PyPI is combined with %s', (otherEcosystem) => {
+    const mixed = new DependencyExtractor({ ecosystems: ['pypi', otherEcosystem] });
+    const refs = mixed.extract(makeDoc('Use `foo.bar` and edit `config.mjs`'));
+    expect(refs).toHaveLength(0);
+  });
+
   it('extracts Go packages', () => {
     const doc = makeDoc('Import `github.com/gin-gonic/gin`');
     const refs = extractor.extract(doc);
@@ -42,7 +67,7 @@ describe('DependencyExtractor', () => {
   });
 
   it('filters out file extensions', () => {
-    const doc = makeDoc('Edit `styles.css` and `app.tsx`');
+    const doc = makeDoc('Open `archive.zip`, `config.mjs`, `index.php`, `app.vue`, `schema.sql`, and `package.lock`');
     const refs = extractor.extract(doc);
     expect(refs).toHaveLength(0);
   });

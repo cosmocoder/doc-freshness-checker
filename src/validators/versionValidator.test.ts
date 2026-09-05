@@ -3,6 +3,7 @@ import path from 'path';
 import { VersionValidator, manifestParsers } from './versionValidator.js';
 import type { DocFreshnessConfig, Reference } from '../types.js';
 import { makeDoc, makeRef as makeBaseRef } from '../test-utils/factories.js';
+import { PEP621_PYPROJECT_FIXTURES } from '../test-utils/manifestFixtures.js';
 
 function makeRef(technology: string, version: string): Reference {
   return makeBaseRef('version', `${technology} ${version}`, { technology, version });
@@ -130,6 +131,243 @@ describe('VersionValidator', () => {
     const results = await validator.validateBatch([makeRef('flask', '2.0')], doc, config);
     expect(results[0].valid).toBe(false);
     expect(results[0].severity).toBe('error');
+  });
+
+  it('does not treat PEP 621 ranges as actual versions but enforces exact pins', async () => {
+    const filePath = path.join(tmpDir, 'pep621-constraints', 'pyproject.toml');
+    await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.promises.writeFile(filePath, PEP621_PYPROJECT_FIXTURES[0].content);
+    const validator = new VersionValidator();
+    const config: DocFreshnessConfig = {
+      rootDir: process.cwd(),
+      manifestFiles: [path.relative(process.cwd(), filePath)],
+    };
+
+    const results = await validator.validateBatch([makeRef('fastapi', '9.0'), makeRef('uvicorn', '9.0')], doc, config);
+
+    expect(results[0].valid).toBe(true);
+    expect(results[0].message).toContain('listed without an exact version');
+    expect(results[1].valid).toBe(false);
+    expect(results[1].message).toContain('actual is 0.30.1');
+  });
+
+  it('scopes PEP 503 alias fallback to pyproject versions', async () => {
+    const dir = path.join(tmpDir, 'mixed-ecosystems');
+    await fs.promises.mkdir(dir, { recursive: true });
+    const packageJson = path.join(dir, 'package.json');
+    const pyproject = path.join(dir, 'pyproject.toml');
+    await fs.promises.writeFile(packageJson, JSON.stringify({ dependencies: { 'foo-bar': '9.0.0' } }));
+    await fs.promises.writeFile(pyproject, '[project]\ndependencies = ["dash-name==1.2", "under_score==2.4"]\n');
+    const validator = new VersionValidator();
+    const config: DocFreshnessConfig = {
+      rootDir: process.cwd(),
+      manifestFiles: [path.relative(process.cwd(), packageJson), path.relative(process.cwd(), pyproject)],
+    };
+
+    const results = await validator.validateBatch(
+      [
+        makeRef('dash_name', '9.0'),
+        makeRef('dash.name', '1.0'),
+        makeRef('under-score', '9.0'),
+        makeRef('under.score', '2.0'),
+        makeRef('foo_bar', '1.0'),
+      ],
+      doc,
+      config
+    );
+
+    expect(results.map((result) => result.valid)).toEqual([false, true, false, true, true]);
+    expect(results[1].message).toBeUndefined();
+    expect(results[3].message).toBeUndefined();
+    expect(results[4].message).toContain('Could not find foo_bar');
+  });
+
+  it.each([
+    {
+      name: 'underscore package name with pyproject later',
+      packageName: 'foo_bar',
+      pythonName: 'foo-bar',
+      order: ['packageJson', 'pyproject'] as const,
+      expected: '2.0',
+      stale: '9.0',
+    },
+    {
+      name: 'exact package name with package.json later',
+      packageName: 'shared-lib',
+      pythonName: 'shared-lib',
+      order: ['pyproject', 'packageJson'] as const,
+      expected: '9.0',
+      stale: '2.0',
+    },
+  ])('uses the later manifest version for $name', async ({ name, packageName, pythonName, order, expected, stale }) => {
+    const dir = path.join(tmpDir, `manifest-order-${name.replace(/\W+/g, '-')}`);
+    await fs.promises.mkdir(dir, { recursive: true });
+    const packageJson = path.join(dir, 'package.json');
+    const pyproject = path.join(dir, 'pyproject.toml');
+    await fs.promises.writeFile(packageJson, JSON.stringify({ dependencies: { [packageName]: '9.0.0' } }));
+    await fs.promises.writeFile(pyproject, `[project]\ndependencies = ["${pythonName}==2.0.0"]\n`);
+    const manifests = { packageJson, pyproject };
+    const validator = new VersionValidator();
+    const config: DocFreshnessConfig = {
+      rootDir: process.cwd(),
+      manifestFiles: order.map((key) => path.relative(process.cwd(), manifests[key])),
+    };
+
+    const results = await validator.validateBatch([makeRef(packageName, expected), makeRef(packageName, stale)], doc, config);
+
+    expect(results[0].valid).toBe(true);
+    expect(results[1].valid).toBe(false);
+    expect(results[1].message).toContain(`actual is ${expected}`);
+  });
+
+  it.each([
+    { name: 'pyproject is later', order: ['requirements', 'pyproject'] as const, expected: '2.0', stale: '7.0' },
+    { name: 'requirements is later', order: ['pyproject', 'requirements'] as const, expected: '7.0', stale: '2.0' },
+  ])('uses the later Python manifest when $name', async ({ name, order, expected, stale }) => {
+    const dir = path.join(tmpDir, `python-manifest-order-${name.replace(/\W+/g, '-')}`);
+    await fs.promises.mkdir(dir, { recursive: true });
+    const requirements = path.join(dir, 'requirements.txt');
+    const pyproject = path.join(dir, 'pyproject.toml');
+    await fs.promises.writeFile(requirements, 'shared_lib==7.0.0\n');
+    await fs.promises.writeFile(pyproject, '[project]\ndependencies = ["shared-lib==2.0.0"]\n');
+    const manifests = { requirements, pyproject };
+    const validator = new VersionValidator();
+    const config: DocFreshnessConfig = {
+      rootDir: process.cwd(),
+      manifestFiles: order.map((key) => path.relative(process.cwd(), manifests[key])),
+    };
+
+    const results = await validator.validateBatch([makeRef('shared.lib', expected), makeRef('shared.lib', stale)], doc, config);
+
+    expect(results[0].valid).toBe(true);
+    expect(results[1].valid).toBe(false);
+    expect(results[1].message).toContain(`actual is ${expected}`);
+  });
+
+  it('treats non-exact requirements without a fixed major as unpinned', async () => {
+    const dir = path.join(tmpDir, 'requirements-pin-semantics');
+    const requirements = path.join(dir, 'requirements.txt');
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.writeFile(
+      requirements,
+      ['range_pkg>=1,<3', 'excluded_pkg!=5', 'direct_pkg @ https://example.com/direct_pkg.whl', 'unpinned_pkg'].join('\n')
+    );
+    const validator = new VersionValidator();
+    const config: DocFreshnessConfig = {
+      rootDir: process.cwd(),
+      manifestFiles: [path.relative(process.cwd(), requirements)],
+    };
+
+    const results = await validator.validateBatch(
+      [makeRef('range_pkg', '9.0'), makeRef('excluded_pkg', '9.0'), makeRef('direct_pkg', '9.0'), makeRef('unpinned_pkg', '9.0')],
+      doc,
+      config
+    );
+
+    expect(results.every((result) => result.valid)).toBe(true);
+    for (const result of results) {
+      expect(result.message).toContain('listed without an exact version');
+    }
+  });
+
+  it('compares compatible-release requirements by major version', async () => {
+    const dir = path.join(tmpDir, 'requirements-compatible-release');
+    const requirements = path.join(dir, 'requirements.txt');
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.writeFile(requirements, 'flask~=2.0\n');
+    const validator = new VersionValidator();
+    const config: DocFreshnessConfig = {
+      rootDir: process.cwd(),
+      manifestFiles: [path.relative(process.cwd(), requirements)],
+    };
+
+    const results = await validator.validateBatch([makeRef('flask', '1.0')], doc, config);
+
+    expect(results[0].valid).toBe(false);
+    expect(results[0].message).toContain('actual is 2.0');
+  });
+
+  it.each(['foo_bar==1\nfoo-bar==2\n', 'foo-bar==2\nfoo_bar==1\n'])(
+    'treats conflicting requirements aliases as unpinned',
+    async (content) => {
+      const dir = path.join(tmpDir, `requirements-conflict-${content.startsWith('foo_bar') ? 'underscore-first' : 'dash-first'}`);
+      const requirements = path.join(dir, 'requirements.txt');
+      await fs.promises.mkdir(dir, { recursive: true });
+      await fs.promises.writeFile(requirements, content);
+      const validator = new VersionValidator();
+      const config: DocFreshnessConfig = {
+        rootDir: process.cwd(),
+        manifestFiles: [path.relative(process.cwd(), requirements)],
+      };
+
+      const results = await validator.validateBatch(
+        [makeRef('foo_bar', '9.0'), makeRef('foo-bar', '9.0'), makeRef('foo.bar', '9.0')],
+        doc,
+        config
+      );
+
+      expect(results.every((result) => result.valid)).toBe(true);
+      expect(results.every((result) => result.message?.includes('listed without an exact version'))).toBe(true);
+    }
+  );
+
+  it('keeps the version when equivalent requirements aliases have the same pin', async () => {
+    const dir = path.join(tmpDir, 'requirements-same-pin');
+    const requirements = path.join(dir, 'requirements.txt');
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.writeFile(requirements, 'foo_bar==2\nfoo-bar===2\n');
+    const validator = new VersionValidator();
+    const config: DocFreshnessConfig = {
+      rootDir: process.cwd(),
+      manifestFiles: [path.relative(process.cwd(), requirements)],
+    };
+
+    const results = await validator.validateBatch([makeRef('foo.bar', '2.0'), makeRef('foo_bar', '9.0')], doc, config);
+
+    expect(results[0].valid).toBe(true);
+    expect(results[1].valid).toBe(false);
+    expect(results[1].message).toContain('actual is 2');
+  });
+
+  it('does not let an npm canonical alias override a Python candidate', async () => {
+    const dir = path.join(tmpDir, 'cross-origin-alias');
+    await fs.promises.mkdir(dir, { recursive: true });
+    const pyproject = path.join(dir, 'pyproject.toml');
+    const packageJson = path.join(dir, 'package.json');
+    await fs.promises.writeFile(pyproject, '[project]\ndependencies = ["foo_bar==2.0.0"]\n');
+    await fs.promises.writeFile(packageJson, JSON.stringify({ dependencies: { 'foo-bar': '9.0.0' } }));
+    const validator = new VersionValidator();
+    const config: DocFreshnessConfig = {
+      rootDir: process.cwd(),
+      manifestFiles: [path.relative(process.cwd(), pyproject), path.relative(process.cwd(), packageJson)],
+    };
+
+    const results = await validator.validateBatch([makeRef('foo.bar', '2.0'), makeRef('foo.bar', '9.0')], doc, config);
+
+    expect(results[0].valid).toBe(true);
+    expect(results[1].valid).toBe(false);
+    expect(results[1].message).toContain('actual is 2.0.0');
+  });
+
+  it('compares PEP 440 epoch and date release majors', async () => {
+    const filePath = path.join(tmpDir, 'pep440-releases', 'pyproject.toml');
+    await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.promises.writeFile(filePath, PEP621_PYPROJECT_FIXTURES[1].content);
+    const validator = new VersionValidator();
+    const config: DocFreshnessConfig = {
+      rootDir: process.cwd(),
+      manifestFiles: [path.relative(process.cwd(), filePath)],
+    };
+
+    const results = await validator.validateBatch(
+      [makeRef('epoch_pkg', '2.0'), makeRef('epoch.pkg', '4.0'), makeRef('date_pkg', '2023.0'), makeRef('date.pkg', '2024.0')],
+      doc,
+      config
+    );
+
+    expect(results.map((result) => result.valid)).toEqual([false, true, false, true]);
+    expect(results[0].message).toContain('actual is 2!4.2');
+    expect(results[2].message).toContain('actual is 2024.01');
   });
 
   it('handles unparseable version strings gracefully', async () => {
@@ -279,19 +517,34 @@ describe('manifestParsers', () => {
 
   it('parses requirements.txt with versions and comments', async () => {
     const filePath = path.join(tmpDir, 'requirements.txt');
-    await fs.promises.writeFile(filePath, 'flask>=2.0.1\nrequests==2.31.0\n# comment\ndjango\n');
+    await fs.promises.writeFile(
+      filePath,
+      [
+        'flask>=2.0.1',
+        'requests==2.31.0',
+        'foo.bar==7',
+        'base_pkg[extra]==3.2',
+        'commented_pkg==4.1 # reason',
+        'direct_pkg @ https://example.com/archive.whl#sha256=abc',
+        '# comment',
+        'django',
+      ].join('\n')
+    );
     const versions = await manifestParsers['requirements.txt'](filePath);
-    expect(versions.get('flask')).toBe('2.0.1');
+    expect(versions.get('flask')).toBe('any');
     expect(versions.get('requests')).toBe('2.31.0');
+    expect(versions.get('foo.bar')).toBe('7');
+    expect(versions.get('base_pkg')).toBe('3.2');
+    expect(versions.get('commented_pkg')).toBe('4.1');
+    expect(versions.get('direct_pkg')).toBe('any');
     expect(versions.get('django')).toBe('any');
   });
 
-  it('parses pyproject.toml', async () => {
+  it.each(PEP621_PYPROJECT_FIXTURES)('parses PEP 621 $name', async ({ content, dependencies }) => {
     const filePath = path.join(tmpDir, 'pyproject.toml');
-    await fs.promises.writeFile(filePath, '[project.dependencies]\n"fastapi>=0.100.0"\n"pydantic>=2.0"\n');
+    await fs.promises.writeFile(filePath, content);
     const versions = await manifestParsers['pyproject.toml'](filePath);
-    expect(versions.get('fastapi')).toBeDefined();
-    expect(versions.get('pydantic')).toBeDefined();
+    expect(Object.fromEntries(versions)).toEqual(dependencies);
   });
 
   it('parses go.mod', async () => {
