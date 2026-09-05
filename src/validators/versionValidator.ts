@@ -157,9 +157,8 @@ export class VersionValidator {
       return;
     }
 
-    this.packageVersions = new Map();
-    this.pythonVersions = new Map();
-    this.loadedFromKey = configKey;
+    const packageVersions = new Map<string, VersionCandidate>();
+    const pythonVersions = new Map<string, VersionCandidate>();
 
     for (const [sourceIndex, manifestPath] of manifestPaths.entries()) {
       const fileName = path.basename(manifestPath);
@@ -173,17 +172,21 @@ export class VersionValidator {
         const versions = await parser(manifestPath);
         for (const [name, version] of versions) {
           const candidate = { version, sourceIndex };
-          this.packageVersions.set(name, candidate);
+          packageVersions.set(name, candidate);
           if (fileName === 'pyproject.toml' || fileName === 'requirements.txt') {
             const canonicalName = canonicalizePythonPackageName(name);
-            this.pythonVersions.set(canonicalName, candidate);
+            pythonVersions.set(canonicalName, candidate);
           }
         }
       }
-      catch {
-        // Manifest file not found or parse error
+      catch (cause) {
+        throw new Error(`Failed to load manifest: ${manifestPath}: ${cause instanceof Error ? cause.message : String(cause)}`, { cause });
       }
     }
+
+    this.packageVersions = packageVersions;
+    this.pythonVersions = pythonVersions;
+    this.loadedFromKey = configKey;
   }
 
   async validateBatch(references: Reference[], _document: Document, config: DocFreshnessConfig): Promise<ValidationResult[]> {

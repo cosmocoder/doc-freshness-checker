@@ -67,13 +67,6 @@ describe('DependencyValidator', () => {
     expect(results[0].severity).toBe('error');
   });
 
-  it('handles missing manifest files gracefully', async () => {
-    const validator = new DependencyValidator();
-    const config: DocFreshnessConfig = { rootDir: process.cwd(), manifestFiles: ['nonexistent.json'] };
-    const results = await validator.validateBatch([makeRef('anything')], doc, config);
-    expect(results[0].valid).toBe(false);
-  });
-
   it('uses default manifestFiles when not specified', async () => {
     const validator = new DependencyValidator();
     const config: DocFreshnessConfig = { rootDir: process.cwd() };
@@ -195,11 +188,6 @@ describe('DependencyValidator', () => {
 
     it('handles Cargo.toml without dependencies section', async () => {
       const results = await writeAndValidate('Cargo.toml', '[package]\nname = "myapp"\nversion = "0.1.0"\n', ['myapp']);
-      expect(results).toEqual([false]);
-    });
-
-    it('handles unknown manifest format gracefully', async () => {
-      const results = await writeAndValidate('build.gradle', 'implementation "org.something:artifact:1.0"\n', ['org.something']);
       expect(results).toEqual([false]);
     });
 

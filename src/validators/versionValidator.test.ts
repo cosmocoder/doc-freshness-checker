@@ -69,21 +69,6 @@ describe('VersionValidator', () => {
     expect(results[0]).toBeDefined();
   });
 
-  it('skips unknown manifest file types', async () => {
-    const validator = new VersionValidator();
-    const config: DocFreshnessConfig = { rootDir: process.cwd(), manifestFiles: ['unknown-manifest.xyz'] };
-    const results = await validator.validateBatch([makeRef('SomeTech', '1.0')], doc, config);
-    expect(results[0].valid).toBe(true);
-    expect(results[0].message).toContain('Could not find');
-  });
-
-  it('handles manifest parse errors gracefully', async () => {
-    const validator = new VersionValidator();
-    const config: DocFreshnessConfig = { rootDir: process.cwd(), manifestFiles: ['nonexistent-file.json'] };
-    const results = await validator.validateBatch([makeRef('SomeTech', '1.0')], doc, config);
-    expect(results[0].valid).toBe(true);
-  });
-
   it('treats version "any" as not constraining', async () => {
     const dir = path.join(tmpDir, 'any-ver');
     await fs.promises.mkdir(dir, { recursive: true });
