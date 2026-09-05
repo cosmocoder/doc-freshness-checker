@@ -4,6 +4,7 @@ import { VersionValidator, manifestParsers } from './versionValidator.js';
 import type { DocFreshnessConfig, Reference } from '../types.js';
 import { makeDoc, makeRef as makeBaseRef } from '../test-utils/factories.js';
 import { PEP621_PYPROJECT_FIXTURES } from '../test-utils/manifestFixtures.js';
+import { GO_MOD_REQUIRE_FIXTURE } from '../test-utils/goModFixture.js';
 
 function makeRef(technology: string, version: string): Reference {
   return makeBaseRef('version', `${technology} ${version}`, { technology, version });
@@ -355,6 +356,23 @@ describe('VersionValidator', () => {
     expect(results[2].message).toContain('actual is 2024.01');
   });
 
+  it('detects a mismatch from a single-line go.mod requirement', async () => {
+    const dir = path.join(tmpDir, 'single-line-go-require');
+    const filePath = path.join(dir, 'go.mod');
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.writeFile(filePath, GO_MOD_REQUIRE_FIXTURE);
+    const validator = new VersionValidator();
+    const config: DocFreshnessConfig = {
+      rootDir: process.cwd(),
+      manifestFiles: [path.relative(process.cwd(), filePath)],
+    };
+
+    const results = await validator.validateBatch([makeRef('github.com/google/uuid', '2.0')], doc, config);
+
+    expect(results[0].valid).toBe(false);
+    expect(results[0].message).toContain('actual is 1.6.0');
+  });
+
   it('handles unparseable version strings gracefully', async () => {
     const validator = new VersionValidator();
     const config: DocFreshnessConfig = { rootDir: process.cwd(), manifestFiles: ['package.json'] };
@@ -534,11 +552,15 @@ describe('manifestParsers', () => {
 
   it('parses go.mod', async () => {
     const filePath = path.join(tmpDir, 'go.mod');
-    await fs.promises.writeFile(filePath, 'module example.com/mymod\n\ngo 1.21\n\nrequire (\n\tgithub.com/gin-gonic/gin v1.9.1\n)');
+    await fs.promises.writeFile(filePath, GO_MOD_REQUIRE_FIXTURE);
     const versions = await manifestParsers['go.mod'](filePath);
-    expect(versions.get('go')).toBe('1.21');
-    expect(versions.get('golang')).toBe('1.21');
+    expect(versions.get('go')).toBe('1.22');
+    expect(versions.get('golang')).toBe('1.22');
+    expect(versions.get('github.com/google/uuid')).toBe('1.6.0');
+    expect(versions.get('github.com/google/go-cmp')).toBe('0.6.0');
     expect(versions.get('github.com/gin-gonic/gin')).toBe('1.9.1');
+    expect(versions.get('golang.org/x/text')).toBe('0.14.0');
+    expect(versions.has('example.com/commented')).toBe(false);
   });
 
   it('parses Cargo.toml', async () => {

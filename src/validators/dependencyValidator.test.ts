@@ -5,6 +5,7 @@ import { DependencyExtractor } from '../parsers/extractors/dependencyExtractor.j
 import type { DocFreshnessConfig } from '../types.js';
 import { makeDoc, makeRef as makeBaseRef } from '../test-utils/factories.js';
 import { PEP621_PYPROJECT_FIXTURES } from '../test-utils/manifestFixtures.js';
+import { GO_MOD_REQUIRE_FIXTURE } from '../test-utils/goModFixture.js';
 
 function makeRef(value: string) {
   return makeBaseRef('dependency', value, { ecosystem: 'npm' });
@@ -112,12 +113,14 @@ describe('DependencyValidator', () => {
     });
 
     it('parses go.mod', async () => {
-      const results = await writeAndValidate(
-        'go.mod',
-        'module example.com/app\n\ngo 1.21\n\nrequire (\n\tgithub.com/gin-gonic/gin v1.9.1\n\tgolang.org/x/text v0.14.0\n)',
-        ['github.com/gin-gonic/gin', 'golang.org/x/text']
-      );
-      expect(results).toEqual([true, true]);
+      const results = await writeAndValidate('go.mod', GO_MOD_REQUIRE_FIXTURE, [
+        'github.com/google/uuid',
+        'github.com/google/go-cmp',
+        'github.com/gin-gonic/gin',
+        'golang.org/x/text',
+        'example.com/commented',
+      ]);
+      expect(results).toEqual([true, true, true, true, false]);
     });
 
     it('parses Cargo.toml', async () => {
