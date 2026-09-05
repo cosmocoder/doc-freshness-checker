@@ -1,10 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import { VersionValidator, manifestParsers } from './versionValidator.js';
-import type { DocFreshnessConfig, Reference } from '../types.js';
+import type { DocFreshnessConfig, Reference, ValidationResult } from '../types.js';
 import { makeDoc, makeRef as makeBaseRef } from '../test-utils/factories.js';
 import { PEP621_PYPROJECT_FIXTURES } from '../test-utils/manifestFixtures.js';
 import { GO_MOD_REQUIRE_FIXTURE } from '../test-utils/goModFixture.js';
+import { CARGO_DEPENDENCY_FIXTURE, CARGO_WORKSPACE_MEMBER_FIXTURE } from '../test-utils/cargoFixture.js';
 
 function makeRef(technology: string, version: string): Reference {
   return makeBaseRef('version', `${technology} ${version}`, { technology, version });
@@ -12,6 +13,26 @@ function makeRef(technology: string, version: string): Reference {
 
 const doc = makeDoc();
 const tmpDir = path.join(process.cwd(), '.doc-freshness-cache', 'manifest-test');
+
+type ManifestFixtures = Record<string, readonly [fileName: string, content: string]>;
+
+async function validateManifests(
+  testName: string,
+  manifests: ManifestFixtures,
+  order: readonly string[],
+  references: Reference[]
+): Promise<ValidationResult[]> {
+  const dir = path.join(tmpDir, testName);
+  for (const [key, [fileName, content]] of Object.entries(manifests)) {
+    const manifestPath = path.join(dir, key, fileName);
+    await fs.promises.mkdir(path.dirname(manifestPath), { recursive: true });
+    await fs.promises.writeFile(manifestPath, content);
+  }
+  return new VersionValidator().validateBatch(references, doc, {
+    rootDir: dir,
+    manifestFiles: order.map((key) => path.join(key, manifests[key][0])),
+  });
+}
 
 describe('VersionValidator', () => {
   it('captures default manifest inputs', async () => {
@@ -373,6 +394,176 @@ describe('VersionValidator', () => {
     expect(results[0].message).toContain('actual is 1.6.0');
   });
 
+  it.each([['root', 'member'] as const, ['member', 'root'] as const])(
+    'uses a listed Cargo workspace root version in %s/%s order',
+    async (...order) => {
+      const results = await validateManifests(
+        `cargo-workspace-${order.join('-')}`,
+        {
+          root: ['Cargo.toml', CARGO_DEPENDENCY_FIXTURE],
+          member: ['Cargo.toml', CARGO_WORKSPACE_MEMBER_FIXTURE],
+        },
+        order,
+        [makeRef('shared', '4.0')]
+      );
+
+      expect(results[0].valid).toBe(false);
+      expect(results[0].message).toContain('actual is 3.2.0');
+    }
+  );
+
+  it.each([
+    {
+      name: 'without a root',
+      manifests: [CARGO_WORKSPACE_MEMBER_FIXTURE],
+      valid: true,
+      message: 'listed without an exact version',
+    },
+    {
+      name: 'with an unrelated regular dependency',
+      manifests: ['[dependencies]\nshared = "8.0"\n', CARGO_WORKSPACE_MEMBER_FIXTURE],
+      valid: false,
+      message: 'actual is 8.0',
+    },
+  ])('handles a workspace reference $name', async ({ name, manifests, valid, message }) => {
+    const fixtures = Object.fromEntries(manifests.map((content, index) => [String(index), ['Cargo.toml', content] as const]));
+    const results = await validateManifests(`cargo-unresolved-${name.replace(/\W+/g, '-')}`, fixtures, Object.keys(fixtures), [
+      makeRef('shared', '9.0'),
+    ]);
+
+    expect(results[0].valid).toBe(valid);
+    expect(results[0].message).toContain(message);
+  });
+
+  it.each([['packageJson', 'member'] as const, ['member', 'packageJson'] as const])(
+    'uses a concrete package version despite an unresolved workspace reference in %s/%s order',
+    async (...order) => {
+      const results = await validateManifests(
+        `cargo-unresolved-package-${order.join('-')}`,
+        {
+          member: ['Cargo.toml', CARGO_WORKSPACE_MEMBER_FIXTURE],
+          packageJson: ['package.json', JSON.stringify({ dependencies: { shared: '9.0.0' } })],
+        },
+        order,
+        [makeRef('shared', '8.0')]
+      );
+
+      expect(results[0].valid).toBe(false);
+      expect(results[0].message).toContain('actual is 9.0.0');
+    }
+  );
+
+  it('prefers a concrete Cargo version over an earlier unpinned requirement', async () => {
+    const results = await validateManifests(
+      'cargo-concrete-beats-earlier-unpinned',
+      {
+        python: ['requirements.txt', 'shared\n'],
+        cargo: ['Cargo.toml', '[dependencies]\nshared = "1.0"\n'],
+      },
+      ['python', 'cargo'],
+      [makeRef('shared', '9.9')]
+    );
+
+    expect(results[0].valid).toBe(false);
+    expect(results[0].message).toContain('actual is 1.0');
+  });
+
+  it.each([
+    {
+      name: 'package.json is later',
+      order: ['cargo', 'packageJson'] as const,
+      expected: '9.0',
+      stale: '3.0',
+      actual: '9.0.0',
+    },
+    {
+      name: 'Cargo.toml is later',
+      order: ['packageJson', 'cargo'] as const,
+      expected: '3.0',
+      stale: '9.0',
+      actual: '3.2.0',
+    },
+  ])('uses the later configured candidate when $name', async ({ name, order, expected, stale, actual }) => {
+    const results = await validateManifests(
+      `cargo-origin-order-${name.replace(/\W+/g, '-')}`,
+      {
+        cargo: ['Cargo.toml', CARGO_DEPENDENCY_FIXTURE],
+        packageJson: ['package.json', JSON.stringify({ dependencies: { shared: '9.0.0' } })],
+      },
+      order,
+      [makeRef('shared', expected), makeRef('shared', stale)]
+    );
+
+    expect(results[0].valid).toBe(true);
+    expect(results[1].valid).toBe(false);
+    expect(results[1].message).toContain(`actual is ${actual}`);
+  });
+
+  it('uses a later explicit Cargo entry after an unresolved workspace reference', async () => {
+    const content = '[dependencies]\nshared = { workspace = true }\n[dev-dependencies]\nshared = "4.0"\n';
+    const results = await validateManifests(
+      'cargo-reference-then-explicit',
+      { cargo: ['Cargo.toml', content] },
+      ['cargo'],
+      [makeRef('shared', '5.0')]
+    );
+    expect(results[0].valid).toBe(false);
+    expect(results[0].message).toContain('actual is 4.0');
+  });
+
+  it('uses an explicit dependency from a later Cargo manifest after an unresolved reference', async () => {
+    const results = await validateManifests(
+      'cargo-reference-then-later-manifest',
+      {
+        member: ['Cargo.toml', CARGO_WORKSPACE_MEMBER_FIXTURE],
+        explicit: ['Cargo.toml', '[dependencies]\nshared = "4.0"\n'],
+      },
+      ['member', 'explicit'],
+      [makeRef('shared', '5.0')]
+    );
+
+    expect(results[0].valid).toBe(false);
+    expect(results[0].message).toContain('actual is 4.0');
+  });
+
+  it('ignores an inline version on a workspace reference unless the workspace defines it', async () => {
+    const content = `[workspace.dependencies]
+defined = "3.0"
+[dependencies]
+unresolved = { workspace = true, version = "5.0" }
+defined = { workspace = true, version = "5.0" }
+`;
+    const results = await validateManifests(
+      'cargo-workspace-inline-version',
+      { cargo: ['Cargo.toml', content] },
+      ['cargo'],
+      [makeRef('unresolved', '9.0'), makeRef('defined', '4.0')]
+    );
+    expect(results[0].valid).toBe(true);
+    expect(results[0].message).toContain('listed without an exact version');
+    expect(results[1].valid).toBe(false);
+    expect(results[1].message).toContain('actual is 3.0');
+  });
+
+  it.each([['root', 'packageJson', 'member'] as const, ['member', 'packageJson', 'root'] as const])(
+    'gives a resolved Cargo workspace dependency the final Cargo source in %s/%s/%s order',
+    async (...order) => {
+      const results = await validateManifests(
+        `cargo-resolved-source-${order.join('-')}`,
+        {
+          root: ['Cargo.toml', CARGO_DEPENDENCY_FIXTURE],
+          member: ['Cargo.toml', CARGO_WORKSPACE_MEMBER_FIXTURE],
+          packageJson: ['package.json', JSON.stringify({ dependencies: { shared: '9.0.0' } })],
+        },
+        order,
+        [makeRef('shared', '9.0')]
+      );
+
+      expect(results[0].valid).toBe(false);
+      expect(results[0].message).toContain('actual is 3.2.0');
+    }
+  );
+
   it('handles unparseable version strings gracefully', async () => {
     const validator = new VersionValidator();
     const config: DocFreshnessConfig = { rootDir: process.cwd(), manifestFiles: ['package.json'] };
@@ -563,27 +754,12 @@ describe('manifestParsers', () => {
     expect(versions.has('example.com/commented')).toBe(false);
   });
 
-  it('parses Cargo.toml', async () => {
-    const filePath = path.join(tmpDir, 'Cargo.toml');
-    await fs.promises.writeFile(filePath, '[dependencies]\nserde = "1.0"\ntokio = "1.28"');
-    const versions = await manifestParsers['Cargo.toml'](filePath);
-    expect(versions.get('serde')).toBe('1.0');
-    expect(versions.get('tokio')).toBe('1.28');
-  });
-
   it('parses go.mod without require block', async () => {
     const filePath = path.join(tmpDir, 'go-no-require.mod');
     await fs.promises.writeFile(filePath, 'module example.com/mymod\n\ngo 1.22\n');
     const versions = await manifestParsers['go.mod'](filePath);
     expect(versions.get('go')).toBe('1.22');
     expect(versions.size).toBe(2);
-  });
-
-  it('parses Cargo.toml without dependencies section', async () => {
-    const filePath = path.join(tmpDir, 'Cargo-empty.toml');
-    await fs.promises.writeFile(filePath, '[package]\nname = "myapp"\nversion = "0.1.0"');
-    const versions = await manifestParsers['Cargo.toml'](filePath);
-    expect(versions.size).toBe(0);
   });
 
   it('parses pyproject.toml without dependencies section', async () => {

@@ -6,6 +6,7 @@ import type { IncrementalInput } from './incrementalInputs.js';
 import type { DocFreshnessConfig, Document, ManifestParser, Reference, ValidationResult } from '../types.js';
 import { canonicalizePythonPackageName, parsePyprojectDependencies, parseRequirementsDependencies } from '../utils/pythonDependencies.js';
 import { parseGoModRequirements } from '../utils/goMod.js';
+import { parseCargoDependencies, resolveCargoDependencies } from '../utils/cargoDependencies.js';
 
 /**
  * Manifest file parsers for different ecosystems
@@ -62,25 +63,6 @@ const manifestParsers: Record<string, ManifestParser> = {
     return versions;
   },
 
-  // Rust: Cargo.toml
-  'Cargo.toml': async (filePath: string): Promise<Map<string, string>> => {
-    const content = await fs.promises.readFile(filePath, 'utf-8');
-    const versions = new Map<string, string>();
-
-    const depsMatch = content.match(/\[dependencies\]([\s\S]*?)(?:\[|$)/);
-    if (depsMatch) {
-      for (const line of depsMatch[1].split('\n')) {
-        const match = line.match(/^([a-zA-Z0-9\-_]+)\s*=\s*"?([^"\n]+)"?/);
-        if (!match) {
-          continue;
-        }
-        versions.set(match[1].toLowerCase(), normalizeVersion(match[2]));
-      }
-    }
-
-    return versions;
-  },
-
   // Java: pom.xml (basic parsing)
   'pom.xml': async (filePath: string): Promise<Map<string, string>> => {
     const content = await fs.promises.readFile(filePath, 'utf-8');
@@ -113,6 +95,13 @@ interface VersionCandidate {
   sourceIndex: number;
 }
 
+function setCandidate(candidates: Map<string, VersionCandidate>, name: string, version: string, sourceIndex: number): void {
+  const current = candidates.get(name);
+  const equallyConcrete = current && (version === 'any') === (current.version === 'any');
+  if (!current || (version !== 'any' && current.version === 'any') || (equallyConcrete && sourceIndex >= current.sourceIndex)) {
+    candidates.set(name, { version, sourceIndex });
+  }
+}
 /**
  * Validates version references against manifest files
  */
@@ -153,28 +142,42 @@ export class VersionValidator {
 
     const packageVersions = new Map<string, VersionCandidate>();
     const pythonVersions = new Map<string, VersionCandidate>();
+    const cargoManifests: Array<{ entries: ReturnType<typeof parseCargoDependencies>; sourceIndex: number }> = [];
 
     for (const [sourceIndex, manifestPath] of manifestPaths.entries()) {
       const fileName = path.basename(manifestPath);
-      const parser = manifestParsers[fileName];
-
-      if (!parser) {
-        continue;
-      }
 
       try {
+        if (fileName === 'Cargo.toml') {
+          const content = await fs.promises.readFile(manifestPath, 'utf-8');
+          cargoManifests.push({ entries: parseCargoDependencies(content), sourceIndex });
+          continue;
+        }
+        const parser = manifestParsers[fileName];
+        if (!parser) {
+          continue;
+        }
         const versions = await parser(manifestPath);
         for (const [name, version] of versions) {
-          const candidate = { version, sourceIndex };
-          packageVersions.set(name, candidate);
+          setCandidate(packageVersions, name, version, sourceIndex);
           if (fileName === 'pyproject.toml' || fileName === 'requirements.txt') {
             const canonicalName = canonicalizePythonPackageName(name);
-            pythonVersions.set(canonicalName, candidate);
+            pythonVersions.set(canonicalName, { version, sourceIndex });
           }
         }
       }
       catch (cause) {
         throw new Error(`Failed to load manifest: ${manifestPath}: ${cause instanceof Error ? cause.message : String(cause)}`, { cause });
+      }
+    }
+
+    const cargoDependencies = cargoManifests.flatMap(({ entries, sourceIndex }) => entries.map((entry) => ({ ...entry, sourceIndex })));
+    for (const [name, dependency] of resolveCargoDependencies(cargoDependencies)) {
+      if (dependency.unresolvedWorkspaceReference) {
+        setCandidate(packageVersions, name, 'any', dependency.sourceIndex);
+      }
+      else {
+        setCandidate(packageVersions, name, normalizeVersion(dependency.version), dependency.sourceIndex);
       }
     }
 

@@ -6,6 +6,7 @@ import type { DocFreshnessConfig } from '../types.js';
 import { makeDoc, makeRef as makeBaseRef } from '../test-utils/factories.js';
 import { PEP621_PYPROJECT_FIXTURES } from '../test-utils/manifestFixtures.js';
 import { GO_MOD_REQUIRE_FIXTURE } from '../test-utils/goModFixture.js';
+import { CARGO_DEPENDENCY_FIXTURE } from '../test-utils/cargoFixture.js';
 
 function makeRef(value: string) {
   return makeBaseRef('dependency', value, { ecosystem: 'npm' });
@@ -124,8 +125,17 @@ describe('DependencyValidator', () => {
     });
 
     it('parses Cargo.toml', async () => {
-      const results = await writeAndValidate('Cargo.toml', '[dependencies]\nserde = "1.0"\ntokio = "1.28"', ['serde', 'tokio']);
-      expect(results).toEqual([true, true]);
+      const results = await writeAndValidate('Cargo.toml', CARGO_DEPENDENCY_FIXTURE, [
+        'serde',
+        'shared',
+        'workspace-unresolved',
+        'regex',
+        'cc',
+        'duplicate',
+        'commented',
+        'target-only',
+      ]);
+      expect(results).toEqual([true, true, true, true, true, true, false, false]);
     });
 
     it('parses pom.xml', async () => {

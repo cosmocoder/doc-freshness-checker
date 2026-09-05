@@ -1,13 +1,14 @@
+import { stripTomlMultilineStrings } from './toml.js';
+
 const QUOTED_STRING = /"((?:\\.|[^"\\])*)"|'([^']*)'/g;
 const TOML_COMMENT = /("(?:\\.|[^"\\])*"|'[^']*')|#[^\r\n]*/g;
 const TOML_ARRAY = /^\[((?:[^"'\]]|"(?:\\.|[^"\\])*"|'[^']*')*)\]/;
-const TOML_MULTILINE_STRING = /"""(?:\\[\s\S]|"{1,2}(?!")|[^"\\])*"""|'''(?:'{1,2}(?!')|[^'])*'''/g;
 
 type DependencyGroups = Map<string, { names: Set<string>; version: string }>;
 
 export function parsePyprojectDependencies(content: string): Map<string, string> {
   const dependencyGroups: DependencyGroups = new Map();
-  const uncommented = stripComments(content.replace(TOML_MULTILINE_STRING, ''));
+  const uncommented = stripComments(stripTomlMultilineStrings(content));
   const coreSection = getSection(uncommented, 'project');
   const optionalSection = getSection(uncommented, 'project.optional-dependencies');
   const arrays = [
