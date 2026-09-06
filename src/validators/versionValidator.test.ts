@@ -618,22 +618,87 @@ defined = { workspace = true, version = "5.0" }
     expect(results[0]).toBeDefined();
   });
 
-  it('parses package.json with peerDependencies', async () => {
+  it('validates package.json peer and optional dependency versions', async () => {
     const dir = path.join(tmpDir, 'peer-deps');
+    const filePath = path.join(dir, 'package.json');
     await fs.promises.mkdir(dir, { recursive: true });
     await fs.promises.writeFile(
-      path.join(dir, 'package.json'),
+      filePath,
       JSON.stringify({
         peerDependencies: { react: '^18.0.0' },
+        optionalDependencies: { fsevents: '^2.3.0' },
       })
     );
     const validator = new VersionValidator();
     const config: DocFreshnessConfig = {
       rootDir: process.cwd(),
-      manifestFiles: [path.relative(process.cwd(), path.join(dir, 'package.json'))],
+      manifestFiles: [path.relative(process.cwd(), filePath)],
     };
-    const results = await validator.validateBatch([makeRef('react', '18.0')], doc, config);
-    expect(results[0].valid).toBe(true);
+    const results = await validator.validateBatch([makeRef('react', '17.0'), makeRef('fsevents', '3.0')], doc, config);
+
+    expect(results[0].valid).toBe(false);
+    expect(results[0].message).toContain('actual is 18.0.0');
+    expect(results[1].valid).toBe(false);
+    expect(results[1].message).toContain('actual is 2.3.0');
+  });
+
+  it('prefers installed versions over peer ranges and keeps engines authoritative', async () => {
+    const results = await validateManifests(
+      'package-json-precedence',
+      {
+        npm: [
+          'package.json',
+          JSON.stringify({
+            engines: { node: '20.0.0' },
+            dependencies: { react: '18.2.0' },
+            devDependencies: { typescript: '5.4.5' },
+            peerDependencies: { react: '^17.0.0', typescript: '>=4.7', node: '14.0.0' },
+          }),
+        ],
+      },
+      ['npm'],
+      [makeRef('react', '17.0'), makeRef('typescript', '4.7'), makeRef('node', '14.0')]
+    );
+
+    expect(results.map((result) => result.valid)).toEqual([false, false, false]);
+    expect(results[0].message).toContain('actual is 18.2.0');
+    expect(results[1].message).toContain('actual is 5.4.5');
+    expect(results[2].message).toContain('actual is 20.0.0');
+  });
+
+  it('skips comparison for wide peer ranges but compares a single-major range', async () => {
+    const results = await validateManifests(
+      'peer-range-semantics',
+      {
+        npm: [
+          'package.json',
+          JSON.stringify({
+            peerDependencies: {
+              react: '^18.0.0',
+              'minimum-only': '>=16',
+              'major-union': '^17 || ^18',
+              'bounded-range': '>=16.8 <19',
+              'hyphen-range': '16.8.0 - 18.2.0',
+            },
+          }),
+        ],
+      },
+      ['npm'],
+      [
+        makeRef('react', '17.0'),
+        makeRef('minimum-only', '16.0'),
+        makeRef('major-union', '18.0'),
+        makeRef('bounded-range', '18.0'),
+        makeRef('hyphen-range', '18.0'),
+      ]
+    );
+
+    expect(results[0].valid).toBe(false);
+    expect(results[0].message).toContain('actual is 18.0.0');
+    for (const result of results.slice(1)) {
+      expect(result.valid).toBe(true);
+      expect(result.message).toContain('listed without an exact version');
+    }
   });
 
   it('uses technology name directly when not in technologyMap', async () => {

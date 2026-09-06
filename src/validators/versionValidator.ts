@@ -17,17 +17,25 @@ const manifestParsers: Record<string, ManifestParser> = {
     const content = JSON.parse(await fs.promises.readFile(filePath, 'utf-8'));
     const versions = new Map<string, string>();
 
+    for (const [name, version] of Object.entries(content.peerDependencies || {})) {
+      versions.set(name.toLowerCase(), normalizePeerVersion(version as string));
+    }
+
+    const allDeps = {
+      ...content.dependencies,
+      ...content.devDependencies,
+      ...content.optionalDependencies,
+    } as Record<string, string>;
+    for (const [name, version] of Object.entries(allDeps)) {
+      versions.set(name.toLowerCase(), normalizeVersion(version as string));
+    }
+
     if (content.engines?.node) {
       versions.set('node', normalizeVersion(content.engines.node));
       versions.set('nodejs', normalizeVersion(content.engines.node));
     }
     if (content.engines?.npm) {
       versions.set('npm', normalizeVersion(content.engines.npm));
-    }
-
-    const allDeps = { ...content.dependencies, ...content.devDependencies } as Record<string, string>;
-    for (const [name, version] of Object.entries(allDeps)) {
-      versions.set(name.toLowerCase(), normalizeVersion(version as string));
     }
 
     return versions;
@@ -88,6 +96,12 @@ function normalizeVersion(version: string): string {
     return 'any';
   }
   return version.replace(/^[\^~>=<]+/, '').replace(/\.x$/i, '.0');
+}
+
+function normalizePeerVersion(version: string): string {
+  const range = semver.validRange(version);
+  const minimum = range && semver.minVersion(range);
+  return minimum && semver.subset(range, `${minimum.major}.x`) ? minimum.version : 'any';
 }
 
 interface VersionCandidate {
