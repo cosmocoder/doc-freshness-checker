@@ -45,6 +45,7 @@ const REPORTER_OUTPUT: Record<ReporterType, 'console' | 'stable' | 'timestamped'
  */
 export async function run(config: DocFreshnessConfig): Promise<ValidationResults> {
   validateConfig(config);
+  const cacheManager = new CacheManager(config);
 
   // Show config file status in verbose mode
   if (config.verbose) {
@@ -61,7 +62,6 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
 
   // Clear cache if requested
   if (config.clearCache) {
-    const cacheManager = new CacheManager(config);
     await cacheManager.clearCache();
     if (config.verbose) {
       console.log('Cache cleared.');
@@ -112,11 +112,7 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
   }
 
   // Load URL cache if available
-  if (config.cache?.enabled !== false) {
-    const cacheManager = new CacheManager(config);
-    const urlCache = await cacheManager.loadUrlCache();
-    urlValidator.loadCache(urlCache);
-  }
+  urlValidator.loadCache(await cacheManager.loadUrlCache());
 
   // Parse documents
   if (config.verbose) {
@@ -133,20 +129,24 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
   // Apply incremental checking if enabled
   let incrementalChecker: IncrementalChecker | null = null;
   if (config.incremental?.enabled && allDocuments.length > 0) {
-    const stateDir = path.resolve(config.rootDir || process.cwd(), config.cache?.dir || config.graph?.cacheDir || '.doc-freshness-cache');
-    const incrementalInputs = await validationEngine.captureIncrementalInputs(allDocuments);
-    const finalFileReporter = (config.reporters || ['console']).findLast(
-      (reporter) => REPORTER_OUTPUT[reporter] === 'stable' || REPORTER_OUTPUT[reporter] === 'timestamped'
-    );
-    const inventoryExclusions =
-      config.outputPath && finalFileReporter && REPORTER_OUTPUT[finalFileReporter] === 'timestamped'
-        ? [path.resolve(config.outputPath)]
-        : [];
-    incrementalChecker = new IncrementalChecker(stateDir);
-    documentsToValidate = await incrementalChecker.filterChanged(allDocuments, config, incrementalInputs, inventoryExclusions);
+    if (cacheManager.policy.enabled) {
+      const incrementalInputs = await validationEngine.captureIncrementalInputs(allDocuments);
+      const finalFileReporter = (config.reporters || ['console']).findLast(
+        (reporter) => REPORTER_OUTPUT[reporter] === 'stable' || REPORTER_OUTPUT[reporter] === 'timestamped'
+      );
+      const inventoryExclusions =
+        config.outputPath && finalFileReporter && REPORTER_OUTPUT[finalFileReporter] === 'timestamped'
+          ? [path.resolve(config.outputPath)]
+          : [];
+      incrementalChecker = new IncrementalChecker(cacheManager);
+      documentsToValidate = await incrementalChecker.filterChanged(allDocuments, config, incrementalInputs, inventoryExclusions);
+    }
 
     if (config.verbose) {
-      const stats = incrementalChecker.getStats(allDocuments.length, documentsToValidate.length);
+      const stats = (incrementalChecker ?? new IncrementalChecker(cacheManager.policy.dir)).getStats(
+        allDocuments.length,
+        documentsToValidate.length
+      );
       console.log(`Incremental mode: checking ${stats.changed} changed files, skipping ${stats.skipped} unchanged.`);
     }
   }
@@ -165,6 +165,15 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
   }
 
   const results = await validationEngine.validate(documentsToValidate);
+
+  try {
+    await cacheManager.saveUrlCache(urlValidator.exportCache());
+  }
+  catch (error) {
+    if (config.verbose) {
+      console.warn(`Could not save the URL cache: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
 
   // Build graph if enabled
   let graph: CodeDocGraph | null = null;
@@ -186,13 +195,6 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
       graph.gitCommit = gitTracker.getCurrentCommit();
     }
 
-    // Save graph cache
-    if (config.cache?.enabled !== false) {
-      const cacheManager = new CacheManager(config);
-      await cacheManager.saveGraph(graph);
-      await cacheManager.saveUrlCache(urlValidator.exportCache());
-    }
-
     // Calculate freshness scores if enabled
     if (config.freshnessScoring?.enabled) {
       const scorer = new FreshnessScorer(config);
@@ -206,7 +208,7 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
     // Always show this message since embedding generation can take time
     console.log('🔍 Running semantic analysis (this may take a moment on first run)...');
 
-    const vectorSearch = new VectorSearch(config);
+    const vectorSearch = new VectorSearch(config, cacheManager);
 
     // Index documentation
     if (config.verbose) {

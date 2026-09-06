@@ -3,6 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { homedir } from 'os';
 import { EmbeddingModel, FlagEmbedding } from 'fastembed';
+import { CacheManager } from '../cache/cacheManager.js';
 import { pruneOldestEntries, setWithMaxEntries } from '../utils/boundedMap.js';
 import type { CacheStats, CodeFile, Comment, DocFreshnessConfig, Document, IndexMetadata, Section, VectorMismatch } from '../types.js';
 
@@ -36,11 +37,10 @@ export class VectorSearch {
   private embeddingCache: Map<string, number[]>;
   private cacheLoaded: boolean;
   private dimensions: number;
-  private cacheDir: string;
-  private embeddingCacheFile: string;
+  private cacheManager: CacheManager;
   private modelCacheDir: string;
 
-  constructor(config: DocFreshnessConfig) {
+  constructor(config: DocFreshnessConfig, cacheManager: CacheManager = new CacheManager(config)) {
     this.config = config;
     this.model = null;
     this.modelInitPromise = null;
@@ -51,8 +51,7 @@ export class VectorSearch {
     this.dimensions = EMBEDDING_DIMENSIONS;
 
     // Cache settings
-    this.cacheDir = config.cache?.dir || '.doc-freshness-cache';
-    this.embeddingCacheFile = path.join(this.cacheDir, 'embedding-cache.json');
+    this.cacheManager = cacheManager;
     this.modelCacheDir = path.join(homedir(), '.doc-freshness', 'fastembed-cache');
   }
 
@@ -156,27 +155,29 @@ export class VectorSearch {
       return;
     }
 
-    try {
-      const data = await fs.promises.readFile(this.embeddingCacheFile, 'utf-8');
-      const parsed = JSON.parse(data) as EmbeddingCache;
+    const data = await this.cacheManager.readEmbeddingCache();
+    if (data !== null) {
+      try {
+        const parsed = JSON.parse(data) as EmbeddingCache;
 
-      // Restore cache as Map
-      this.embeddingCache = new Map(Object.entries(parsed.embeddings || {}));
-      pruneOldestEntries(this.embeddingCache, MAX_EMBEDDING_CACHE_ENTRIES);
+        // Restore cache as Map
+        this.embeddingCache = new Map(Object.entries(parsed.embeddings || {}));
+        pruneOldestEntries(this.embeddingCache, MAX_EMBEDDING_CACHE_ENTRIES);
 
-      // Restore index if available
-      if (parsed.vectorIndex && parsed.indexMetadata) {
-        this.vectorIndex = parsed.vectorIndex;
-        this.indexMetadata = parsed.indexMetadata;
+        // Restore index if available
+        if (parsed.vectorIndex && parsed.indexMetadata) {
+          this.vectorIndex = parsed.vectorIndex;
+          this.indexMetadata = parsed.indexMetadata;
+        }
+
+        if (this.config.verbose) {
+          console.log(`Loaded ${this.embeddingCache.size} cached embeddings.`);
+        }
       }
-
-      if (this.config.verbose) {
-        console.log(`Loaded ${this.embeddingCache.size} cached embeddings.`);
+      catch {
+        // Invalid cache file - start fresh
+        this.embeddingCache = new Map();
       }
-    }
-    catch {
-      // No cache file or invalid - start fresh
-      this.embeddingCache = new Map();
     }
 
     this.cacheLoaded = true;
@@ -186,9 +187,10 @@ export class VectorSearch {
    * Save embedding cache to disk
    */
   private async saveCache(): Promise<void> {
+    if (!this.cacheManager.policy.enabled) {
+      return;
+    }
     try {
-      await fs.promises.mkdir(this.cacheDir, { recursive: true });
-
       const data: EmbeddingCache = {
         model: 'BGESmallENV15',
         dimensions: this.dimensions,
@@ -198,7 +200,7 @@ export class VectorSearch {
         indexMetadata: this.indexMetadata,
       };
 
-      await fs.promises.writeFile(this.embeddingCacheFile, JSON.stringify(data), 'utf-8');
+      await this.cacheManager.writeEmbeddingCache(JSON.stringify(data));
 
       if (this.config.verbose) {
         console.log(`Saved ${this.embeddingCache.size} embeddings to cache.`);
@@ -570,12 +572,7 @@ export class VectorSearch {
     this.vectorIndex = [];
     this.indexMetadata = [];
 
-    try {
-      await fs.promises.unlink(this.embeddingCacheFile);
-    }
-    catch {
-      // File doesn't exist - ok
-    }
+    await this.cacheManager.clearEmbeddingCache();
   }
 
   /**

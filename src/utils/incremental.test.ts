@@ -1,6 +1,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { CacheManager } from '../cache/cacheManager.js';
 import { IncrementalChecker } from '../index.js';
 import type { IncrementalInput } from '../validators/incrementalInputs.js';
 import type { DocFreshnessConfig, Document } from '../types.js';
@@ -494,5 +495,25 @@ describe('IncrementalChecker', () => {
     expect(state.documentHashes[docPath]).toBeTypeOf('string');
     expect(state.configFingerprint).toBeTypeOf('string');
     expect(state.inputFingerprint).toBeTypeOf('string');
+  });
+
+  it('revalidates manager-owned state after an ancestor symlink swap', async () => {
+    const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'doc-freshness-incremental-swap-'));
+    const rootDir = path.join(tempDir, 'root');
+    const outsideDir = path.join(tempDir, 'outside');
+    const cacheAncestor = path.join(rootDir, 'results');
+    fs.mkdirSync(path.join(cacheAncestor, 'cache'), { recursive: true });
+    fs.mkdirSync(outsideDir);
+    fs.writeFileSync(path.join(outsideDir, 'sentinel'), 'keep');
+    const managedChecker = new IncrementalChecker(new CacheManager({ rootDir, cache: { enabled: true, dir: 'results/cache' } }));
+
+    fs.rmSync(cacheAncestor, { recursive: true, force: true });
+    fs.symlinkSync(outsideDir, cacheAncestor);
+
+    await expect(managedChecker.filterChanged([])).rejects.toThrow('strict descendant of project root');
+    await expect(managedChecker.saveState()).rejects.toThrow('strict descendant of project root');
+    expect(fs.readdirSync(outsideDir)).toEqual(['sentinel']);
+
+    fs.rmSync(tempDir, { recursive: true, force: true });
   });
 });

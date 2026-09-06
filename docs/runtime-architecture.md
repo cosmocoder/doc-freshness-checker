@@ -92,14 +92,13 @@ These branches run conditionally based on config and CLI options:
 
 ## Cache Lifecycle
 
-`src/cache/cacheManager.ts` manages persisted state such as:
+`src/cache/cacheManager.ts` resolves one result-cache policy per run under the configured project root. When caching is enabled, the directory contains:
 
 - URL validation cache
-- graph cache
-- incremental state helpers
-- embedding cache used by vector search
+- incremental document hashes
+- vector-search embeddings and index metadata
 
-Cache behavior is controlled by `config.cache` and the `--no-cache` / `--clear-cache` flags.
+URL results are saved after validation independently of graph generation. Graphs are rebuilt in memory and are not persisted. `--no-cache` disables all result-cache reads and writes; incremental mode then checks every document. `--clear-cache` removes the result directory before work even when caching is disabled. FastEmbed may still use its separate model-download cache under the user's home directory.
 
 ## Reporting
 

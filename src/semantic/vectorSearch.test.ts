@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { VectorSearch } from './vectorSearch.js';
 import type { CodeFile, DocFreshnessConfig, Document } from '../types.js';
@@ -638,6 +639,29 @@ describe('VectorSearch', () => {
       const vs = new VectorSearch(makeConfig({ cache: { dir: '.doc-freshness-cache/no-such-dir' } }));
       await expect(vs.clearCache()).resolves.not.toThrow();
     });
+
+    it('does not touch an outside result path when caching is disabled', async () => {
+      const outsideDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'doc-freshness-vector-disabled-'));
+      const sentinel = path.join(outsideDir, 'sentinel');
+      await fs.promises.writeFile(sentinel, 'keep');
+      const vs = new VectorSearch(makeConfig({ cache: { enabled: false, dir: outsideDir } }));
+
+      await vs.clearCache();
+
+      expect(await fs.promises.readdir(outsideDir)).toEqual(['sentinel']);
+      expect(await fs.promises.readFile(sentinel, 'utf-8')).toBe('keep');
+      await fs.promises.rm(outsideDir, { recursive: true, force: true });
+    });
+
+    it('propagates embedding cache removal failures', async () => {
+      const vs = createVS();
+      const error = Object.assign(new Error('permission denied'), { code: 'EPERM' });
+      const rmSpy = vi.spyOn(fs.promises, 'rm').mockRejectedValueOnce(error);
+
+      await expect(vs.clearCache()).rejects.toBe(error);
+      expect(rmSpy).toHaveBeenCalledWith(path.resolve(cacheDir, 'embedding-cache.json'), { force: true });
+      rmSpy.mockRestore();
+    });
   });
 
   describe('loadCache (disk persistence)', () => {
@@ -664,27 +688,62 @@ describe('VectorSearch', () => {
       await vs2.indexDocumentation([makeDoc(docContent)]);
       expect(logSpy.mock.calls.flat().join(' ')).toContain('cached embeddings');
     });
+
+    it('derives an enabled standalone cache under rootDir', async () => {
+      const rootDir = path.join(process.cwd(), '.doc-freshness-cache', 'vector-standalone-root');
+      await fs.promises.mkdir(rootDir, { recursive: true });
+      const vs = new VectorSearch(makeConfig({ rootDir, cache: { enabled: true, dir: '.results' } }));
+      await vs.indexDocumentation([makeDoc('# Cached\n\nThis function handles standalone cache placement.')]);
+      await vs.findMismatches();
+
+      await expect(fs.promises.access(path.join(rootDir, '.results', 'embedding-cache.json'))).resolves.toBeUndefined();
+      await fs.promises.rm(rootDir, { recursive: true, force: true });
+    });
+
+    it('does not read or write the result cache when disabled', async () => {
+      const rootDir = path.join(process.cwd(), '.doc-freshness-cache', 'vector-disabled-root');
+      const cacheFile = path.join(rootDir, '.results', 'embedding-cache.json');
+      await fs.promises.mkdir(path.dirname(cacheFile), { recursive: true });
+      await fs.promises.writeFile(cacheFile, 'sentinel');
+      const readSpy = vi.spyOn(fs.promises, 'readFile');
+      const writeSpy = vi.spyOn(fs.promises, 'writeFile');
+      const vs = new VectorSearch(makeConfig({ rootDir, cache: { enabled: false, dir: '.results' } }));
+
+      await vs.indexDocumentation([makeDoc('# Uncached\n\nThis function handles uncached semantic indexing.')]);
+      await vs.findMismatches();
+
+      expect(readSpy).not.toHaveBeenCalledWith(cacheFile, 'utf-8');
+      expect(writeSpy).not.toHaveBeenCalledWith(cacheFile, expect.anything(), expect.anything());
+      expect(await fs.promises.readFile(cacheFile, 'utf-8')).toBe('sentinel');
+      readSpy.mockRestore();
+      writeSpy.mockRestore();
+      await fs.promises.rm(rootDir, { recursive: true, force: true });
+    });
   });
 
   describe('saveCache error', () => {
     it('logs warning when save fails in verbose mode', async () => {
-      const vs = await createInitializedVS({ verbose: true, cache: { dir: '/nonexistent/permission-denied' } });
+      const vs = await createInitializedVS({ verbose: true });
       const docContent = '# Save Fail\n\nThis function does something complex with data processing.';
       await vs.indexDocumentation([makeDoc(docContent)]);
 
       const warnSpy = captureWarn();
+      const writeSpy = vi.spyOn(fs.promises, 'writeFile').mockRejectedValueOnce(new Error('permission denied'));
       await vs.findMismatches();
       expect(warnSpy.mock.calls.flat().join(' ')).toContain('Failed to save');
+      writeSpy.mockRestore();
     });
 
     it('silently ignores save failure in non-verbose mode', async () => {
-      const vs = await createInitializedVS({ cache: { dir: '/nonexistent/permission-denied' } });
+      const vs = await createInitializedVS();
       const docContent = '# Silent Fail\n\nThis function returns the processed result data.';
       await vs.indexDocumentation([makeDoc(docContent)]);
 
       const warnSpy = captureWarn();
+      const writeSpy = vi.spyOn(fs.promises, 'writeFile').mockRejectedValueOnce(new Error('permission denied'));
       await vs.findMismatches();
       expect(warnSpy).not.toHaveBeenCalled();
+      writeSpy.mockRestore();
     });
   });
 
