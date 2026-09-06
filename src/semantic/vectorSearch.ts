@@ -5,7 +5,17 @@ import { homedir } from 'os';
 import { EmbeddingModel, FlagEmbedding } from 'fastembed';
 import { CacheManager } from '../cache/cacheManager.js';
 import { pruneOldestEntries, setWithMaxEntries } from '../utils/boundedMap.js';
-import type { CacheStats, CodeFile, Comment, DocFreshnessConfig, Document, IndexMetadata, Section, VectorMismatch } from '../types.js';
+import type {
+  CacheStats,
+  CodeFile,
+  Comment,
+  DocFreshnessConfig,
+  Document,
+  IndexMetadata,
+  Section,
+  SupportedLanguage,
+  VectorMismatch,
+} from '../types.js';
 
 /**
  * Vector-based semantic search for documentation validation
@@ -503,7 +513,7 @@ export class VectorSearch {
     const comments: Comment[] = [];
 
     // Language-specific comment patterns
-    const patterns: Record<string, RegExp[]> = {
+    const patterns: Record<SupportedLanguage, RegExp[]> = {
       javascript: [
         /\/\*\*[\s\S]*?\*\//g, // JSDoc
         /\/\/.*$/gm, // Single line
@@ -530,7 +540,8 @@ export class VectorSearch {
       ],
     };
 
-    const langPatterns = patterns[language] || patterns.javascript;
+    const isSupportedLanguage = (value: string): value is SupportedLanguage => Object.hasOwn(patterns, value);
+    const langPatterns = isSupportedLanguage(language) ? patterns[language] : patterns.javascript;
 
     for (const pattern of langPatterns) {
       let match: RegExpExecArray | null;

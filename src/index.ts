@@ -73,6 +73,8 @@ export type {
   SymbolLocation,
   SourceFileData,
   CodeFile,
+  SupportedLanguage,
+  SupportedSnippetLanguage,
   CodeSnippetRuleConfig,
   BaseExtractor as BaseExtractorType,
   BaseValidator,

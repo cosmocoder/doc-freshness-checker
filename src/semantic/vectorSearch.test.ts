@@ -279,13 +279,13 @@ describe('VectorSearch', () => {
       expect(vs.getCacheStats().indexedCodeComments).toBeGreaterThan(0);
     });
 
-    it('falls back to JavaScript patterns for unknown languages', async () => {
+    it.each(['ruby', 'toString'])('falls back to JavaScript patterns for the unknown language %s', async (language) => {
       const vs = await createInitializedVS();
       await vs.indexCodeComments([
         {
           path: 'script.rb',
           content: '// This helper utility performs string sanitization operations\nfunction sanitize() {}',
-          language: 'ruby',
+          language,
         },
       ]);
       expect(vs.getCacheStats().indexedCodeComments).toBeGreaterThan(0);
