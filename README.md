@@ -38,7 +38,7 @@ Validate documentation against your codebase to catch stale references before th
 - **Documentation formats:** Markdown (`.md`, `.markdown`), reStructuredText (`.rst`), AsciiDoc (`.adoc`, `.asciidoc`), plaintext (`.txt`).
 - **Source indexing for symbol validation:** JavaScript, TypeScript, Python, Go, Rust, Java.
 - **Code snippet validation:** verifies import paths resolve, imported symbols are exported, function call signatures still match example placeholders, and config object keys match type/interface definitions.
-- **Manifest parsing for version/dependency checks:** `package.json`, `requirements.txt`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `pom.xml`.
+- **Manifest hints for version/dependency checks:** basic format-specific identifiers and versions from listed `package.json`, `requirements.txt`, `pyproject.toml`, `go.mod`, `Cargo.toml`, and `pom.xml` files.
   - In the general manifest candidate set, concrete versions take precedence over unpinned entries. Python package names retain their Python-specific source precedence. Among equally concrete candidates, the later configured manifest wins.
   - Cargo parses simple and inline-table entries in `[dependencies]`, `[dev-dependencies]`, `[build-dependencies]`, and `[workspace.dependencies]`. Workspace references resolve from matching workspace definitions across explicitly listed `Cargo.toml` files. Dependency subtables, dotted keys, and target-specific sections are not parsed.
 - **Reporters:** `console`, `json`, `markdown`, `enhanced`.
@@ -173,11 +173,13 @@ doc-freshness --score --incremental
 | --------------------- | ------------------------------------------------------------------------------------------------ |
 | `file-path`           | Referenced files/directories exist                                                               |
 | `external-url`        | External URLs are reachable (with caching and skip rules)                                        |
-| `version`             | Mentioned versions compared to parsed manifests                                                  |
+| `version`             | Mentioned versions compared to extracted manifest version hints                                  |
 | `directory-structure` | Tree snippets align with actual structure                                                        |
 | `code-pattern`        | Mentioned symbols exist in indexed source                                                        |
 | `code-snippet`        | Import paths resolve, exported symbols exist, function signatures still match, config keys valid |
-| `dependency`          | Mentioned packages exist in manifest dependencies                                                |
+| `dependency`          | Mentioned packages exist among extracted manifest identifiers                                    |
+
+Extraction uses basic format-specific heuristics; it does not execute package managers or build backends, inspect generated metadata, discover workspace members, or implement full ecosystem grammars.
 
 ### URL Validation Behavior
 
