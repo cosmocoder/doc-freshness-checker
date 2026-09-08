@@ -69,7 +69,7 @@
   },
   "engine-strict": true,
   "dependencies": {
-    "commander": "14.0.3",
+    "commander": "15.0.0",
     "fastembed": "2.1.0",
     "glob": "13.0.6",
     "semver": "7.8.5"
