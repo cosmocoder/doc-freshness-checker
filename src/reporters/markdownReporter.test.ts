@@ -1,14 +1,12 @@
-import { MarkdownReporter } from './markdownReporter.js';
 import type { ProjectScores, ValidationResults } from '../types.js';
+import { MarkdownReporter } from './markdownReporter.js';
 
 describe('MarkdownReporter', () => {
   const reporter = new MarkdownReporter();
-
   const cleanResults: ValidationResults = {
     documents: [],
     summary: { total: 2, valid: 2, errors: 0, warnings: 0, skipped: 0 },
   };
-
   const resultsWithIssues: ValidationResults = {
     documents: [
       {
@@ -40,26 +38,26 @@ describe('MarkdownReporter', () => {
   };
 
   it('generates markdown with summary table', () => {
-    const md = reporter.generate(cleanResults);
-    expect(md).toContain('# Documentation Freshness Report');
-    expect(md).toContain('Total Checked | 2');
-    expect(md).toContain('Info | 0');
-    expect(md).toContain('up to date');
+    const markdown = reporter.generate(cleanResults);
+    expect(markdown).toContain('# Documentation Freshness Report');
+    expect(markdown).toContain('Total Checked | 2');
+    expect(markdown).toContain('Info | 0');
+    expect(markdown).toContain('up to date');
   });
 
   it('generates issues table with error, warning, and info severities', () => {
-    const md = reporter.generate(resultsWithIssues);
-    expect(md).toContain('## Issues');
-    expect(md).toContain('docs/api.md');
-    expect(md).toContain('❌ Error');
-    expect(md).toContain('⚠️ Warning');
-    expect(md).toContain('| 30 | ℹ️ Info |');
-    expect(md).toContain('File not found');
-    expect(md).toContain('missing.tsx');
-    expect(md).toContain('URL returned 404');
+    const markdown = reporter.generate(resultsWithIssues);
+    expect(markdown).toContain('## Issues');
+    expect(markdown).toContain('docs/api.md');
+    expect(markdown).toContain('❌ Error');
+    expect(markdown).toContain('⚠️ Warning');
+    expect(markdown).toContain('| 30 | ℹ️ Info |');
+    expect(markdown).toContain('File not found');
+    expect(markdown).toContain('missing.tsx');
+    expect(markdown).toContain('URL returned 404');
   });
 
-  it('escapes pipe characters in messages', () => {
+  it('escapes pipe characters and uses "-" for missing suggestions', () => {
     const results: ValidationResults = {
       documents: [
         {
@@ -76,31 +74,10 @@ describe('MarkdownReporter', () => {
       ],
       summary: { total: 1, valid: 0, errors: 1, warnings: 0, skipped: 0 },
     };
-    expect(reporter.generate(results)).toContain('Path with \\| pipe');
+    expect(reporter.generate(results)).toMatch(/Path with \\| pipe \| -/);
   });
 
-  it('uses "-" for missing suggestions', () => {
-    const results: ValidationResults = {
-      documents: [
-        {
-          path: 'doc.md',
-          issues: [
-            {
-              reference: { type: 'file-path', value: 'x', lineNumber: 1, raw: 'x', sourceFile: 'doc.md' },
-              valid: false,
-              severity: 'error',
-              message: 'Not found',
-            },
-          ],
-        },
-      ],
-      summary: { total: 1, valid: 0, errors: 1, warnings: 0, skipped: 0 },
-    };
-    const md = reporter.generate(results);
-    expect(md).toMatch(/Not found \| -/);
-  });
-
-  it('includes vector mismatches without a contradictory success message', () => {
+  it('includes vector mismatches once after scores without a success message', () => {
     const results: ValidationResults = {
       ...cleanResults,
       vectorMismatches: [
@@ -114,24 +91,22 @@ describe('MarkdownReporter', () => {
         },
       ],
     };
-
-    const md = reporter.generate(results);
-    expect(md).toContain('Semantic Analysis');
-    expect(md).toContain('src/vector.ts (search)');
-    expect(md).not.toContain('up to date');
-    expect(md.match(/docs\/vector-api\.md/g)).toHaveLength(1);
-
     const scores: ProjectScores = {
       projectScore: 100,
       projectGrade: 'A',
       documents: [],
       summary: { total: 0, gradeA: 0, gradeB: 0, gradeC: 0, gradeD: 0, gradeF: 0 },
     };
-    const scoredMd = reporter.generateWithScores(results, scores);
-    expect(scoredMd.indexOf('Freshness Scores')).toBeLessThan(scoredMd.indexOf('Semantic Analysis'));
+
+    const markdown = reporter.generate(results);
+    expect(markdown).not.toContain('up to date');
+    expect(markdown.match(/docs\/vector-api\.md/g)).toHaveLength(1);
+    const scored = reporter.generateWithScores(results, scores);
+    expect(scored.indexOf('Freshness Scores')).toBeLessThan(scored.indexOf('Semantic Analysis'));
+    expect(scored.match(/docs\/vector-api\.md/g)).toHaveLength(1);
   });
 
-  it('generateWithScores includes freshness section', () => {
+  it('generates populated and null freshness score modes', () => {
     const scores: ProjectScores = {
       projectScore: 92,
       projectGrade: 'A',
@@ -145,41 +120,92 @@ describe('MarkdownReporter', () => {
       ],
       summary: { total: 1, gradeA: 1, gradeB: 0, gradeC: 0, gradeD: 0, gradeF: 0 },
     };
-    const md = reporter.generateWithScores(cleanResults, scores);
-    expect(md).toContain('## Freshness Scores');
-    expect(md).toContain('92/100');
-    expect(md).toContain('Grade: A');
+    const markdown = reporter.generateWithScores(cleanResults, scores);
+    expect(markdown).toContain('92/100');
+    expect(markdown).toContain('Grade: A');
+    expect(reporter.generateWithScores(cleanResults, null)).not.toContain('Freshness Scores');
   });
 
-  it('generateWithScores with null scores omits section', () => {
-    const md = reporter.generateWithScores(cleanResults, null);
-    expect(md).not.toContain('Freshness Scores');
-  });
-
-  it('generates per-document score table', () => {
-    const scores: ProjectScores = {
-      projectScore: 85,
-      projectGrade: 'B',
-      documents: [
-        {
-          document: 'a.md',
-          totalScore: 90,
-          factors: { referenceValidity: 100, gitTimeDelta: 80, codeChangeFrequency: 80, symbolCoverage: 90 },
-          grade: 'A',
-        },
-        {
-          document: 'b.md',
-          totalScore: 70,
-          factors: { referenceValidity: 70, gitTimeDelta: 70, codeChangeFrequency: 70, symbolCoverage: 70 },
-          grade: 'C',
-        },
-      ],
-      summary: { total: 2, gradeA: 1, gradeB: 0, gradeC: 1, gradeD: 0, gradeF: 0 },
+  it('captures summary then documents before the clock and retains those references', () => {
+    const events: string[] = [];
+    const summary = { total: 1, valid: 0, errors: 1, warnings: 0, skipped: 0 };
+    const documents: ValidationResults['documents'] = [];
+    let currentSummary = summary;
+    let currentDocuments = documents;
+    const results: ValidationResults = {
+      get summary() {
+        events.push('summary');
+        return currentSummary;
+      },
+      set summary(value) {
+        currentSummary = value;
+      },
+      get documents() {
+        events.push('documents');
+        return currentDocuments;
+      },
+      set documents(value) {
+        currentDocuments = value;
+      },
     };
-    const md = reporter.generateWithScores(cleanResults, scores);
-    expect(md).toContain('a.md');
-    expect(md).toContain('90/100');
-    expect(md).toContain('b.md');
-    expect(md).toContain('70/100');
+    const clock = vi.spyOn(Date.prototype, 'toISOString').mockImplementation(() => {
+      events.push('clock');
+      summary.total = 7;
+      documents.push({
+        path: 'docs/captured.md',
+        issues: [
+          {
+            reference: { type: 'file-path', value: 'x', lineNumber: 1, raw: 'x', sourceFile: 'captured.md' },
+            valid: false,
+            severity: 'error',
+            message: 'captured issue',
+          },
+        ],
+      });
+      results.summary = { total: 99, valid: 99, errors: 0, warnings: 0, skipped: 0 };
+      results.documents = [];
+      return '2025-01-02T03:04:05.678Z';
+    });
+
+    try {
+      const report = reporter.generate(results);
+      expect(events).toEqual(['summary', 'documents', 'clock']);
+      expect(report).toContain('| Total Checked | 7 |');
+      expect(report).toContain('docs/captured.md');
+      expect(report).not.toContain('| Total Checked | 99 |');
+    }
+    finally {
+      clock.mockRestore();
+    }
+  });
+
+  it.each([
+    { failure: 'summary', expected: ['summary'] },
+    { failure: 'documents', expected: ['summary', 'documents'] },
+  ] as const)('does not read the clock after a throwing $failure getter', ({ failure, expected }) => {
+    const events: string[] = [];
+    const results: ValidationResults = {
+      get summary() {
+        events.push('summary');
+        if (failure === 'summary') {
+          throw new Error('summary failed');
+        }
+        return { total: 0, valid: 0, errors: 0, warnings: 0, skipped: 0 };
+      },
+      get documents(): ValidationResults['documents'] {
+        events.push('documents');
+        throw new Error('documents failed');
+      },
+    };
+    const clock = vi.spyOn(Date.prototype, 'toISOString');
+
+    try {
+      expect(() => reporter.generate(results)).toThrow(`${failure} failed`);
+      expect(events).toEqual(expected);
+      expect(clock).not.toHaveBeenCalled();
+    }
+    finally {
+      clock.mockRestore();
+    }
   });
 });

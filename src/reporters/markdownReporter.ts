@@ -1,79 +1,76 @@
 import type { ProjectScores, ValidationResults } from '../types.js';
-import { escapeMarkdownTableCell } from '../utils/escapeMarkdownTableCell.js';
 import { formatVectorMismatches } from './formatVectorMismatches.js';
+import { normalizeMarkdownIssueCells } from './markdownIssueCells.js';
+import { createTimestampedReportContext } from './reportContext.js';
 
-/**
- * Markdown reporter for documentation-friendly output
- */
+type MarkdownReportContext = ReturnType<typeof createTimestampedReportContext>;
+
+function renderMarkdownBase(report: MarkdownReportContext): string {
+  const { summary, documents, vectorMismatches } = report.results;
+  let markdown = '';
+
+  markdown += '# Documentation Freshness Report\n\n';
+  markdown += `Generated: ${report.generatedAt}\n\n`;
+  markdown += '## Summary\n\n';
+  markdown += '| Metric | Count |\n';
+  markdown += '|--------|-------|\n';
+  markdown += `| Total Checked | ${summary.total} |\n`;
+  markdown += `| ✅ Valid | ${summary.valid} |\n`;
+  markdown += `| ❌ Errors | ${summary.errors} |\n`;
+  markdown += `| ⚠️ Warnings | ${summary.warnings} |\n`;
+  markdown += `| ℹ️ Info | ${summary.info ?? 0} |\n`;
+  markdown += `| ⏭️ Skipped | ${summary.skipped} |\n\n`;
+
+  if (documents.length === 0) {
+    return vectorMismatches?.length ? markdown : `${markdown}✨ **All documentation is up to date!**\n`;
+  }
+
+  markdown += '## Issues\n\n';
+  for (const document of documents) {
+    markdown += `### 📄 \`${document.path}\`\n\n`;
+    markdown += '| Line | Severity | Issue | Suggestion |\n';
+    markdown += '|------|----------|-------|------------|\n';
+    for (const issue of document.issues) {
+      const { isError, isInfo, suggestion, message } = normalizeMarkdownIssueCells(issue);
+      const severity = isError ? '❌ Error' : isInfo ? 'ℹ️ Info' : '⚠️ Warning';
+      markdown += `| ${issue.reference.lineNumber} | ${severity} | ${message} | ${suggestion} |\n`;
+    }
+    markdown += '\n';
+  }
+  return markdown;
+}
+
+function renderMarkdownScores(freshnessScores: NonNullable<MarkdownReportContext['freshnessScores']>): string {
+  let markdown = '## Freshness Scores\n\n';
+  markdown += `**Project Score:** ${freshnessScores.projectScore}/100 (Grade: ${freshnessScores.projectGrade})\n\n`;
+  markdown += '| Document | Score | Grade |\n';
+  markdown += '|----------|-------|-------|\n';
+  for (const document of freshnessScores.documents) {
+    markdown += `| \`${document.document}\` | ${document.totalScore}/100 | ${document.grade} |\n`;
+  }
+  return `${markdown}\n`;
+}
+
+function renderMarkdownReport(report: MarkdownReportContext): string {
+  let markdown = renderMarkdownBase(report);
+  if (report.freshnessScores) {
+    markdown += renderMarkdownScores(report.freshnessScores);
+  }
+  const mismatches = report.results.vectorMismatches;
+  return markdown + formatVectorMismatches(mismatches ? [...mismatches] : undefined);
+}
+
+export function generateMarkdownReport(results: ValidationResults, freshnessScores: ProjectScores | null | undefined = undefined): string {
+  return renderMarkdownReport(createTimestampedReportContext(results, freshnessScores));
+}
+
+/** Markdown reporter for documentation-friendly output. */
 export class MarkdownReporter {
   generate(results: ValidationResults): string {
-    return this.generateValidationResults(results) + formatVectorMismatches(results.vectorMismatches);
+    return generateMarkdownReport(results);
   }
 
-  private generateValidationResults(results: ValidationResults): string {
-    const { summary, documents } = results;
-    let md = '';
-
-    md += '# Documentation Freshness Report\n\n';
-    md += `Generated: ${new Date().toISOString()}\n\n`;
-
-    md += '## Summary\n\n';
-    md += '| Metric | Count |\n';
-    md += '|--------|-------|\n';
-    md += `| Total Checked | ${summary.total} |\n`;
-    md += `| ✅ Valid | ${summary.valid} |\n`;
-    md += `| ❌ Errors | ${summary.errors} |\n`;
-    md += `| ⚠️ Warnings | ${summary.warnings} |\n`;
-    md += `| ℹ️ Info | ${summary.info ?? 0} |\n`;
-    md += `| ⏭️ Skipped | ${summary.skipped} |\n\n`;
-
-    if (documents.length === 0) {
-      if (!results.vectorMismatches?.length) {
-        md += '✨ **All documentation is up to date!**\n';
-      }
-    }
-    else {
-      md += '## Issues\n\n';
-
-      for (const doc of documents) {
-        md += `### 📄 \`${doc.path}\`\n\n`;
-        md += '| Line | Severity | Issue | Suggestion |\n';
-        md += '|------|----------|-------|------------|\n';
-
-        for (const issue of doc.issues) {
-          const severity = issue.severity === 'error' ? '❌ Error' : issue.severity === 'info' ? 'ℹ️ Info' : '⚠️ Warning';
-          const suggestion = escapeMarkdownTableCell(issue.suggestion || '-');
-          const message = escapeMarkdownTableCell(issue.message || '');
-          md += `| ${issue.reference.lineNumber} | ${severity} | ${message} | ${suggestion} |\n`;
-        }
-
-        md += '\n';
-      }
-    }
-
-    return md;
-  }
-
-  /**
-   * Generate with freshness scores
-   */
   generateWithScores(results: ValidationResults, freshnessScores: ProjectScores | null): string {
-    let md = this.generateValidationResults(results);
-
-    if (freshnessScores) {
-      md += '## Freshness Scores\n\n';
-      md += `**Project Score:** ${freshnessScores.projectScore}/100 (Grade: ${freshnessScores.projectGrade})\n\n`;
-
-      md += '| Document | Score | Grade |\n';
-      md += '|----------|-------|-------|\n';
-
-      for (const doc of freshnessScores.documents) {
-        md += `| \`${doc.document}\` | ${doc.totalScore}/100 | ${doc.grade} |\n`;
-      }
-
-      md += '\n';
-    }
-
-    return md + formatVectorMismatches(results.vectorMismatches);
+    return generateMarkdownReport(results, freshnessScores);
   }
 }
