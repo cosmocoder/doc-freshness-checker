@@ -1,7 +1,11 @@
 import type { BaseExtractor, BaseValidator, DocFreshnessConfig, Document, ValidationResults } from '../types.js';
 
 /**
- * Plugin interface for extending doc-freshness functionality
+ * Plugin interface for extending doc-freshness functionality.
+ *
+ * @deprecated `Plugin` is not consumed by `run()`. Supported extension points are
+ * `DocFreshnessConfig.customExtractors` and `DocFreshnessConfig.customValidators`.
+ * Planned for removal in v3.0.0.
  */
 export class Plugin {
   name: string;

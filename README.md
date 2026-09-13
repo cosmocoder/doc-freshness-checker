@@ -373,6 +373,11 @@ console.log(results.summary);
 
 `run()` and `runWithConfig()` reject when a matched document cannot be read or an extractor or validator throws. `runWithConfig()` also rejects when its configuration file cannot be loaded. Matched paths confirmed to have disappeared between discovery and reading are ignored as a normal filesystem race.
 
+> [!WARNING]
+> `Plugin` is deprecated because it is not consumed by `run()` and is planned for removal in v3.0.0. Use
+> `DocFreshnessConfig.customExtractors` and `DocFreshnessConfig.customValidators` for supported extensions. Reporter and
+> lifecycle hooks have no replacement.
+
 Key exports:
 
 | Export                                                                    | Purpose                                              |
