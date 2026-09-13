@@ -14,15 +14,18 @@ import { IncrementalChecker } from './utils/incremental.js';
 import { FileValidator } from './validators/fileValidator.js';
 import { CacheManager } from './cache/cacheManager.js';
 import { FreshnessScorer } from './scoring/freshnessScorer.js';
+import type { Extractor } from './index.js';
 import { withOutputFile } from './test-utils/tempFiles.js';
 import { captureConsoleLog, captureConsoleWarn } from './test-utils/console.js';
 import type {
   BaseExtractor,
   BaseValidator,
   DocFreshnessConfig,
+  Document,
   ProjectScores,
   Reference,
   ReporterType,
+  ValidationResult,
   ValidationResults,
   VectorMismatch,
 } from './types.js';
@@ -175,15 +178,61 @@ describe('runner', () => {
     await fs.promises.rm(path.join(process.cwd(), cacheDir), { recursive: true, force: true });
   });
 
-  it('registers custom extractors and validators', async () => {
-    const extract = vi.fn().mockReturnValue([]);
-    const validateBatch = vi.fn().mockResolvedValue([]);
-    await run({
-      ...baseConfig,
-      customExtractors: [{ extract, supportsFormat: () => true }] as unknown as DocFreshnessConfig['customExtractors'],
-      customValidators: { custom: { validateBatch } } as unknown as DocFreshnessConfig['customValidators'],
+  it('round-trips a two-method custom extractor through an overriding custom validator', async () => {
+    await fs.promises.mkdir(cacheRoot, { recursive: true });
+    await withOutputFile(cacheRoot, 'custom-extractor.md', async (filePath) => {
+      const content = '# Custom\n\nprose';
+      await fs.promises.writeFile(filePath, content, 'utf-8');
+      vi.mocked(glob).mockResolvedValueOnce([filePath]);
+
+      const reference: Reference = {
+        type: 'file-path',
+        value: 'prose',
+        lineNumber: 3,
+        raw: 'prose',
+        sourceFile: 'custom-extractor.md',
+      };
+      const customExtractor = {
+        supportsFormat: vi.fn<Extractor['supportsFormat']>((format) => format === 'markdown'),
+        extract: vi.fn<Extractor['extract']>(() => [reference]),
+      } satisfies Extractor;
+      const invalidResult: ValidationResult = {
+        reference,
+        valid: false,
+        severity: 'error',
+        message: 'Custom reference is stale',
+      };
+      const customValidator = {
+        validateBatch: vi.fn<BaseValidator['validateBatch']>(async () => [invalidResult]),
+      } satisfies BaseValidator;
+      const config: DocFreshnessConfig = {
+        ...baseConfig,
+        rootDir: cacheRoot,
+        include: ['**/*.md'],
+        rules: { ...baseConfig.rules, 'file-path': { enabled: true } },
+        customExtractors: [customExtractor],
+        customValidators: { 'file-path': customValidator },
+      };
+
+      const results = await run(config);
+      const document: Document = {
+        path: 'custom-extractor.md',
+        absolutePath: filePath,
+        content,
+        format: 'markdown',
+        lines: ['# Custom', '', 'prose'],
+        references: [reference],
+      };
+
+      expect(vi.mocked(glob).mock.calls).toEqual([[['**/*.md'], { ignore: [], cwd: cacheRoot, absolute: true }]]);
+      expect(customExtractor.supportsFormat.mock.calls).toEqual([['markdown']]);
+      expect(customExtractor.extract.mock.calls).toEqual([[document]]);
+      expect(customValidator.validateBatch.mock.calls).toEqual([[[reference], document, config]]);
+      expect(results).toEqual({
+        documents: [{ path: 'custom-extractor.md', issues: [invalidResult] }],
+        summary: { total: 1, valid: 0, errors: 1, warnings: 0, info: 0, skipped: 0 },
+      });
     });
-    expect(true).toBe(true);
   });
 
   it.each(['supportsFormat', 'extract'] as const)('propagates custom extractor %s failures', async (hook) => {
@@ -199,7 +248,7 @@ describe('runner', () => {
     await expect(
       run({
         ...baseConfig,
-        customExtractors: [extractor] as unknown as DocFreshnessConfig['customExtractors'],
+        customExtractors: [extractor],
       })
     ).rejects.toThrow(`${hook} crashed`);
   });
@@ -217,7 +266,7 @@ describe('runner', () => {
     await expect(
       run({
         ...baseConfig,
-        customExtractors: [{ extract: () => [reference], supportsFormat: () => true }] as unknown as DocFreshnessConfig['customExtractors'],
+        customExtractors: [{ extract: () => [reference], supportsFormat: () => true }],
         customValidators: {
           custom: { validateBatch: vi.fn().mockRejectedValue(new Error('custom validator crashed')) },
         },
@@ -241,9 +290,7 @@ describe('runner', () => {
         run({
           ...baseConfig,
           rules: { ...baseConfig.rules, 'file-path': { enabled: true } },
-          customExtractors: [
-            { extract: () => [reference], supportsFormat: () => true },
-          ] as unknown as DocFreshnessConfig['customExtractors'],
+          customExtractors: [{ extract: () => [reference], supportsFormat: () => true }],
         })
       ).rejects.toThrow('file validator crashed');
     }
@@ -280,7 +327,7 @@ describe('runner', () => {
       const results = await run({
         ...baseConfig,
         rules: { ...baseConfig.rules, dependency: { enabled: true, severity: 'info' } },
-        customExtractors: [{ extract: () => [reference], supportsFormat: () => true }] as unknown as DocFreshnessConfig['customExtractors'],
+        customExtractors: [{ extract: () => [reference], supportsFormat: () => true }],
       });
 
       expect(results.summary.info).toBe(1);

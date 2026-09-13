@@ -77,5 +77,6 @@ export type {
   SupportedSnippetLanguage,
   CodeSnippetRuleConfig,
   BaseExtractor as BaseExtractorType,
+  Extractor,
   BaseValidator,
 } from './types.js';
