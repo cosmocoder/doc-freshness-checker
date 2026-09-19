@@ -48,6 +48,7 @@ export interface CodeSnippetRuleConfig extends RuleConfig {
 }
 
 export interface VersionRuleConfig extends RuleConfig {
+  /** @deprecated No validation effect; changes invalidate incremental reuse. Major versions are compared. Planned removal in v3.0.0. */
   allowMinorDrift?: boolean;
 }
 
@@ -76,9 +77,16 @@ export interface GraphConfig {
   cacheMaxAge?: number;
 }
 
+/**
+ * @deprecated Its fields have no Git effect; changes invalidate incremental reuse. Git is auto-detected,
+ * and Enhanced reports use a seven-day window. Planned removal in v3.0.0.
+ */
 export interface GitConfig {
+  /** @deprecated No Git effect; changes invalidate incremental reuse. Git is auto-detected. Planned removal in v3.0.0. */
   enabled?: boolean;
+  /** @deprecated No Git effect; changes invalidate incremental reuse. Tracking is fixed. Planned removal in v3.0.0. */
   trackChanges?: boolean;
+  /** @deprecated No Git effect; changes invalidate incremental reuse. Enhanced uses seven days. Planned removal in v3.0.0. */
   changeWindow?: number;
 }
 
@@ -105,7 +113,9 @@ export interface FreshnessScoringConfig {
 export interface VectorSearchConfig {
   enabled?: boolean;
   similarityThreshold?: number;
+  /** @deprecated No indexing effect; changes invalidate incremental reuse. Comments are always indexed. Planned removal in v3.0.0. */
   indexCodeComments?: boolean;
+  /** @deprecated No indexing effect; changes invalidate incremental reuse. No docstring path exists. Planned removal in v3.0.0. */
   indexDocstrings?: boolean;
 }
 
@@ -130,12 +140,24 @@ export interface DocFreshnessConfig {
   urlValidation?: UrlValidationConfig;
   rules?: RulesConfig;
   reporters?: ReporterType[];
+  /**
+   * @deprecated No report-routing effect; changes invalidate incremental reuse. Use outputPath for
+   * JSON, Markdown, or Enhanced. Console remains on stdout. Planned removal in v3.0.0.
+   */
   outputDir?: string;
   outputPath?: string;
+  /**
+   * @deprecated No filtering effect; changes invalidate incremental reuse. Rule-level
+   * illustrativePatterns cover file-path, directory-structure, and code-snippet only. Planned removal in v3.0.0.
+   */
   ignorePatterns?: string[];
   customExtractors?: Extractor[];
   customValidators?: Record<string, BaseValidator>;
   graph?: GraphConfig;
+  /**
+   * @deprecated No Git effect; changes invalidate incremental reuse. Git is auto-detected, and
+   * Enhanced reports use a seven-day window. Planned removal in v3.0.0.
+   */
   git?: GitConfig;
   freshnessScoring?: FreshnessScoringConfig;
   vectorSearch?: VectorSearchConfig;

@@ -294,6 +294,20 @@ export default defineConfig({
 });
 ```
 
+The following accepted configuration options do not affect validation or reporting and are planned for removal in v3.0.0.
+They remain part of the incremental configuration fingerprint, so changing one forces the next incremental run to perform
+a full validation:
+
+| Option                                                           | Current behavior / migration                                                                                                                                                                                                                  |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rules.version.allowMinorDrift`                                  | Version validation compares major versions only.                                                                                                                                                                                              |
+| `outputDir`                                                      | Use `outputPath` with the JSON, Markdown, or Enhanced reporter. Console output remains on stdout.                                                                                                                                             |
+| `ignorePatterns`                                                 | `include` and `exclude` select documentation files. Rule-level `illustrativePatterns` can suppress illustrative `file-path`, `directory-structure`, and `code-snippet` references; there is no general semantic reference-ignore replacement. |
+| `git`, `git.enabled`, `git.trackChanges`, `git.changeWindow`     | Git availability is auto-detected during graph processing, and Enhanced reports use a fixed seven-day change window.                                                                                                                          |
+| `vectorSearch.indexCodeComments`, `vectorSearch.indexDocstrings` | Enabled vector search follows its built-in indexing behavior.                                                                                                                                                                                 |
+
+The exported `GitConfig` type is deprecated with the `git` property.
+
 <details>
 <summary>Full configuration example</summary>
 
