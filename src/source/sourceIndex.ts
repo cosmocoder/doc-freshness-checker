@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { glob } from 'glob';
+import { glob } from 'node:fs/promises';
 import type { IncrementalInput } from '../validators/incrementalInputs.js';
 import type {
   DocFreshnessConfig,
@@ -207,10 +207,14 @@ export class SourceIndex {
   private async findFiles(patterns: string[], rootDir: string, ignore: string[]): Promise<{ files: string[]; complete: boolean }> {
     const files: string[] = [];
     let complete = true;
+    // @types/node 24 omits followSymlinks, so keep this object inferred until its declarations catch up.
+    const globOptions = { cwd: rootDir, exclude: ignore, followSymlinks: true, withFileTypes: true } as const;
     for (const pattern of patterns) {
       try {
-        for (const file of await glob(pattern, { cwd: rootDir, absolute: true, nodir: true, ignore })) {
-          files.push(file);
+        for await (const entry of glob(pattern, globOptions)) {
+          if (!entry.isDirectory()) {
+            files.push(path.resolve(entry.parentPath, entry.name));
+          }
         }
       }
       catch {

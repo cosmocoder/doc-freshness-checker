@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { DocumentParser } from './documentParser.js';
 import { BaseExtractor } from './extractors/baseExtractor.js';
@@ -83,6 +84,53 @@ describe('DocumentParser', () => {
       expect(docs).toHaveLength(1);
       expect(docs[0].format).toBe('markdown');
       expect(docs[0].content).toContain('Hello');
+    });
+
+    it('uses a custom root and excludes matching files', async () => {
+      const rootDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'doc-freshness-parser-'));
+      const includedPath = path.join(rootDir, 'docs', 'included.md');
+      const excludedPath = path.join(rootDir, 'docs', 'excluded', 'draft.md');
+
+      try {
+        await fs.promises.mkdir(path.dirname(excludedPath), { recursive: true });
+        await fs.promises.writeFile(includedPath, '# Included');
+        await fs.promises.writeFile(excludedPath, '# Excluded');
+
+        const parser = new DocumentParser({
+          rootDir,
+          include: ['docs/**/*.md'],
+          exclude: ['docs/excluded/**'],
+        });
+        const docs = await parser.scanDocuments();
+
+        expect(docs).toHaveLength(1);
+        expect(docs[0].path).toBe(path.join('docs', 'included.md'));
+        expect(docs[0].absolutePath).toBe(includedPath);
+      }
+      finally {
+        await fs.promises.rm(rootDir, { recursive: true, force: true });
+      }
+    });
+
+    it('scans documents through symlinked directories', async () => {
+      const rootDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'doc-freshness-parser-symlink-'));
+      const targetDir = path.join(rootDir, 'api-docs');
+      const linkedDir = path.join(rootDir, 'docs', 'api');
+      const documentPath = path.join(targetDir, 'api.md');
+
+      try {
+        await fs.promises.mkdir(path.dirname(linkedDir), { recursive: true });
+        await fs.promises.mkdir(targetDir);
+        await fs.promises.writeFile(documentPath, '# API');
+        await fs.promises.symlink(targetDir, linkedDir, 'dir');
+
+        const docs = await new DocumentParser({ rootDir, include: ['docs/**/*.md'] }).scanDocuments();
+
+        expect(docs.map((doc) => doc.path)).toEqual([path.join('docs', 'api', 'api.md')]);
+      }
+      finally {
+        await fs.promises.rm(rootDir, { recursive: true, force: true });
+      }
     });
 
     it('applies registered extractors to matching documents', async () => {

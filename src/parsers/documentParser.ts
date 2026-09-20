@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { glob } from 'glob';
+import { glob } from 'node:fs/promises';
 import type { DocFreshnessConfig, Document, DocumentFormat, Extractor } from '../types.js';
 
 /**
@@ -26,15 +26,19 @@ export class DocumentParser {
    * Scan all documentation files matching the configured patterns
    */
   async scanDocuments(): Promise<Document[]> {
-    const files = await glob(this.config.include || [], {
-      ignore: this.config.exclude,
-      cwd: this.config.rootDir,
-      absolute: true,
-    });
+    const rootDir = this.config.rootDir || process.cwd();
+    // @types/node 24 omits followSymlinks, so keep this object inferred until its declarations catch up.
+    const globOptions = {
+      exclude: this.config.exclude,
+      followSymlinks: true,
+      cwd: rootDir,
+    };
+    const files = glob(this.config.include || [], globOptions);
 
     const documents: Document[] = [];
 
-    for (const filePath of files) {
+    for await (const file of files) {
+      const filePath = path.resolve(rootDir, file);
       let content: string;
       try {
         content = await fs.promises.readFile(filePath, 'utf-8');
@@ -54,7 +58,7 @@ export class DocumentParser {
         }
         throw error;
       }
-      const relativePath = path.relative(this.config.rootDir || process.cwd(), filePath);
+      const relativePath = path.relative(rootDir, filePath);
       const format = this.detectFormat(filePath);
 
       const doc: Document = {
