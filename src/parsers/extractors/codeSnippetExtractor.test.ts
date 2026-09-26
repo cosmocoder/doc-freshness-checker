@@ -134,6 +134,18 @@ describe('CodeSnippetExtractor', () => {
       expect(refs[0].argumentNames).toEqual(['name', 'email']);
     });
 
+    it('counts Python keyword arguments and leaves other languages without a keyword count', () => {
+      const python = makeDoc(['```python', 'configure(path, debug=True, level == 2, **extra)', '```'].join('\n'));
+      const [pythonCall] = extractor.extract(python).filter((r) => r.kind === 'function-call');
+      expect(pythonCall.linkText).toBe('4');
+      expect(pythonCall.keywordArgumentCount).toBe(2);
+
+      const typescript = makeDoc(['```typescript', 'configure(path, debug = true);', '```'].join('\n'));
+      const [typescriptCall] = extractor.extract(typescript).filter((r) => r.kind === 'function-call');
+      expect(typescriptCall.linkText).toBe('2');
+      expect(typescriptCall.keywordArgumentCount).toBeUndefined();
+    });
+
     it('counts zero arguments', () => {
       const doc = makeDoc(['```typescript', 'initialize();', '```'].join('\n'));
       const refs = extractor.extract(doc).filter((r) => r.kind === 'function-call');

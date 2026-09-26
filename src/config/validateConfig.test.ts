@@ -11,8 +11,41 @@ describe('validateConfig', () => {
     ['array freshness scoring config', { freshnessScoring: [] }, 'freshnessScoring must be a plain object'],
     ['string scoring weights', { freshnessScoring: { weights: 'invalid' } }, 'freshnessScoring.weights must be a plain object'],
     ['number scoring thresholds', { freshnessScoring: { thresholds: 1 } }, 'freshnessScoring.thresholds must be a plain object'],
+    ['array vector search config', { vectorSearch: [] }, 'vectorSearch must be a plain object'],
   ])('rejects %s', (_name, config, message) => {
     expect(() => validateConfig(config as unknown as DocFreshnessConfig)).toThrow(message);
+  });
+
+  it('rejects several distinct file reporters sharing outputPath', () => {
+    expect(() => validateConfig({ reporters: ['console', 'markdown', 'json', 'markdown'], outputPath: 'report.out' })).toThrow(
+      'outputPath supports one file reporter, but these reporters would overwrite it: markdown, json'
+    );
+    expect(() => validateConfig({ reporters: ['console', 'json', 'json'], outputPath: 'report.out' })).not.toThrow();
+    expect(() => validateConfig({ reporters: ['json', 'markdown'] })).not.toThrow();
+  });
+
+  it('rejects freshness scoring when graphing is disabled', () => {
+    expect(() => validateConfig({ graph: { enabled: false }, freshnessScoring: { enabled: true } })).toThrow(
+      'freshnessScoring.enabled requires graph.enabled'
+    );
+    expect(() => validateConfig({ freshnessScoring: { enabled: true } })).not.toThrow();
+  });
+
+  it.each([
+    ['NaN', Number.NaN],
+    ['infinity', Number.POSITIVE_INFINITY],
+    ['negative', -0.1],
+    ['above one', 1.1],
+    ['string', '0.3'],
+  ])('rejects %s vector similarity threshold', (_name, similarityThreshold) => {
+    expect(() => validateConfig({ vectorSearch: { similarityThreshold } } as unknown as DocFreshnessConfig)).toThrow(
+      'vectorSearch.similarityThreshold must be a finite number between 0 and 1'
+    );
+  });
+
+  it('accepts inclusive vector similarity threshold bounds', () => {
+    expect(() => validateConfig({ vectorSearch: { similarityThreshold: 0 } })).not.toThrow();
+    expect(() => validateConfig({ vectorSearch: { similarityThreshold: 1 } })).not.toThrow();
   });
 
   it('accepts null-prototype config containers', () => {

@@ -8,6 +8,9 @@ const LANGUAGE_ALIASES: Record<SupportedSnippetLanguage, string[]> = {
   go: ['go', 'golang'],
 };
 
+// `name=value` or `**mapping`; `==` is a comparison, not a keyword argument.
+const PYTHON_KEYWORD_ARGUMENT = /^(?:\*\*|[A-Za-z_]\w*\s*=(?!=))/;
+
 /**
  * Identifiers to skip when extracting function calls.
  * Includes language keywords, common built-ins, and test framework globals.
@@ -388,11 +391,12 @@ export class CodeSnippetExtractor extends BaseExtractor {
           continue;
         }
 
-        const arity = this.countArguments(line, match.index + match[0].length - 1, lines, i);
-        if (arity === null) {
+        const args = this.callArguments(line, match.index + match[0].length - 1, lines, i);
+        if (args === null) {
           continue;
         }
-        const argumentNames = this.extractArgumentNames(line, match.index + match[0].length - 1, lines, i);
+        const names = args.map((argument) => this.extractArgumentName(argument));
+        const argumentNames = names.every((name) => name !== null) ? (names as string[]) : undefined;
 
         refs.push({
           type: this.type,
@@ -402,8 +406,9 @@ export class CodeSnippetExtractor extends BaseExtractor {
           raw: match[0].slice(0, -1), // function name without the paren
           sourceFile: doc.path,
           language: lang,
-          linkText: String(arity),
+          linkText: String(args.length),
           argumentNames,
+          ...(lang === 'python' ? { keywordArgumentCount: args.filter((argument) => PYTHON_KEYWORD_ARGUMENT.test(argument)).length } : {}),
         });
       }
     }
@@ -412,10 +417,10 @@ export class CodeSnippetExtractor extends BaseExtractor {
   }
 
   /**
-   * Count arguments starting from the opening paren, handling nesting and
-   * multi-line argument lists.
+   * Split the arguments starting from the opening paren, handling nesting and
+   * multi-line argument lists. Returns null when the call is not closed.
    */
-  private countArguments(line: string, parenStart: number, lines: string[], lineIdx: number): number | null {
+  private callArguments(line: string, parenStart: number, lines: string[], lineIdx: number): string[] | null {
     let text = line.substring(parenStart);
     let lineOffset = 0;
 
@@ -429,14 +434,7 @@ export class CodeSnippetExtractor extends BaseExtractor {
     }
 
     const inner = this.extractParenContent(text);
-    if (inner === null) {
-      return null;
-    }
-    if (inner.trim() === '') {
-      return 0;
-    }
-
-    return this.splitTopLevel(inner, ',').length;
+    return inner === null ? null : this.splitTopLevel(inner, ',');
   }
 
   private hasClosingParen(text: string): boolean {
@@ -565,30 +563,6 @@ export class CodeSnippetExtractor extends BaseExtractor {
       .split(',')
       .map((s) => s.trim().split(' as ')[0].trim())
       .filter(Boolean);
-  }
-
-  private extractArgumentNames(line: string, parenStart: number, lines: string[], lineIdx: number): string[] | undefined {
-    let text = line.substring(parenStart);
-    let lineOffset = 0;
-
-    while (!this.hasClosingParen(text) && lineIdx + lineOffset + 1 < lines.length) {
-      lineOffset++;
-      text += '\n' + lines[lineIdx + lineOffset];
-    }
-
-    if (!this.hasClosingParen(text)) {
-      return undefined;
-    }
-
-    const inner = this.extractParenContent(text);
-    if (inner === null || inner.trim() === '') {
-      return [];
-    }
-
-    const parts = this.splitTopLevel(inner, ',');
-    const names = parts.map((part) => this.extractArgumentName(part));
-
-    return names.every((name) => name !== null) ? (names as string[]) : undefined;
   }
 
   private extractArgumentName(argument: string): string | null {

@@ -29,18 +29,11 @@ import { VectorSearch } from './semantic/vectorSearch.js';
 import { SourceIndex } from './source/sourceIndex.js';
 import { createSourceValidators } from './source/sourceValidators.js';
 import { loadConfig } from './config/loader.js';
-import { BUILT_IN_RULE_TYPES } from './config/defaults.js';
+import { BUILT_IN_RULE_TYPES, FILE_REPORTER_TYPES } from './config/defaults.js';
 import type { BuiltInRuleType } from './config/defaults.js';
 import { validateConfig } from './config/validateConfig.js';
 import type { CodeDocGraph } from './graph/codeDocGraph.js';
 import type { BaseValidator, DocFreshnessConfig, ProjectScores, ReporterType, ValidationResults } from './types.js';
-
-const REPORTER_OUTPUT: Record<ReporterType, 'console' | 'stable' | 'timestamped'> = {
-  console: 'console',
-  json: 'stable',
-  markdown: 'timestamped',
-  enhanced: 'timestamped',
-};
 
 interface ReportInput {
   readonly results: ValidationResults;
@@ -183,13 +176,8 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
   if (config.incremental?.enabled && allDocuments.length > 0) {
     if (cacheManager.policy.enabled) {
       const incrementalInputs = await validationEngine.captureIncrementalInputs(allDocuments);
-      const finalFileReporter = (config.reporters || ['console']).findLast(
-        (reporter) => REPORTER_OUTPUT[reporter] === 'stable' || REPORTER_OUTPUT[reporter] === 'timestamped'
-      );
-      const inventoryExclusions =
-        config.outputPath && finalFileReporter && REPORTER_OUTPUT[finalFileReporter] === 'timestamped'
-          ? [path.resolve(config.outputPath)]
-          : [];
+      const writesReport = (config.reporters || ['console']).some((reporter) => FILE_REPORTER_TYPES.has(reporter));
+      const inventoryExclusions = config.outputPath && writesReport ? [path.resolve(config.outputPath)] : [];
       incrementalChecker = new IncrementalChecker(cacheManager);
       documentsToValidate = await incrementalChecker.filterChanged(allDocuments, config, incrementalInputs, inventoryExclusions);
     }

@@ -80,14 +80,14 @@ describe('CodePatternValidator', () => {
     }
   });
 
-  it('marks source inputs unavailable when source discovery fails', async () => {
+  it('rejects source inputs when source discovery fails', async () => {
     const validator = new CodePatternValidator();
     const invalidConfig = { rootDir: process.cwd(), sourcePatterns: [null as unknown as string] };
 
-    expect(await validator.getIncrementalInputs([], doc, invalidConfig)).toBeNull();
+    await expect(validator.getIncrementalInputs([], doc, invalidConfig)).rejects.toThrow('Could not scan source pattern null');
   });
 
-  it('marks source inputs unavailable when a matched source file is unreadable', async () => {
+  it('rejects source inputs when a matched source file is unreadable', async () => {
     const rootDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'code-pattern-unreadable-'));
     const sourceDir = path.join(rootDir, 'src');
     const sourcePath = path.join(sourceDir, 'source.ts');
@@ -103,7 +103,9 @@ describe('CodePatternValidator', () => {
     try {
       const validator = new CodePatternValidator();
 
-      await expect(validator.getIncrementalInputs([], doc, { rootDir, sourcePatterns: ['src/**/*.ts'] })).resolves.toBeNull();
+      await expect(validator.getIncrementalInputs([], doc, { rootDir, sourcePatterns: ['src/**/*.ts'] })).rejects.toThrow(
+        `Could not read source file ${sourcePath}: permission denied`
+      );
     }
     finally {
       readSpy.mockRestore();

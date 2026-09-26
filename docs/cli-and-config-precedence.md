@@ -73,6 +73,7 @@ Manifest candidate list includes:
 - `--no-cache` disables cache usage; `--clear-cache` still requests cache clearing early in runtime.
 - `--output` controls file output for reporters that emit string payloads (`json`, `markdown`, `enhanced`).
 - The `console` reporter prints directly and does not use `outputPath`.
+- `outputPath` accepts one file reporter. A config that combines `outputPath` with more than one of `json`, `markdown`, and `enhanced` is rejected.
 
 ## Exit Code Semantics
 

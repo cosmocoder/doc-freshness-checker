@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { findSimilar } from '../utils/similarity.js';
 import { isIllustrativePath, compilePatterns } from '../utils/illustrativePatterns.js';
-import { isWithinRoot, resolveDocumentDir, resolveProjectRoot } from '../utils/pathSecurity.js';
+import { isWithinRoot, locateRealPath, resolveDocumentDir, resolveProjectRoot } from '../utils/pathSecurity.js';
 import { createIllustrativeSkippedResult, getRuleSeverity, severityForIllustrative } from '../utils/validation.js';
 import type { IncrementalInput } from './incrementalInputs.js';
 import type { DocFreshnessConfig, Document, Reference, ValidationResult } from '../types.js';
@@ -81,7 +81,8 @@ export class FileValidator {
     const baseSeverity = getRuleSeverity(config, 'file-path', 'error');
 
     // Prevent probing files outside the configured project root
-    if (!isWithinRoot(resolvedPath, rootDir)) {
+    const location = isWithinRoot(resolvedPath, rootDir) ? await locateRealPath(resolvedPath, rootDir) : 'outside';
+    if (location === 'outside') {
       return {
         reference: ref,
         valid: false,
@@ -92,43 +93,33 @@ export class FileValidator {
       };
     }
 
-    try {
-      await fs.promises.access(resolvedPath);
+    if (location === 'inside') {
       return {
         reference: ref,
         valid: true,
         resolvedPath,
       };
     }
-    catch {
-      // File doesn't exist - try to find similar files
-      const suggestion = await this.findSuggestion(ref.value, docDir, rootDir);
 
-      // Reduce severity for illustrative paths that weren't skipped
-      return {
-        reference: ref,
-        valid: false,
-        severity: severityForIllustrative(isIllustrative, baseSeverity),
-        message: isIllustrative ? `File not found (illustrative): ${ref.value}` : `File not found: ${ref.value}`,
-        suggestion: suggestion ? `Did you mean: ${suggestion}?` : null,
-        resolvedPath,
-      };
-    }
+    // File doesn't exist - try to find similar files
+    const suggestion = await this.findSuggestion(ref.value, docDir, rootDir);
+
+    // Reduce severity for illustrative paths that weren't skipped
+    return {
+      reference: ref,
+      valid: false,
+      severity: severityForIllustrative(isIllustrative, baseSeverity),
+      message: isIllustrative ? `File not found (illustrative): ${ref.value}` : `File not found: ${ref.value}`,
+      suggestion: suggestion ? `Did you mean: ${suggestion}?` : null,
+      resolvedPath,
+    };
   }
 
   private async findSuggestion(refPath: string, docDir: string, rootDir: string): Promise<string | null> {
     const dir = path.dirname(path.resolve(docDir, refPath));
     const fileName = path.basename(refPath);
 
-    if (!isWithinRoot(dir, rootDir)) {
-      return null;
-    }
-
-    // Check if directory exists
-    try {
-      await fs.promises.access(dir);
-    }
-    catch {
+    if (!isWithinRoot(dir, rootDir) || (await locateRealPath(dir, rootDir)) !== 'inside') {
       return null;
     }
 

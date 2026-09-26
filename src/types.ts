@@ -190,6 +190,7 @@ export interface Reference {
   linkText?: string;
   importSpecifiers?: string[];
   argumentNames?: string[];
+  keywordArgumentCount?: number;
   technology?: string;
   version?: string;
   kind?: string;
@@ -320,6 +321,10 @@ export interface SourceFileData {
 export interface FunctionSignature {
   params: string[];
   requiredParams: number;
+  /** Index in `params` of the first positional rest parameter (`...rest`, `*args`). */
+  restIndex?: number;
+  /** Index in `params` of the Python `**kwargs` parameter, which accepts any number of keyword arguments. */
+  keywordRestIndex?: number;
   filePath: string;
 }
 

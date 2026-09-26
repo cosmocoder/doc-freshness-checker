@@ -250,6 +250,109 @@ describe('CodeSnippetValidator', () => {
       );
     });
 
+    it('accepts any number of arguments for rest parameters and reports too few as a minimum', async () => {
+      await withTempSourceFiles(
+        {
+          'src/api.ts': 'export function log(level: string, ...messages: string[]) { return [level, ...messages]; }\n',
+          'src/api.py': 'def gather(first, *rest): pass\n',
+        },
+        async (tempConfig) => {
+          const validator = new CodeSnippetValidator();
+          const results = await validator.validateBatch(
+            [
+              makeRef('function-call', 'log', { argumentNames: ['level', 'first', 'second', 'third'], linkText: '4', raw: 'log(...)' }),
+              makeRef('function-call', 'gather', { linkText: '3', raw: 'gather(a, b, c)', language: 'python' }),
+              makeRef('function-call', 'log', { linkText: '0', raw: 'log()' }),
+            ],
+            doc,
+            tempConfig
+          );
+          expect(results[0].valid).toBe(true);
+          expect(results[1].valid).toBe(true);
+          expect(results[2].valid).toBe(false);
+          expect(results[2].message).toContain('expects at least 1');
+        }
+      );
+    });
+
+    it('lets **kwargs absorb keyword arguments but not positional arguments', async () => {
+      await withTempSourceFiles(
+        {
+          'src/api.py': 'def configure(required, **options): pass\ndef gather(first, *rest, **options): pass\n',
+        },
+        async (tempConfig) => {
+          const python = { language: 'python' };
+          const results = await new CodeSnippetValidator().validateBatch(
+            [
+              makeRef('function-call', 'configure', {
+                ...python,
+                linkText: '3',
+                keywordArgumentCount: 2,
+                raw: 'configure(x, debug=True, level=2)',
+              }),
+              makeRef('function-call', 'configure', { ...python, linkText: '1', keywordArgumentCount: 1, raw: 'configure(required=x)' }),
+              makeRef('function-call', 'configure', { ...python, linkText: '3', keywordArgumentCount: 0, raw: 'configure(a, b, c)' }),
+              makeRef('function-call', 'gather', { ...python, linkText: '4', keywordArgumentCount: 1, raw: 'gather(a, b, c, debug=True)' }),
+            ],
+            doc,
+            tempConfig
+          );
+          expect(results.map((result) => result.valid)).toEqual([true, true, false, true]);
+          expect(results[2].message).toBe('Function configure called with 3 positional arg(s) but expects 1 positional');
+        }
+      );
+    });
+
+    it('checks only positional argument names and treats impossible keyword counts as zero', async () => {
+      await withTempSourceFiles(
+        {
+          'src/api.py': 'def configure(required, **options): pass\ndef tune(a, b=1, **options): pass\n',
+        },
+        async (tempConfig) => {
+          const python = { language: 'python' };
+          const results = await new CodeSnippetValidator().validateBatch(
+            [
+              makeRef('function-call', 'configure', {
+                ...python,
+                linkText: '2',
+                argumentNames: ['required', 'debug'],
+                keywordArgumentCount: 1,
+              }),
+              makeRef('function-call', 'tune', { ...python, linkText: '2', argumentNames: ['a', 'debug'], keywordArgumentCount: 1 }),
+              makeRef('function-call', 'configure', { ...python, linkText: '2', argumentNames: ['x', 'debug'], keywordArgumentCount: 1 }),
+              makeRef('function-call', 'configure', { ...python, linkText: '3', keywordArgumentCount: 4 }),
+              makeRef('function-call', 'configure', { ...python, linkText: '3', keywordArgumentCount: Number.NaN }),
+            ],
+            doc,
+            tempConfig
+          );
+          expect(results.map((result) => result.valid)).toEqual([true, true, false, false, false]);
+          expect(results[2].message).toContain('outdated parameter name');
+          expect(results[3].message).toBe('Function configure called with 3 positional arg(s) but expects 1 positional');
+          expect(results[4].message).toBe(results[3].message);
+        }
+      );
+    });
+
+    it('describes the overload nearest to the call when no overload accepts it', async () => {
+      await withTempSourceFiles(
+        {
+          'src/rest.ts': 'export function pick(first: string, ...rest: string[]) { return [first, ...rest]; }\n',
+          'src/fixed.ts':
+            'export function pick(a: string, b: string, c: string, d: string, e: string, f: string, g: string, h: string) { return a; }\n',
+        },
+        async (tempConfig) => {
+          const [result] = await new CodeSnippetValidator().validateBatch(
+            [makeRef('function-call', 'pick', { linkText: '0', raw: 'pick()' })],
+            doc,
+            tempConfig
+          );
+          expect(result.valid).toBe(false);
+          expect(result.message).toBe('Function pick called with 0 arg(s) but expects at least 1');
+        }
+      );
+    });
+
     it('skips parameter-name comparison when arguments are expressions', async () => {
       await withTempSourceFiles(
         {

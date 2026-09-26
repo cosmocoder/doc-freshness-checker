@@ -1,5 +1,6 @@
 import type {
   DocFreshnessConfig,
+  ReporterType,
   FreshnessScoringConfig,
   FreshnessScoringThresholds,
   FreshnessScoringWeights,
@@ -25,6 +26,8 @@ export const BUILT_IN_RULE_TYPES = [
 ] as const;
 
 export type BuiltInRuleType = (typeof BUILT_IN_RULE_TYPES)[number];
+
+export const FILE_REPORTER_TYPES: ReadonlySet<ReporterType> = new Set(['json', 'markdown', 'enhanced']);
 
 /**
  * Default configuration values for Documentation Freshness Checker
@@ -166,7 +169,7 @@ export const DEFAULT_CONFIG: DefaultConfig = {
   // Vector search settings (optional, requires fastembed package)
   vectorSearch: {
     enabled: false, // Disabled by default
-    similarityThreshold: 0.3, // Lower = stricter matching
+    similarityThreshold: 0.3, // Higher = stricter: doc sections need a closer code match, so more mismatches are reported
     // Deprecated: ignored by vector indexing; changing this value invalidates incremental reuse.
     indexCodeComments: true,
     // Deprecated: ignored by vector indexing; changing this value invalidates incremental reuse.

@@ -589,25 +589,22 @@ describe('runner', () => {
       });
     });
 
-    it('overwrites a shared outputPath sequentially so the last string reporter wins', async () => {
+    it('rejects several file reporters sharing one outputPath before writing anything', async () => {
       await withOutputFile(cacheRoot, 'shared-reporter.out', async (outputPath) => {
-        captureLog();
-        await run({ ...baseConfig, reporters: ['json', 'markdown'], outputPath });
-        expect(await fs.promises.readFile(outputPath, 'utf-8')).toMatch(/^# Documentation Freshness Report/);
-
-        await run({ ...baseConfig, reporters: ['markdown', 'json'], outputPath });
-        expect(await fs.promises.readFile(outputPath, 'utf-8')).toMatch(/^\{/);
+        await expect(run({ ...baseConfig, reporters: ['json', 'markdown'], outputPath })).rejects.toThrow(
+          'outputPath supports one file reporter, but these reporters would overwrite it: json, markdown'
+        );
+        await expect(fs.promises.access(outputPath)).rejects.toThrow();
       });
     });
 
-    it('creates recursive output directories and reports each verbose label', async () => {
+    it('creates recursive output directories and reports the verbose label', async () => {
       const outputRoot = path.join(cacheRoot, 'reporter-routing');
       const outputPath = path.join(outputRoot, 'nested', 'report.out');
       const log = captureLog();
       try {
-        await run({ ...baseConfig, reporters: ['json', 'markdown'], outputPath, verbose: true });
+        await run({ ...baseConfig, reporters: ['console', 'markdown'], outputPath, verbose: true });
         expect(await fs.promises.readFile(outputPath, 'utf-8')).toMatch(/^# Documentation Freshness Report/);
-        expect(log.mock.calls.flat()).toContain(`JSON report written to ${outputPath}`);
         expect(log.mock.calls.flat()).toContain(`Markdown report written to ${outputPath}`);
       }
       finally {
@@ -1074,6 +1071,32 @@ describe('runner', () => {
       });
     });
 
+    it('rejects instead of validating against a partial source index when a source file is unreadable', async () => {
+      await withIncrementalRoot('unreadable-source', async (rootDir) => {
+        const docPath = path.join(rootDir, 'guide.md');
+        const sourcePath = path.join(rootDir, 'locked.ts');
+        await fs.promises.writeFile(docPath, ['```typescript', 'class LockedService {}', '```'].join('\n'));
+        await fs.promises.writeFile(sourcePath, 'export class LockedService {}');
+        const config = incrementalConfig(rootDir, {
+          sourcePatterns: ['*.ts'],
+          rules: { 'code-pattern': { enabled: true, severity: 'warning' } },
+        });
+        const readFile = fs.promises.readFile;
+        const spy = vi
+          .spyOn(fs.promises, 'readFile')
+          .mockImplementation(((file: string, options: BufferEncoding) =>
+            file === sourcePath ? Promise.reject(new Error('EACCES: permission denied')) : readFile(file, options)) as typeof readFile);
+        try {
+          mockDocumentScan(docPath);
+          vi.mocked(glob).mockReturnValueOnce(sourceGlobResults([sourcePath]));
+          await expect(run(config)).rejects.toThrow(`Could not read source file ${sourcePath}: EACCES: permission denied`);
+        }
+        finally {
+          spy.mockRestore();
+        }
+      });
+    });
+
     it('captures graph-only source inputs once per run and skips unchanged validation', async () => {
       await withIncrementalRoot('graph-source', async (rootDir) => {
         const docPath = path.join(rootDir, 'guide.md');
@@ -1188,80 +1211,33 @@ describe('runner', () => {
       });
     });
 
-    it('revalidates after generated output changes the project inventory', async () => {
-      await withIncrementalRoot('output', async (rootDir) => {
-        const docPath = path.join(rootDir, 'guide.md');
-        const targetPath = path.join(rootDir, 'target.ts');
-        const outputPath = path.join(rootDir, 'report.json');
-        await fs.promises.writeFile(docPath, '[target](target.ts)');
-        await fs.promises.writeFile(targetPath, 'export const target = true;');
-        const config = incrementalConfig(rootDir, {
-          rules: { 'file-path': { enabled: true } },
-          reporters: ['json'],
-          outputPath,
-        });
+    it.each(['json', 'markdown', 'enhanced'] as ReporterType[])(
+      'skips unchanged docs when %s output is inside rootDir',
+      async (reporter) => {
+        await withIncrementalRoot(`output-${reporter}`, async (rootDir) => {
+          const docPath = path.join(rootDir, 'guide.md');
+          const targetPath = path.join(rootDir, 'target.ts');
+          const outputPath = path.join(rootDir, `${reporter}.out`);
+          await fs.promises.writeFile(docPath, '[target](target.ts)');
+          await fs.promises.writeFile(targetPath, 'export const target = true;');
+          const config = incrementalConfig(rootDir, {
+            rules: { 'file-path': { enabled: true } },
+            reporters: [reporter],
+            outputPath,
+          });
 
-        mockDocumentScan(docPath);
-        expect((await run(config)).summary.total).toBe(1);
-        mockDocumentScan(docPath);
-        expect((await run(config)).summary.total).toBe(1);
-        mockDocumentScan(docPath);
-        expect((await run(config)).summary.total).toBe(0);
-        mockDocumentScan(docPath);
-        expect((await run(config)).summary.total).toBe(1);
-      });
-    });
-
-    it.each(['markdown', 'enhanced'] as ReporterType[])('skips unchanged docs when %s output is inside rootDir', async (reporter) => {
-      await withIncrementalRoot(`output-${reporter}`, async (rootDir) => {
-        const docPath = path.join(rootDir, 'guide.md');
-        const targetPath = path.join(rootDir, 'target.ts');
-        const outputPath = path.join(rootDir, `${reporter}.out`);
-        await fs.promises.writeFile(docPath, '[target](target.ts)');
-        await fs.promises.writeFile(targetPath, 'export const target = true;');
-        const config = incrementalConfig(rootDir, {
-          rules: { 'file-path': { enabled: true } },
-          reporters: [reporter],
-          outputPath,
-        });
-
-        mockDocumentScan(docPath);
-        expect((await run(config)).summary.total).toBe(1);
-        await expect(fs.promises.access(outputPath)).resolves.toBeUndefined();
-
-        mockDocumentScan(docPath);
-        expect((await run(config)).summary.total).toBe(0);
-
-        mockDocumentScan(docPath);
-        expect((await run(config)).summary.total).toBe(0);
-      });
-    });
-
-    it.each([
-      { reporters: ['markdown', 'json'] as ReporterType[], expectedTotals: [1, 1, 0, 1] },
-      { reporters: ['json', 'markdown'] as ReporterType[], expectedTotals: [1, 0, 0, 0] },
-    ])('keeps mixed reporter ordering stable for incremental output', async ({ reporters, expectedTotals }) => {
-      await withIncrementalRoot(`mixed-output-${reporters.join('-')}`, async (rootDir) => {
-        const docPath = path.join(rootDir, 'guide.md');
-        const targetPath = path.join(rootDir, 'target.ts');
-        const outputPath = path.join(rootDir, 'report.out');
-        await fs.promises.writeFile(docPath, '[target](target.ts)');
-        await fs.promises.writeFile(targetPath, 'export const target = true;');
-        const config = incrementalConfig(rootDir, {
-          rules: { 'file-path': { enabled: true } },
-          reporters,
-          outputPath,
-        });
-        const totals: number[] = [];
-
-        for (let runNumber = 0; runNumber < expectedTotals.length; runNumber++) {
           mockDocumentScan(docPath);
-          totals.push((await run(config)).summary.total);
-        }
+          expect((await run(config)).summary.total).toBe(1);
+          await expect(fs.promises.access(outputPath)).resolves.toBeUndefined();
 
-        expect(totals).toEqual(expectedTotals);
-      });
-    });
+          mockDocumentScan(docPath);
+          expect((await run(config)).summary.total).toBe(0);
+
+          mockDocumentScan(docPath);
+          expect((await run(config)).summary.total).toBe(0);
+        });
+      }
+    );
 
     it('does not throw for markdown reporting without outputPath', async () => {
       await withIncrementalRoot('markdown-stdout', async (rootDir) => {
