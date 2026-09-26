@@ -214,13 +214,13 @@ describe('SourceIndex', () => {
         const snapshot = await loadBoth(new SourceIndex(), { rootDir, sourcePatterns: ['src/*'] });
         expect(snapshot.symbols.get('calculate')).toHaveLength(2);
         expect(snapshot.functionSignatures.get('calculate')).toEqual([
-          { params: ['required', 'optional', 'rest'], requiredParams: 1, filePath: 'src/api.ts' },
+          { params: ['required', 'optional', 'rest'], requiredParams: 1, restIndex: 2, filePath: 'src/api.ts' },
         ]);
         expect(snapshot.functionSignatures.get('arrow')).toEqual([
           { params: ['first', 'second'], requiredParams: 1, filePath: 'src/api.ts' },
         ]);
         expect(snapshot.functionSignatures.get('method')).toEqual([
-          { params: ['required', 'optional', 'args'], requiredParams: 1, filePath: 'src/api.py' },
+          { params: ['required', 'optional', 'args'], requiredParams: 1, restIndex: 2, filePath: 'src/api.py' },
         ]);
         expect(snapshot.interfaceKeys.get('Config')).toEqual(new Set(['first', 'nested', 'second']));
         expect(snapshot.exportsByFile.get('src/api.ts')).toEqual(

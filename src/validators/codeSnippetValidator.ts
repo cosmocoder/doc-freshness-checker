@@ -258,6 +258,7 @@ export class CodeSnippetValidator {
   private validateFunctionCall(ref: Reference, config: DocFreshnessConfig): ValidationResult {
     const funcName = ref.value;
     const snippetArity = parseInt(ref.linkText || '0', 10);
+    const keywordCount = this.keywordArgumentCount(ref, snippetArity);
 
     if (isIllustrativeSymbol(funcName)) {
       return {
@@ -280,10 +281,10 @@ export class CodeSnippetValidator {
     }
 
     // A call is valid if any signature can accept this many arguments
-    const compatible = signatures.find((sig) => snippetArity >= sig.requiredParams && snippetArity <= sig.params.length);
+    const compatible = signatures.find((sig) => this.acceptsArity(sig, snippetArity, keywordCount));
 
     if (compatible) {
-      const parameterNamesResult = this.validateFunctionParameterNames(ref, compatible, signatures, config);
+      const parameterNamesResult = this.validateFunctionParameterNames(ref, keywordCount, compatible, signatures, config);
       if (parameterNamesResult) {
         return parameterNamesResult;
       }
@@ -295,22 +296,27 @@ export class CodeSnippetValidator {
       };
     }
 
-    const closest = signatures.reduce((prev, curr) => {
-      const prevMid = (prev.requiredParams + prev.params.length) / 2;
-      const currMid = (curr.requiredParams + curr.params.length) / 2;
-      return Math.abs(snippetArity - currMid) < Math.abs(snippetArity - prevMid) ? curr : prev;
-    });
+    const closest = signatures.reduce((prev, curr) =>
+      this.arityDistance(curr, snippetArity, keywordCount) < this.arityDistance(prev, snippetArity, keywordCount) ? curr : prev
+    );
 
+    const maxPositional = this.maxPositional(closest);
     const arityDesc =
-      closest.requiredParams === closest.params.length
-        ? String(closest.params.length)
-        : `${closest.requiredParams}–${closest.params.length}`;
+      closest.restIndex !== undefined
+        ? `at least ${closest.requiredParams}`
+        : closest.requiredParams === maxPositional
+          ? String(maxPositional)
+          : `${closest.requiredParams}–${maxPositional}`;
+    const message =
+      closest.keywordRestIndex !== undefined && closest.restIndex === undefined
+        ? `Function ${funcName} called with ${snippetArity - keywordCount} positional arg(s) but expects ${arityDesc} positional`
+        : `Function ${funcName} called with ${snippetArity} arg(s) but expects ${arityDesc}`;
 
     return {
       reference: ref,
       valid: false,
       severity: getRuleSeverity(config, 'code-snippet', 'warning'),
-      message: `Function ${funcName} called with ${snippetArity} arg(s) but expects ${arityDesc}`,
+      message,
       suggestion: `Current signature: ${funcName}(${closest.params.join(', ')})`,
       foundIn: signatures.map((s) => s.filePath),
     };
@@ -388,6 +394,7 @@ export class CodeSnippetValidator {
 
   private validateFunctionParameterNames(
     ref: Reference,
+    keywordCount: number,
     compatible: FunctionSignature,
     signatures: FunctionSignature[],
     config: DocFreshnessConfig
@@ -399,9 +406,8 @@ export class CodeSnippetValidator {
 
     const compatibleByNames = signatures.find(
       (signature) =>
-        argumentNames.length >= signature.requiredParams &&
-        argumentNames.length <= signature.params.length &&
-        this.parameterNamesMatch(argumentNames, signature.params)
+        this.acceptsArity(signature, argumentNames.length, keywordCount) &&
+        this.parameterNamesMatch(argumentNames.slice(0, Math.max(0, argumentNames.length - keywordCount)), signature)
     );
 
     if (compatibleByNames) {
@@ -418,12 +424,29 @@ export class CodeSnippetValidator {
     };
   }
 
-  private parameterNamesMatch(argumentNames: string[], parameterNames: string[]): boolean {
-    if (argumentNames.length > parameterNames.length) {
-      return false;
-    }
+  /** Custom extractors can set any value; an impossible count is treated as all-positional, the strictest reading. */
+  private keywordArgumentCount(ref: Reference, arity: number): number {
+    const count = ref.keywordArgumentCount;
+    return count !== undefined && Number.isInteger(count) && count >= 0 && count <= arity ? count : 0;
+  }
 
-    return argumentNames.every((name, index) => name === parameterNames[index]);
+  private acceptsArity(signature: FunctionSignature, arity: number, keywordCount: number): boolean {
+    return this.arityDistance(signature, arity, keywordCount) === 0;
+  }
+
+  /** How many arguments a call must add or remove to fit the signature; 0 means it fits. */
+  private arityDistance(signature: FunctionSignature, arity: number, keywordCount: number): number {
+    const maxArity = signature.restIndex === undefined && signature.keywordRestIndex === undefined ? signature.params.length : Infinity;
+    return Math.max(signature.requiredParams - arity, arity - maxArity, arity - keywordCount - this.maxPositional(signature), 0);
+  }
+
+  private maxPositional(signature: FunctionSignature): number {
+    return signature.restIndex === undefined ? (signature.keywordRestIndex ?? signature.params.length) : Infinity;
+  }
+
+  private parameterNamesMatch(argumentNames: string[], signature: FunctionSignature): boolean {
+    const positionalCount = signature.restIndex ?? signature.keywordRestIndex ?? signature.params.length;
+    return argumentNames.slice(0, positionalCount).every((name, index) => name === signature.params[index]);
   }
 
   // Exposed for testing / integration

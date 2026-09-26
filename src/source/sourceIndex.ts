@@ -288,18 +288,24 @@ export class SourceIndex {
     const parsed = this.parseParameters(parameters, behavior);
     let names = parsed.names;
     let required = parsed.requiredCount;
+    let { restIndex, keywordRestIndex } = parsed;
     if (names.length > 0 && behavior.strippedReceivers?.includes(names[0])) {
       names = names.slice(1);
       required = Math.max(0, required - 1);
+      restIndex = restIndex === undefined ? undefined : restIndex - 1;
+      keywordRestIndex = keywordRestIndex === undefined ? undefined : keywordRestIndex - 1;
     }
     const entries = signatures.get(name) || [];
     if (entries.length === 0) {
       signatures.set(name, entries);
     }
-    entries.push({ params: names, requiredParams: required, filePath });
+    entries.push({ params: names, requiredParams: required, restIndex, keywordRestIndex, filePath });
   }
 
-  private parseParameters(parameters: string, behavior: SnippetLanguageBehavior): { names: string[]; requiredCount: number } {
+  private parseParameters(
+    parameters: string,
+    behavior: SnippetLanguageBehavior
+  ): { names: string[]; requiredCount: number; restIndex?: number; keywordRestIndex?: number } {
     if (!parameters.trim()) {
       return { names: [], requiredCount: 0 };
     }
@@ -328,14 +334,22 @@ export class SourceIndex {
     const names: string[] = [];
     let requiredCount = 0;
     let seenOptional = false;
+    let restIndex: number | undefined;
+    let keywordRestIndex: number | undefined;
     for (const raw of rawParameters) {
       const name = this.extractParameterName(raw, behavior);
       if (!name) {
         continue;
       }
-      names.push(name);
       const optional = this.isOptionalParameter(raw, behavior);
       const rest = raw.trim().startsWith('...') || raw.trim().startsWith('*');
+      if (raw.trim().startsWith('**')) {
+        keywordRestIndex ??= names.length;
+      }
+      else if (rest) {
+        restIndex ??= names.length;
+      }
+      names.push(name);
       if (!optional && !rest && !seenOptional) {
         requiredCount++;
       }
@@ -343,7 +357,7 @@ export class SourceIndex {
         seenOptional = true;
       }
     }
-    return { names, requiredCount };
+    return { names, requiredCount, restIndex, keywordRestIndex };
   }
 
   private extractParameterName(raw: string, behavior: SnippetLanguageBehavior): string | null {
