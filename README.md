@@ -356,7 +356,8 @@ than `2147483647` milliseconds (Node.js's maximum timer delay), and `urlValidati
 integer. Effective freshness-scoring weights—including defaults for omitted factors—must each be finite values from 0
 through 1. Omitted factors retain their defaults; weights are not normalized, and final freshness scores are capped to the
 documented `0..100` range. Grade thresholds must be finite values from 0
-through 100 in strictly descending order: `gradeA > gradeB > gradeC > gradeD`.
+through 100 in strictly descending order: `gradeA > gradeB > gradeC > gradeD`. Freshness scores are computed from the
+code-to-doc graph, so `freshnessScoring.enabled: true` (or `--score`) is rejected when `graph.enabled` is `false`.
 
 Configured supported manifests (`package.json`, `requirements.txt`, `pyproject.toml`, `go.mod`, `Cargo.toml`, and `pom.xml`) must be readable; read failures abort validation. Parser errors also abort when a parser reports them. The regex-based parsers may treat malformed content as empty or partial and report missing dependencies instead. Unknown manifest basenames are ignored for compatibility. These parsers do not execute package managers.
 

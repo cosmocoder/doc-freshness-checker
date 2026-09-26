@@ -15,6 +15,13 @@ describe('validateConfig', () => {
     expect(() => validateConfig(config as unknown as DocFreshnessConfig)).toThrow(message);
   });
 
+  it('rejects freshness scoring when graphing is disabled', () => {
+    expect(() => validateConfig({ graph: { enabled: false }, freshnessScoring: { enabled: true } })).toThrow(
+      'freshnessScoring.enabled requires graph.enabled'
+    );
+    expect(() => validateConfig({ freshnessScoring: { enabled: true } })).not.toThrow();
+  });
+
   it('accepts null-prototype config containers', () => {
     const urlValidation = Object.assign(Object.create(null) as NonNullable<DocFreshnessConfig['urlValidation']>, { timeout: 5000 });
     expect(() => validateConfig({ urlValidation })).not.toThrow();

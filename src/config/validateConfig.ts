@@ -37,6 +37,10 @@ export function validateConfig(config: DocFreshnessConfig): void {
     throw new Error('urlValidation.concurrency must be a positive integer');
   }
 
+  if (freshnessScoring?.enabled === true && config.graph?.enabled === false) {
+    throw new Error('freshnessScoring.enabled requires graph.enabled; freshness scores are computed from the code-to-doc graph');
+  }
+
   validateScoringWeights(weights as FreshnessScoringWeights | undefined);
   validateScoringThresholds(thresholds as FreshnessScoringThresholds | undefined);
 }
