@@ -497,12 +497,13 @@ export class SourceIndex {
     const namedPattern = /export\s*\{([^}]+)\}/g;
     while ((match = namedPattern.exec(content)) !== null) {
       for (const item of match[1].split(',')) {
-        const original = item
+        const exported = item
           .trim()
-          .split(/\s+as\s+/)[0]
-          .trim();
-        if (original) {
-          exports.add(original);
+          .split(/\s+as\s+/)
+          .at(-1)
+          ?.trim();
+        if (exported) {
+          exports.add(exported);
         }
       }
     }

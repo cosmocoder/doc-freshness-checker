@@ -199,7 +199,7 @@ describe('SourceIndex', () => {
           '}',
           'export type Config = { second: number };',
           'const Internal = 1;',
-          'export { Internal as Public };',
+          'export { Internal as Public, Shared, Named as default };',
           'export default function Named() {}',
           'module.exports = { common, alias: value };',
         ].join('\n'),
@@ -224,9 +224,9 @@ describe('SourceIndex', () => {
         ]);
         expect(snapshot.interfaceKeys.get('Config')).toEqual(new Set(['first', 'nested', 'second']));
         expect(snapshot.exportsByFile.get('src/api.ts')).toEqual(
-          new Set(['calculate', 'arrow', 'Config', 'Named', 'Internal', 'default', 'common', 'alias'])
+          new Set(['calculate', 'arrow', 'Config', 'Named', 'Public', 'Shared', 'default', 'common', 'alias'])
         );
-        expect(snapshot.exportsByFile.get('src/api.ts')?.has('Public')).toBe(false);
+        expect(snapshot.exportsByFile.get('src/api.ts')?.has('Internal')).toBe(false);
         expect(snapshot.exportsByFile.get('src/api.py')).toEqual(new Set(['method', 'public_fn', 'Public']));
       }
     );
