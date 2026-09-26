@@ -137,66 +137,43 @@ export class SourceIndex {
   };
   private readonly reads = new Map<string, Promise<string>>();
   private readonly loads: Partial<Record<SourceIndexView, Promise<SourceIndexSnapshot>>> = {};
-  private readonly finished = new Set<SourceIndexView>();
   private config: DocFreshnessConfig | undefined;
 
   load(config: DocFreshnessConfig, view: SourceIndexView): Promise<SourceIndexSnapshot> {
     const sourceConfig = (this.config ??= config);
-    if (this.finished.has(view)) {
-      return Promise.resolve(this.snapshot);
-    }
-    this.loads[view] ??= (view === 'pattern' ? this.buildPattern(sourceConfig) : this.buildSnippet(sourceConfig)).then(
-      () => {
-        this.finished.add(view);
-        return this.snapshot;
-      },
-      (error: unknown) => {
-        this.finished.add(view);
-        throw error;
-      }
-    );
+    // A failed load stays rejected, so no later consumer can read the partial snapshot.
+    this.loads[view] ??= (view === 'pattern' ? this.buildPattern(sourceConfig) : this.buildSnippet(sourceConfig)).then(() => this.snapshot);
     return this.loads[view];
   }
 
   private async buildPattern(config: DocFreshnessConfig): Promise<void> {
     const rootDir = config.rootDir || process.cwd();
     const patterns = config.sourcePatterns || this.patternFallback();
-    const { files, complete } = await this.findFiles(patterns, rootDir, PATTERN_IGNORES);
+    const files = await this.findFiles(patterns, rootDir, PATTERN_IGNORES);
     const inputs = new Map<string, string>();
-    let inputsComplete = complete;
     for (const file of files) {
-      try {
-        const content = await this.read(file);
-        inputs.set(path.resolve(file), content);
-        const relativePath = path.relative(rootDir, file);
-        const language = this.patternLanguage(file);
-        this.indexSymbols(this.snapshot.symbols, content, relativePath, language);
-        this.snapshot.patternFiles.set(relativePath, { content, language });
-      }
-      catch {
-        inputsComplete = false;
-      }
+      const content = await this.read(file);
+      inputs.set(path.resolve(file), content);
+      const relativePath = path.relative(rootDir, file);
+      const language = this.patternLanguage(file);
+      this.indexSymbols(this.snapshot.symbols, content, relativePath, language);
+      this.snapshot.patternFiles.set(relativePath, { content, language });
     }
-    this.snapshot.patternInputs = inputsComplete ? [...inputs].map(([inputPath, content]) => ({ path: inputPath, content })) : null;
+    this.snapshot.patternInputs = [...inputs].map(([inputPath, content]) => ({ path: inputPath, content }));
   }
 
   private async buildSnippet(config: DocFreshnessConfig): Promise<void> {
     const rootDir = config.rootDir || process.cwd();
     const patterns = config.sourcePatterns || SNIPPET_FALLBACK;
-    const { files } = await this.findFiles(patterns, rootDir, SNIPPET_IGNORES);
+    const files = await this.findFiles(patterns, rootDir, SNIPPET_IGNORES);
     for (const file of files) {
-      try {
-        const content = await this.read(file);
-        const relativePath = path.relative(rootDir, file);
-        const language = this.snippetLanguage(file);
-        this.snapshot.snippetFiles.set(relativePath, { content, language });
-        this.indexFunctionSignatures(this.snapshot.functionSignatures, content, relativePath, language);
-        this.indexInterfaceDefinitions(this.snapshot.interfaceKeys, content, language);
-        this.snapshot.exportsByFile.set(relativePath, this.extractExports(content, language));
-      }
-      catch {
-        /* skip unreadable files */
-      }
+      const content = await this.read(file);
+      const relativePath = path.relative(rootDir, file);
+      const language = this.snippetLanguage(file);
+      this.snapshot.snippetFiles.set(relativePath, { content, language });
+      this.indexFunctionSignatures(this.snapshot.functionSignatures, content, relativePath, language);
+      this.indexInterfaceDefinitions(this.snapshot.interfaceKeys, content, language);
+      this.snapshot.exportsByFile.set(relativePath, this.extractExports(content, language));
     }
   }
 
@@ -204,30 +181,47 @@ export class SourceIndex {
     return Object.values(languageConfigs).flatMap((config) => config.extensions.map((extension) => `**/*.${extension}`));
   }
 
-  private async findFiles(patterns: string[], rootDir: string, ignore: string[]): Promise<{ files: string[]; complete: boolean }> {
+  private async findFiles(patterns: string[], rootDir: string, ignore: string[]): Promise<string[]> {
     const files: string[] = [];
-    let complete = true;
     // @types/node 24 omits followSymlinks, so keep this object inferred until its declarations catch up.
     const globOptions = { cwd: rootDir, exclude: ignore, followSymlinks: true, withFileTypes: true } as const;
     for (const pattern of patterns) {
       try {
         for await (const entry of glob(pattern, globOptions)) {
-          if (!entry.isDirectory()) {
-            files.push(path.resolve(entry.parentPath, entry.name));
+          const file = path.resolve(entry.parentPath, entry.name);
+          if (entry.isFile() || (entry.isSymbolicLink() && (await this.isLinkToFile(file)))) {
+            files.push(file);
           }
         }
       }
-      catch {
-        complete = false;
+      catch (error) {
+        throw new Error(
+          `Could not scan source pattern ${JSON.stringify(pattern)}: ${error instanceof Error ? error.message : String(error)}`,
+          { cause: error }
+        );
       }
     }
-    return { files, complete };
+    return files;
+  }
+
+  private isLinkToFile(file: string): Promise<boolean> {
+    return fs.promises.stat(file).then(
+      (stats) => stats.isFile(),
+      (error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT' || error.code === 'ELOOP') {
+          return false;
+        }
+        throw error;
+      }
+    );
   }
 
   private read(file: string): Promise<string> {
     let pending = this.reads.get(file);
     if (!pending) {
-      pending = fs.promises.readFile(file, 'utf-8');
+      pending = fs.promises.readFile(file, 'utf-8').catch((error: unknown) => {
+        throw new Error(`Could not read source file ${file}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+      });
       this.reads.set(file, pending);
     }
     return pending;

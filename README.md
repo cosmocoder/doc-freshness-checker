@@ -361,6 +361,10 @@ documented `0..100` range. Grade thresholds must be finite values from 0
 through 100 in strictly descending order: `gradeA > gradeB > gradeC > gradeD`. Freshness scores are computed from the
 code-to-doc graph, so `freshnessScoring.enabled: true` (or `--score`) is rejected when `graph.enabled` is `false`.
 
+Every regular source file that `sourcePatterns` (or the built-in source patterns) matches must be readable. A read
+failure on a matched file, or a non-string pattern, aborts validation. The scan skips folders that it cannot read, and
+symlinks whose target is missing or is not a file. A pattern that matches nothing is not an error.
+
 Configured supported manifests (`package.json`, `requirements.txt`, `pyproject.toml`, `go.mod`, `Cargo.toml`, and `pom.xml`) must be readable; read failures abort validation. Parser errors also abort when a parser reports them. The regex-based parsers may treat malformed content as empty or partial and report missing dependencies instead. Unknown manifest basenames are ignored for compatibility. These parsers do not execute package managers.
 
 For details on CLI-to-config mapping and precedence, see [CLI and Configuration Precedence](docs/cli-and-config-precedence.md). For the internal execution pipeline, see [Runtime Architecture](docs/runtime-architecture.md).

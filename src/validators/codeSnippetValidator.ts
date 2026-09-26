@@ -76,13 +76,7 @@ export class CodeSnippetValidator {
     if (this.sourceFiles) {
       return;
     }
-    try {
-      this.useSnapshot(await this.index.load(config, 'snippet'));
-    }
-    catch (error) {
-      this.useSnapshot(await this.index.load(config, 'snippet'));
-      throw error;
-    }
+    this.useSnapshot(await this.index.load(config, 'snippet'));
   }
 
   private useSnapshot(snapshot: SourceIndexSnapshot): void {

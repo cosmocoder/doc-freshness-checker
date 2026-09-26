@@ -60,6 +60,7 @@ flowchart TD
 - `src/source/sourceIndex.ts`
   - Starts the code-pattern and code-snippet discovery/glob passes independently on demand, preserving their distinct views.
   - Deduplicates physical reads so each matched absolute source file is read at most once per run.
+  - Rejects the load when a pattern cannot be scanned or a matched source file cannot be read, which aborts the run.
   - Supplies symbol data directly to graph building and source-file content directly to vector search.
   - Remains an internal runtime module rather than part of the package's public API.
 

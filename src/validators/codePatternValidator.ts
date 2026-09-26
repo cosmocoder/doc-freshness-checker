@@ -33,13 +33,7 @@ export class CodePatternValidator {
       return;
     }
 
-    try {
-      this.useSnapshot(await this.index.load(config, 'pattern'));
-    }
-    catch (error) {
-      this.useSnapshot(await this.index.load(config, 'pattern'));
-      throw error;
-    }
+    this.useSnapshot(await this.index.load(config, 'pattern'));
   }
 
   private useSnapshot(snapshot: SourceIndexSnapshot): void {

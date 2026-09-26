@@ -1074,6 +1074,32 @@ describe('runner', () => {
       });
     });
 
+    it('rejects instead of validating against a partial source index when a source file is unreadable', async () => {
+      await withIncrementalRoot('unreadable-source', async (rootDir) => {
+        const docPath = path.join(rootDir, 'guide.md');
+        const sourcePath = path.join(rootDir, 'locked.ts');
+        await fs.promises.writeFile(docPath, ['```typescript', 'class LockedService {}', '```'].join('\n'));
+        await fs.promises.writeFile(sourcePath, 'export class LockedService {}');
+        const config = incrementalConfig(rootDir, {
+          sourcePatterns: ['*.ts'],
+          rules: { 'code-pattern': { enabled: true, severity: 'warning' } },
+        });
+        const readFile = fs.promises.readFile;
+        const spy = vi
+          .spyOn(fs.promises, 'readFile')
+          .mockImplementation(((file: string, options: BufferEncoding) =>
+            file === sourcePath ? Promise.reject(new Error('EACCES: permission denied')) : readFile(file, options)) as typeof readFile);
+        try {
+          mockDocumentScan(docPath);
+          vi.mocked(glob).mockReturnValueOnce(sourceGlobResults([sourcePath]));
+          await expect(run(config)).rejects.toThrow(`Could not read source file ${sourcePath}: EACCES: permission denied`);
+        }
+        finally {
+          spy.mockRestore();
+        }
+      });
+    });
+
     it('captures graph-only source inputs once per run and skips unchanged validation', async () => {
       await withIncrementalRoot('graph-source', async (rootDir) => {
         const docPath = path.join(rootDir, 'guide.md');
