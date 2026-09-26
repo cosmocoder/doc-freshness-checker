@@ -1,3 +1,4 @@
+import fs from 'fs';
 import path from 'path';
 
 /**
@@ -7,6 +8,21 @@ export function isWithinRoot(candidatePath: string, rootDir: string): boolean {
   const resolvedRoot = path.resolve(rootDir);
   const resolvedCandidate = path.resolve(candidatePath);
   return resolvedCandidate === resolvedRoot || resolvedCandidate.startsWith(resolvedRoot + path.sep);
+}
+
+/**
+ * Resolves symlinks in both paths, so a link inside rootDir that points outside it reports 'outside'.
+ */
+export async function locateRealPath(candidatePath: string, rootDir: string): Promise<'inside' | 'outside' | 'missing'> {
+  let realCandidate: string;
+  try {
+    realCandidate = await fs.promises.realpath(candidatePath);
+  }
+  catch {
+    return 'missing';
+  }
+  const realRoot = await fs.promises.realpath(rootDir).catch(() => path.resolve(rootDir));
+  return isWithinRoot(realCandidate, realRoot) ? 'inside' : 'outside';
 }
 
 /**

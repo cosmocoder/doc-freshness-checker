@@ -145,12 +145,51 @@ describe('SourceIndex', () => {
     );
   });
 
-  it('swallows unreadable matches and invalid patterns without aborting later patterns', async () => {
+  it('ignores directory matches and patterns that match nothing', async () => {
     await withSources({ 'src/good.ts': 'class Good {}' }, async (rootDir) => {
       const snapshot = await loadBoth(new SourceIndex(), { rootDir, sourcePatterns: ['src', '[', 'src/*.ts'] });
       expect(snapshot.symbols.has('Good')).toBe(true);
       expect(snapshot.patternFiles.has('src')).toBe(false);
       expect(snapshot.snippetFiles.has('src')).toBe(false);
+    });
+  });
+
+  it.each(['pattern', 'snippet'] as const)('rejects the %s view when a matched source file cannot be read', async (view) => {
+    await withSources({ 'src/good.ts': 'class Good {}', 'src/locked.ts': 'class Locked {}' }, async (rootDir) => {
+      const readFile = fs.promises.readFile;
+      const spy = vi
+        .spyOn(fs.promises, 'readFile')
+        .mockImplementation(((file: string, options: BufferEncoding) =>
+          file.endsWith('locked.ts')
+            ? Promise.reject(new Error('EACCES: permission denied'))
+            : readFile(file, options)) as typeof readFile);
+      try {
+        await expect(new SourceIndex().load({ rootDir, sourcePatterns: ['src/*.ts'] }, view)).rejects.toThrow(
+          `Could not read source file ${path.join(rootDir, 'src/locked.ts')}: EACCES: permission denied`
+        );
+      }
+      finally {
+        spy.mockRestore();
+      }
+    });
+  });
+
+  it('skips symlinks whose target is missing or is not a file', async () => {
+    await withSources({ 'src/good.ts': 'class Good {}' }, async (rootDir) => {
+      await fs.promises.mkdir(path.join(rootDir, 'realdir'));
+      await fs.promises.symlink(path.join(rootDir, 'missing.ts'), path.join(rootDir, 'src/dangling.ts'));
+      await fs.promises.symlink(path.join(rootDir, 'realdir'), path.join(rootDir, 'src/folder.ts'), 'dir');
+      await fs.promises.symlink(path.join(rootDir, 'src/good.ts'), path.join(rootDir, 'src/linked.ts'));
+      const snapshot = await loadBoth(new SourceIndex(), { rootDir, sourcePatterns: ['src/*.ts'] });
+      expect([...snapshot.patternFiles.keys()].sort()).toEqual(['src/good.ts', 'src/linked.ts']);
+      expect([...snapshot.snippetFiles.keys()].sort()).toEqual(['src/good.ts', 'src/linked.ts']);
+    });
+  });
+
+  it('rejects source patterns that cannot be scanned', async () => {
+    await withSources({ 'src/good.ts': 'class Good {}' }, async (rootDir) => {
+      const config = { rootDir, sourcePatterns: ['src/*.ts', 42] } as unknown as DocFreshnessConfig;
+      await expect(new SourceIndex().load(config, 'pattern')).rejects.toThrow('Could not scan source pattern 42');
     });
   });
 
@@ -199,7 +238,7 @@ describe('SourceIndex', () => {
           '}',
           'export type Config = { second: number };',
           'const Internal = 1;',
-          'export { Internal as Public };',
+          'export { Internal as Public, Shared, Named as default };',
           'export default function Named() {}',
           'module.exports = { common, alias: value };',
         ].join('\n'),
@@ -214,19 +253,19 @@ describe('SourceIndex', () => {
         const snapshot = await loadBoth(new SourceIndex(), { rootDir, sourcePatterns: ['src/*'] });
         expect(snapshot.symbols.get('calculate')).toHaveLength(2);
         expect(snapshot.functionSignatures.get('calculate')).toEqual([
-          { params: ['required', 'optional', 'rest'], requiredParams: 1, filePath: 'src/api.ts' },
+          { params: ['required', 'optional', 'rest'], requiredParams: 1, restIndex: 2, filePath: 'src/api.ts' },
         ]);
         expect(snapshot.functionSignatures.get('arrow')).toEqual([
           { params: ['first', 'second'], requiredParams: 1, filePath: 'src/api.ts' },
         ]);
         expect(snapshot.functionSignatures.get('method')).toEqual([
-          { params: ['required', 'optional', 'args'], requiredParams: 1, filePath: 'src/api.py' },
+          { params: ['required', 'optional', 'args'], requiredParams: 1, restIndex: 2, filePath: 'src/api.py' },
         ]);
         expect(snapshot.interfaceKeys.get('Config')).toEqual(new Set(['first', 'nested', 'second']));
         expect(snapshot.exportsByFile.get('src/api.ts')).toEqual(
-          new Set(['calculate', 'arrow', 'Config', 'Named', 'Internal', 'default', 'common', 'alias'])
+          new Set(['calculate', 'arrow', 'Config', 'Named', 'Public', 'Shared', 'default', 'common', 'alias'])
         );
-        expect(snapshot.exportsByFile.get('src/api.ts')?.has('Public')).toBe(false);
+        expect(snapshot.exportsByFile.get('src/api.ts')?.has('Internal')).toBe(false);
         expect(snapshot.exportsByFile.get('src/api.py')).toEqual(new Set(['method', 'public_fn', 'Public']));
       }
     );
@@ -250,7 +289,7 @@ describe('SourceIndex', () => {
     });
   });
 
-  it('keeps successful empty loads sticky and recovers to empty maps after a rejected first load', async () => {
+  it('keeps successful empty loads and rejected loads sticky', async () => {
     await withSources({ 'a.ts': 'class Later {}' }, async (rootDir) => {
       const emptyIndex = new SourceIndex();
       const empty = await emptyIndex.load({ rootDir, sourcePatterns: [] }, 'pattern');
@@ -268,13 +307,11 @@ describe('SourceIndex', () => {
       const concurrent = rejectedIndex.load({ rootDir, sourcePatterns: ['*.ts'] }, 'pattern');
       expect(concurrent).toBe(rejected);
       await expect(Promise.all([rejected, concurrent])).rejects.toBe(error);
-      const recovered = await rejectedIndex.load({ rootDir, sourcePatterns: ['*.ts'] }, 'pattern');
-      expect(recovered.patternFiles.size).toBe(0);
-      expect(recovered.symbols.size).toBe(0);
+      await expect(rejectedIndex.load({ rootDir, sourcePatterns: ['*.ts'] }, 'pattern')).rejects.toBe(error);
     });
   });
 
-  it('leaves validator getters initialized after each view rejects once', async () => {
+  it('keeps validator getters null and rejects again after each view rejects', async () => {
     await withSources({ 'src/api.ts': 'class Later {}' }, async (rootDir) => {
       const error = new Error('bad config');
       const badConfig = Object.defineProperty({ rootDir }, 'sourcePatterns', {
@@ -287,14 +324,14 @@ describe('SourceIndex', () => {
       const { pattern, snippet } = createSourceValidators(index);
 
       await expect(pattern.buildSourceIndex(badConfig)).rejects.toBe(error);
-      expect(pattern.getSourceIndex()).toEqual(new Map());
-      expect(pattern.getSourceFiles()).toEqual(new Map());
-      await expect(pattern.buildSourceIndex(goodConfig)).resolves.toBeUndefined();
+      expect(pattern.getSourceIndex()).toBeNull();
+      expect(pattern.getSourceFiles()).toBeNull();
+      await expect(pattern.buildSourceIndex(goodConfig)).rejects.toBe(error);
 
       await expect(snippet.validateBatch([], {} as never, badConfig)).rejects.toBe(error);
-      expect(snippet.getFunctionSignatures()).toEqual(new Map());
-      expect(snippet.getInterfaceKeys()).toEqual(new Map());
-      await expect(snippet.validateBatch([], {} as never, goodConfig)).resolves.toEqual([]);
+      expect(snippet.getFunctionSignatures()).toBeNull();
+      expect(snippet.getInterfaceKeys()).toBeNull();
+      await expect(snippet.validateBatch([], {} as never, goodConfig)).rejects.toBe(error);
     });
   });
 

@@ -1,3 +1,6 @@
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { FileValidator } from './fileValidator.js';
 import { FilePathExtractor } from '../parsers/extractors/filePathExtractor.js';
 import type { DocFreshnessConfig, Reference } from '../types.js';
@@ -65,6 +68,35 @@ describe('FileValidator', () => {
     const results = await validator.validateBatch([makeRef('/etc/passwd')], makeDoc(), config);
     expect(results[0].valid).toBe(false);
     expect(results[0].message).toContain('escapes project root');
+  });
+
+  it('rejects symlinks that resolve outside project root and accepts symlinks inside it', async () => {
+    const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'doc-freshness-file-symlink-'));
+    const rootDir = path.join(tempDir, 'root');
+    const outsideDir = path.join(tempDir, 'outside');
+    try {
+      await fs.promises.mkdir(rootDir);
+      await fs.promises.mkdir(outsideDir);
+      await fs.promises.writeFile(path.join(outsideDir, 'secret.txt'), 'outside');
+      await fs.promises.writeFile(path.join(rootDir, 'real.txt'), 'inside');
+      await fs.promises.symlink(path.join(outsideDir, 'secret.txt'), path.join(rootDir, 'secret-link.txt'));
+      await fs.promises.symlink(outsideDir, path.join(rootDir, 'outside-dir'), 'dir');
+      await fs.promises.symlink(path.join(rootDir, 'real.txt'), path.join(rootDir, 'inside-link.txt'));
+
+      const results = await new FileValidator().validateBatch(
+        [makeRef('secret-link.txt'), makeRef('outside-dir/secret.txt'), makeRef('outside-dir/secre.txt'), makeRef('inside-link.txt')],
+        makeBaseDoc({ path: 'README.md' }),
+        { ...config, rootDir }
+      );
+
+      expect(results.map((result) => result.valid)).toEqual([false, false, false, true]);
+      expect(results[0].message).toContain('escapes project root');
+      expect(results[1].message).toContain('escapes project root');
+      expect(results[2].suggestion).toBeNull();
+    }
+    finally {
+      await fs.promises.rm(tempDir, { recursive: true, force: true });
+    }
   });
 
   it('handles pre-marked illustrative references', async () => {

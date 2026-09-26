@@ -138,7 +138,7 @@ Options:
   --vector-search         Enable semantic vector search for doc-code mismatches
 ```
 
-Incremental mode skips unchanged documents only after a clean run when the effective configuration and project inventory are unchanged. It conservatively revalidates all documents when filesystem or external inputs cannot be fingerprinted safely.
+Incremental mode skips unchanged documents only after a clean run when the effective configuration and project inventory are unchanged. It conservatively revalidates all documents when filesystem or external inputs cannot be fingerprinted safely. The report file that a reporter writes to `outputPath` is not part of the project inventory, unless a validator reads it as an input.
 
 `--reporter` accepts only the four choices shown above. An unsupported value prints an error and exits with status `1`.
 With vector search enabled, potential mismatches appear under **Semantic Analysis** in text reports and as `vectorMismatches` in JSON.
@@ -211,7 +211,7 @@ The checker resolves `./services/userService` against the project source tree (t
    💡 Did you mean: sendOnboardingEmail?
 ```
 
-**Function signatures** — checks that the number of arguments shown in a code example matches the function's current signature, accounting for optional and rest parameters. When an example uses simple placeholder identifiers like `name, email`, those are also compared to the current parameter names to catch renamed positional parameters.
+**Function signatures** — checks that the number of arguments shown in a code example matches the function's current signature, accounting for optional and rest parameters. In Python, `**kwargs` accepts any number of keyword arguments, but no extra positional arguments. When an example uses simple placeholder identifiers like `name, email`, those are also compared to the current parameter names to catch renamed positional parameters.
 
 ````markdown
 ```typescript
@@ -350,13 +350,23 @@ export default {
 
 </details>
 
-The `urlValidation`, `freshnessScoring`, `freshnessScoring.weights`, and `freshnessScoring.thresholds` sections must be plain objects.
+`outputPath` accepts one file reporter. A config that combines `outputPath` with more than one of `json`, `markdown`, and
+`enhanced` is rejected, because each report would overwrite the previous one.
+
+The `urlValidation`, `vectorSearch`, `freshnessScoring`, `freshnessScoring.weights`, and `freshnessScoring.thresholds` sections must be plain objects.
 Numeric settings are validated before a run starts. `urlValidation.timeout` must be a positive finite number no greater
 than `2147483647` milliseconds (Node.js's maximum timer delay), and `urlValidation.concurrency` must be a positive
-integer. Effective freshness-scoring weights—including defaults for omitted factors—must each be finite values from 0
+integer. `vectorSearch.similarityThreshold` must be a finite number from 0 through 1. A documentation section is reported
+as a semantic mismatch when its best code-comment similarity is below this value, so a higher value reports more
+mismatches. Effective freshness-scoring weights—including defaults for omitted factors—must each be finite values from 0
 through 1. Omitted factors retain their defaults; weights are not normalized, and final freshness scores are capped to the
 documented `0..100` range. Grade thresholds must be finite values from 0
-through 100 in strictly descending order: `gradeA > gradeB > gradeC > gradeD`.
+through 100 in strictly descending order: `gradeA > gradeB > gradeC > gradeD`. Freshness scores are computed from the
+code-to-doc graph, so `freshnessScoring.enabled: true` (or `--score`) is rejected when `graph.enabled` is `false`.
+
+Every regular source file that `sourcePatterns` (or the built-in source patterns) matches must be readable. A read
+failure on a matched file, or a non-string pattern, aborts validation. The scan skips folders that it cannot read, and
+symlinks whose target is missing or is not a file. A pattern that matches nothing is not an error.
 
 Configured supported manifests (`package.json`, `requirements.txt`, `pyproject.toml`, `go.mod`, `Cargo.toml`, and `pom.xml`) must be readable; read failures abort validation. Parser errors also abort when a parser reports them. The regex-based parsers may treat malformed content as empty or partial and report missing dependencies instead. Unknown manifest basenames are ignored for compatibility. These parsers do not execute package managers.
 
