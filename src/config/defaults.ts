@@ -166,7 +166,7 @@ export const DEFAULT_CONFIG: DefaultConfig = {
   // Vector search settings (optional, requires fastembed package)
   vectorSearch: {
     enabled: false, // Disabled by default
-    similarityThreshold: 0.3, // Lower = stricter matching
+    similarityThreshold: 0.3, // Higher = stricter: doc sections need a closer code match, so more mismatches are reported
     // Deprecated: ignored by vector indexing; changing this value invalidates incremental reuse.
     indexCodeComments: true,
     // Deprecated: ignored by vector indexing; changing this value invalidates incremental reuse.

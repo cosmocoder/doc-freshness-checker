@@ -26,6 +26,19 @@ export function validateConfig(config: DocFreshnessConfig): void {
     throw new Error('freshnessScoring.thresholds must be a plain object');
   }
 
+  const vectorSearch = (config as { vectorSearch?: unknown }).vectorSearch;
+  if (vectorSearch !== undefined && !isPlainObject(vectorSearch)) {
+    throw new Error('vectorSearch must be a plain object');
+  }
+
+  const similarityThreshold = vectorSearch?.similarityThreshold;
+  if (
+    similarityThreshold !== undefined &&
+    (typeof similarityThreshold !== 'number' || !Number.isFinite(similarityThreshold) || similarityThreshold < 0 || similarityThreshold > 1)
+  ) {
+    throw new Error('vectorSearch.similarityThreshold must be a finite number between 0 and 1');
+  }
+
   const validatedUrlValidation = urlValidation as UrlValidationConfig | undefined;
   const timeout = validatedUrlValidation?.timeout;
   if (timeout !== undefined && (!isPositiveFiniteNumber(timeout) || timeout > MAX_TIMER_DELAY_MS)) {

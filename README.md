@@ -350,10 +350,12 @@ export default {
 
 </details>
 
-The `urlValidation`, `freshnessScoring`, `freshnessScoring.weights`, and `freshnessScoring.thresholds` sections must be plain objects.
+The `urlValidation`, `vectorSearch`, `freshnessScoring`, `freshnessScoring.weights`, and `freshnessScoring.thresholds` sections must be plain objects.
 Numeric settings are validated before a run starts. `urlValidation.timeout` must be a positive finite number no greater
 than `2147483647` milliseconds (Node.js's maximum timer delay), and `urlValidation.concurrency` must be a positive
-integer. Effective freshness-scoring weights—including defaults for omitted factors—must each be finite values from 0
+integer. `vectorSearch.similarityThreshold` must be a finite number from 0 through 1. A documentation section is reported
+as a semantic mismatch when its best code-comment similarity is below this value, so a higher value reports more
+mismatches. Effective freshness-scoring weights—including defaults for omitted factors—must each be finite values from 0
 through 1. Omitted factors retain their defaults; weights are not normalized, and final freshness scores are capped to the
 documented `0..100` range. Grade thresholds must be finite values from 0
 through 100 in strictly descending order: `gradeA > gradeB > gradeC > gradeD`. Freshness scores are computed from the
