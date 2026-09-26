@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG } from './defaults.js';
+import { DEFAULT_CONFIG, FILE_REPORTER_TYPES } from './defaults.js';
 import type { DocFreshnessConfig, FreshnessScoringThresholds, FreshnessScoringWeights, UrlValidationConfig } from '../types.js';
 
 const FRESHNESS_SCORING_WEIGHT_KEYS = Object.keys(DEFAULT_CONFIG.freshnessScoring.weights) as Array<keyof FreshnessScoringWeights>;
@@ -48,6 +48,13 @@ export function validateConfig(config: DocFreshnessConfig): void {
   const concurrency = validatedUrlValidation?.concurrency;
   if (concurrency !== undefined && (!Number.isInteger(concurrency) || concurrency <= 0)) {
     throw new Error('urlValidation.concurrency must be a positive integer');
+  }
+
+  const fileReporters = new Set(
+    Array.isArray(config.reporters) ? config.reporters.filter((reporter) => FILE_REPORTER_TYPES.has(reporter)) : []
+  );
+  if (config.outputPath && fileReporters.size > 1) {
+    throw new Error(`outputPath supports one file reporter, but these reporters would overwrite it: ${[...fileReporters].join(', ')}`);
   }
 
   if (freshnessScoring?.enabled === true && config.graph?.enabled === false) {

@@ -16,6 +16,14 @@ describe('validateConfig', () => {
     expect(() => validateConfig(config as unknown as DocFreshnessConfig)).toThrow(message);
   });
 
+  it('rejects several distinct file reporters sharing outputPath', () => {
+    expect(() => validateConfig({ reporters: ['console', 'markdown', 'json', 'markdown'], outputPath: 'report.out' })).toThrow(
+      'outputPath supports one file reporter, but these reporters would overwrite it: markdown, json'
+    );
+    expect(() => validateConfig({ reporters: ['console', 'json', 'json'], outputPath: 'report.out' })).not.toThrow();
+    expect(() => validateConfig({ reporters: ['json', 'markdown'] })).not.toThrow();
+  });
+
   it('rejects freshness scoring when graphing is disabled', () => {
     expect(() => validateConfig({ graph: { enabled: false }, freshnessScoring: { enabled: true } })).toThrow(
       'freshnessScoring.enabled requires graph.enabled'

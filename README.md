@@ -138,7 +138,7 @@ Options:
   --vector-search         Enable semantic vector search for doc-code mismatches
 ```
 
-Incremental mode skips unchanged documents only after a clean run when the effective configuration and project inventory are unchanged. It conservatively revalidates all documents when filesystem or external inputs cannot be fingerprinted safely.
+Incremental mode skips unchanged documents only after a clean run when the effective configuration and project inventory are unchanged. It conservatively revalidates all documents when filesystem or external inputs cannot be fingerprinted safely. The report file that a reporter writes to `outputPath` is not part of the project inventory, unless a validator reads it as an input.
 
 `--reporter` accepts only the four choices shown above. An unsupported value prints an error and exits with status `1`.
 With vector search enabled, potential mismatches appear under **Semantic Analysis** in text reports and as `vectorMismatches` in JSON.
@@ -349,6 +349,9 @@ export default {
 ```
 
 </details>
+
+`outputPath` accepts one file reporter. A config that combines `outputPath` with more than one of `json`, `markdown`, and
+`enhanced` is rejected, because each report would overwrite the previous one.
 
 The `urlValidation`, `vectorSearch`, `freshnessScoring`, `freshnessScoring.weights`, and `freshnessScoring.thresholds` sections must be plain objects.
 Numeric settings are validated before a run starts. `urlValidation.timeout` must be a positive finite number no greater

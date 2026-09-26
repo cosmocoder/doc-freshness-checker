@@ -130,7 +130,7 @@ URL results are saved after validation independently of graph generation. Graphs
 - `markdown`
 - `enhanced`
 
-When `outputPath` is set, string-based reporters write to file; otherwise they emit to stdout.
+When `outputPath` is set, string-based reporters write to file; otherwise they emit to stdout. Only one string-based reporter can write to `outputPath`.
 
 ## Extension Points
 

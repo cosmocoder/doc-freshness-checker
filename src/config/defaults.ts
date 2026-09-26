@@ -1,5 +1,6 @@
 import type {
   DocFreshnessConfig,
+  ReporterType,
   FreshnessScoringConfig,
   FreshnessScoringThresholds,
   FreshnessScoringWeights,
@@ -25,6 +26,8 @@ export const BUILT_IN_RULE_TYPES = [
 ] as const;
 
 export type BuiltInRuleType = (typeof BUILT_IN_RULE_TYPES)[number];
+
+export const FILE_REPORTER_TYPES: ReadonlySet<ReporterType> = new Set(['json', 'markdown', 'enhanced']);
 
 /**
  * Default configuration values for Documentation Freshness Checker
