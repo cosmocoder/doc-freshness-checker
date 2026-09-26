@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { isIllustrativePath, compilePatterns } from '../utils/illustrativePatterns.js';
 import { similarityRatio } from '../utils/similarity.js';
-import { isWithinRoot, resolveDocumentDir, resolveProjectRoot } from '../utils/pathSecurity.js';
+import { isWithinRoot, locateRealPath, resolveDocumentDir, resolveProjectRoot } from '../utils/pathSecurity.js';
 import { createIllustrativeSkippedResult, getRuleSeverity, severityForIllustrative } from '../utils/validation.js';
 import type { IncrementalInput } from './incrementalInputs.js';
 import type { DocFreshnessConfig, Document, Reference, ValidationResult } from '../types.js';
@@ -110,7 +110,8 @@ export class DirectoryValidator {
 
     // Strategy 1: Check if the path exists from project root
     // This handles full paths like "frontend/src/apps/domains"
-    if (isWithinRoot(fullPath, rootDir) && (await this.pathExists(fullPath))) {
+    const fullLocation = isWithinRoot(fullPath, rootDir) ? await locateRealPath(fullPath, rootDir) : null;
+    if (fullLocation === 'inside') {
       this.pathCache.set(cacheKey, { found: true, foundAt: itemPath });
       return {
         reference: ref,
@@ -121,7 +122,8 @@ export class DirectoryValidator {
 
     // Strategy 2: The path might be relative to the document's location
     // e.g., a doc in "docs/" might reference "../src/..."
-    if (isWithinRoot(relativeToDoc, rootDir) && (await this.pathExists(relativeToDoc))) {
+    const docLocation = isWithinRoot(relativeToDoc, rootDir) ? await locateRealPath(relativeToDoc, rootDir) : null;
+    if (docLocation === 'inside') {
       const foundAt = path.relative(rootDir, relativeToDoc);
       this.pathCache.set(cacheKey, { found: true, foundAt });
       return {
@@ -131,8 +133,8 @@ export class DirectoryValidator {
       };
     }
 
-    // If both candidate paths resolve outside root, fail early with explicit message.
-    if (!isWithinRoot(fullPath, rootDir) && !isWithinRoot(relativeToDoc, rootDir)) {
+    // Fail early when both candidates are lexically outside root, or either one is a symlink out of it.
+    if (fullLocation === 'outside' || docLocation === 'outside' || (fullLocation === null && docLocation === null)) {
       return {
         reference: ref,
         valid: false,
@@ -156,16 +158,6 @@ export class DirectoryValidator {
     };
   }
 
-  private async pathExists(fullPath: string): Promise<boolean> {
-    try {
-      await fs.promises.access(fullPath);
-      return true;
-    }
-    catch {
-      return false;
-    }
-  }
-
   /**
    * Try to find a similar path for suggestions
    * Handles common issues like singular/plural mismatches
@@ -179,12 +171,7 @@ export class DirectoryValidator {
     const parentPath = segments.slice(0, -1).join('/');
     const parentFullPath = path.resolve(rootDir, parentPath);
 
-    if (!isWithinRoot(parentFullPath, rootDir)) {
-      return null;
-    }
-
-    // Check if parent exists
-    if (!(await this.pathExists(parentFullPath))) {
+    if (!isWithinRoot(parentFullPath, rootDir) || (await locateRealPath(parentFullPath, rootDir)) !== 'inside') {
       return null;
     }
 
