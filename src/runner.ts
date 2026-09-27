@@ -231,10 +231,6 @@ export async function run(config: DocFreshnessConfig): Promise<ValidationResults
     const graphBuilder = new GraphBuilder(config);
     graph = await graphBuilder.buildGraph(allDocuments, sourceSnapshot.symbols);
 
-    if (gitTracker.isGitRepo()) {
-      graph.gitCommit = gitTracker.getCurrentCommit();
-    }
-
     // Calculate freshness scores if enabled
     if (config.freshnessScoring?.enabled) {
       const scorer = new FreshnessScorer(config);

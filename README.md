@@ -329,7 +329,7 @@ export default {
   },
 
   reporters: ['console'],
-  cache: { enabled: true, dir: '.doc-freshness-cache', maxAge: 86400000 },
+  cache: { enabled: true, dir: '.doc-freshness-cache' },
   incremental: { enabled: false },
   vectorSearch: { enabled: false, similarityThreshold: 0.3 },
   verbose: false,

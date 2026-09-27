@@ -1,4 +1,4 @@
-import type { GraphReference, Reference, SerializedGraph } from '../types.js';
+import type { GraphReference, Reference } from '../types.js';
 
 /**
  * Represents the relationship graph between docs and code
@@ -17,19 +17,11 @@ export class CodeDocGraph {
   // Map: doc path -> references with metadata
   docReferences: Map<string, GraphReference[]>;
 
-  // Metadata
-  buildTimestamp: number | null;
-  gitCommit: string | null;
-  configHash: string | null;
-
   constructor() {
     this.docToCode = new Map();
     this.codeToDoc = new Map();
     this.codeSymbols = new Map();
     this.docReferences = new Map();
-    this.buildTimestamp = null;
-    this.gitCommit = null;
-    this.configHash = null;
   }
 
   /**
@@ -84,35 +76,5 @@ export class CodeDocGraph {
    */
   getAllCodeFiles(): string[] {
     return Array.from(this.codeToDoc.keys());
-  }
-
-  /**
-   * Serialize graph for caching
-   */
-  serialize(): SerializedGraph {
-    return {
-      docToCode: Object.fromEntries([...this.docToCode].map(([k, v]) => [k, [...v]])),
-      codeToDoc: Object.fromEntries([...this.codeToDoc].map(([k, v]) => [k, [...v]])),
-      codeSymbols: Object.fromEntries([...this.codeSymbols].map(([k, v]) => [k, [...v]])),
-      docReferences: Object.fromEntries(this.docReferences),
-      buildTimestamp: this.buildTimestamp,
-      gitCommit: this.gitCommit,
-      configHash: this.configHash,
-    };
-  }
-
-  /**
-   * Deserialize from cache
-   */
-  static deserialize(data: SerializedGraph): CodeDocGraph {
-    const graph = new CodeDocGraph();
-    graph.docToCode = new Map(Object.entries(data.docToCode || {}).map(([k, v]) => [k, new Set(v)]));
-    graph.codeToDoc = new Map(Object.entries(data.codeToDoc || {}).map(([k, v]) => [k, new Set(v)]));
-    graph.codeSymbols = new Map(Object.entries(data.codeSymbols || {}).map(([k, v]) => [k, new Set(v)]));
-    graph.docReferences = new Map(Object.entries(data.docReferences || {}));
-    graph.buildTimestamp = data.buildTimestamp;
-    graph.gitCommit = data.gitCommit;
-    graph.configHash = data.configHash;
-    return graph;
   }
 }

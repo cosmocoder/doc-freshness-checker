@@ -642,12 +642,11 @@ describe('runner', () => {
   });
 
   describe('graph and scoring', () => {
-    it('builds graph without persisting an unused graph cache', async () => {
+    it('writes the URL cache when the graph is enabled', async () => {
       captureLog();
       const cacheDir = '.doc-freshness-cache/runner-graph';
       try {
         await run({ ...baseConfig, graph: { enabled: true }, cache: { enabled: true, dir: cacheDir } });
-        await expect(fs.promises.access(path.join(process.cwd(), cacheDir, 'graph-cache.json'))).rejects.toThrow();
         await expect(fs.promises.access(path.join(process.cwd(), cacheDir, 'url-cache.json'))).resolves.toBeUndefined();
       }
       finally {
@@ -865,7 +864,6 @@ describe('runner', () => {
         expect(await exists('url-cache.json')).toBe(cache);
         expect(await exists('file-hashes.json')).toBe(cache && incremental);
         expect(await exists('embedding-cache.json')).toBe(cache && vector);
-        expect(await exists('graph-cache.json')).toBe(false);
         if (!cache) {
           await expect(fs.promises.access(resultDir)).rejects.toThrow();
         }

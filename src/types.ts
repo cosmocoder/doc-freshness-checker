@@ -71,7 +71,6 @@ export interface UrlValidationConfig {
 export interface GraphConfig {
   enabled?: boolean;
   cacheDir?: string;
-  cacheMaxAge?: number;
 }
 
 export interface FreshnessScoringWeights {
@@ -102,7 +101,6 @@ export interface VectorSearchConfig {
 export interface CacheConfig {
   enabled?: boolean;
   dir?: string;
-  maxAge?: number;
 }
 
 export interface IncrementalConfig {
@@ -260,16 +258,6 @@ export interface GraphReference extends Reference {
   resolvedCodeFile: string;
 }
 
-export interface SerializedGraph {
-  docToCode: Record<string, string[]>;
-  codeToDoc: Record<string, string[]>;
-  codeSymbols: Record<string, string[]>;
-  docReferences: Record<string, GraphReference[]>;
-  buildTimestamp: number | null;
-  gitCommit: string | null;
-  configHash: string | null;
-}
-
 // ============================================================================
 // Code Index Types
 // ============================================================================
@@ -380,13 +368,6 @@ export interface CacheStats {
 // ============================================================================
 // Cache Types
 // ============================================================================
-
-export interface CacheStats2 {
-  exists: boolean;
-  graphSize: number;
-  urlCacheSize: number;
-  lastUpdated: Date | null;
-}
 
 export interface UrlCacheEntry {
   result: {

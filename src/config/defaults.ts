@@ -128,7 +128,6 @@ export const DEFAULT_CONFIG: DefaultConfig = {
   graph: {
     enabled: true,
     cacheDir: '.doc-freshness-cache',
-    cacheMaxAge: 24 * 60 * 60 * 1000, // 24 hours for non-git repos
   },
 
   // Freshness scoring settings
@@ -158,7 +157,6 @@ export const DEFAULT_CONFIG: DefaultConfig = {
   cache: {
     enabled: true,
     dir: '.doc-freshness-cache',
-    maxAge: 24 * 60 * 60 * 1000,
   },
 
   // Incremental checking (only check changed files)

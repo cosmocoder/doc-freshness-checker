@@ -1,5 +1,5 @@
 import { CodeDocGraph } from './codeDocGraph.js';
-import type { Reference, SerializedGraph } from '../types.js';
+import type { Reference } from '../types.js';
 
 function makeRef(type: string, value: string): Reference {
   return { type, value, lineNumber: 1, raw: value, sourceFile: 'doc.md' };
@@ -59,39 +59,6 @@ describe('CodeDocGraph', () => {
 
     it('getAllCodeFiles returns all code file paths', () => {
       expect(graph.getAllCodeFiles().sort()).toEqual(['src/x.ts', 'src/y.ts']);
-    });
-  });
-
-  describe('serialize / deserialize', () => {
-    it('round-trips correctly', () => {
-      graph.addReference('docs/a.md', 'src/x.ts', makeRef('file-path', 'x.ts'));
-      graph.codeSymbols.set('src/x.ts', new Set(['MyClass', 'myFunc']));
-      graph.buildTimestamp = 12345;
-      graph.gitCommit = 'abc';
-      graph.configHash = 'def';
-
-      const serialized = graph.serialize();
-      const restored = CodeDocGraph.deserialize(serialized);
-
-      expect(restored.getCodeReferencedByDoc('docs/a.md').has('src/x.ts')).toBe(true);
-      expect(restored.codeSymbols.get('src/x.ts')!.has('MyClass')).toBe(true);
-      expect(restored.buildTimestamp).toBe(12345);
-      expect(restored.gitCommit).toBe('abc');
-      expect(restored.configHash).toBe('def');
-    });
-
-    it('handles empty graph', () => {
-      const serialized = graph.serialize();
-      const restored = CodeDocGraph.deserialize(serialized);
-      expect(restored.getAllDocs()).toEqual([]);
-    });
-
-    it('handles missing fields in serialized data gracefully', () => {
-      const partial = { buildTimestamp: null, gitCommit: null, configHash: null } as unknown as SerializedGraph;
-      const restored = CodeDocGraph.deserialize(partial);
-      expect(restored.getAllDocs()).toEqual([]);
-      expect(restored.getAllCodeFiles()).toEqual([]);
-      expect(restored.codeSymbols.size).toBe(0);
     });
   });
 });

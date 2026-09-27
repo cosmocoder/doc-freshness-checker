@@ -44,8 +44,6 @@ export class GraphBuilder {
       }
     }
 
-    graph.buildTimestamp = Date.now();
-
     return graph;
   }
 

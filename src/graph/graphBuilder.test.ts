@@ -68,12 +68,6 @@ describe('GraphBuilder', () => {
     expect(graph.getCodeReferencedByDoc('docs/api.md').size).toBe(0);
   });
 
-  it('sets buildTimestamp on the graph', async () => {
-    const before = Date.now();
-    const graph = await new GraphBuilder(config).buildGraph([], null);
-    expect(graph.buildTimestamp).toBeGreaterThanOrEqual(before);
-  });
-
   it('handles null codeIndex for code-pattern refs', async () => {
     const docs = [makeDoc('docs/api.md', [makeRef('code-pattern', 'Missing')])];
     const graph = await new GraphBuilder(config).buildGraph(docs, null);
