@@ -368,6 +368,9 @@ Every regular source file that `sourcePatterns` (or the built-in source patterns
 failure on a matched file, or a non-string pattern, aborts validation. The scan skips folders that it cannot read, and
 symlinks whose target is missing or is not a file. A pattern that matches nothing is not an error.
 
+The file-path and directory-structure validators report a referenced path as not found only when the path does not
+exist. Any other error while resolving the path, such as a permission error, aborts validation.
+
 Configured supported manifests (`package.json`, `requirements.txt`, `pyproject.toml`, `go.mod`, `Cargo.toml`, and `pom.xml`) must be readable; read failures abort validation. Parser errors also abort when a parser reports them. The regex-based parsers may treat malformed content as empty or partial and report missing dependencies instead. Unknown manifest basenames are ignored for compatibility. These parsers do not execute package managers.
 
 For details on CLI-to-config mapping and precedence, see [CLI and Configuration Precedence](docs/cli-and-config-precedence.md). For the internal execution pipeline, see [Runtime Architecture](docs/runtime-architecture.md).

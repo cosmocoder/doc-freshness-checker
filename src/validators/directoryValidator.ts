@@ -110,7 +110,14 @@ export class DirectoryValidator {
 
     // Strategy 1: Check if the path exists from project root
     // This handles full paths like "frontend/src/apps/domains"
-    const fullLocation = isWithinRoot(fullPath, rootDir) ? await locateRealPath(fullPath, rootDir) : null;
+    // A permission error here must not hide a doc-relative match, so it is rethrown only if Strategy 2 also fails.
+    let fullPathError: unknown;
+    const fullLocation = isWithinRoot(fullPath, rootDir)
+      ? await locateRealPath(fullPath, rootDir).catch((error: unknown) => {
+          fullPathError = error;
+          return null;
+        })
+      : null;
     if (fullLocation === 'inside') {
       this.pathCache.set(cacheKey, { found: true, foundAt: itemPath });
       return {
@@ -131,6 +138,10 @@ export class DirectoryValidator {
         valid: true,
         foundAt,
       };
+    }
+
+    if (fullPathError) {
+      throw fullPathError;
     }
 
     // Fail early when both candidates are lexically outside root, or either one is a symlink out of it.

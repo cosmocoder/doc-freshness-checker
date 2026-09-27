@@ -1,6 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 
+// Paths that cannot exist: absent, through a file, a symlink loop, a name too long, or a NUL byte.
+const MISSING_PATH_CODES = new Set(['ENOENT', 'ENOTDIR', 'ELOOP', 'ENAMETOOLONG', 'ERR_INVALID_ARG_VALUE']);
+
 /**
  * Returns true if candidatePath is equal to or nested within rootDir.
  */
@@ -12,16 +15,20 @@ export function isWithinRoot(candidatePath: string, rootDir: string): boolean {
 
 /**
  * Resolves symlinks in both paths, so a link inside rootDir that points outside it reports 'outside'.
+ * Throws on filesystem errors other than a missing path, such as EACCES.
  */
 export async function locateRealPath(candidatePath: string, rootDir: string): Promise<'inside' | 'outside' | 'missing'> {
   let realCandidate: string;
   try {
     realCandidate = await fs.promises.realpath(candidatePath);
   }
-  catch {
-    return 'missing';
+  catch (error) {
+    if (MISSING_PATH_CODES.has((error as NodeJS.ErrnoException).code ?? '')) {
+      return 'missing';
+    }
+    throw error;
   }
-  const realRoot = await fs.promises.realpath(rootDir).catch(() => path.resolve(rootDir));
+  const realRoot = await fs.promises.realpath(rootDir);
   return isWithinRoot(realCandidate, realRoot) ? 'inside' : 'outside';
 }
 
