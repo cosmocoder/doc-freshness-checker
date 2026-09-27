@@ -41,7 +41,7 @@ Validate documentation against your codebase to catch stale references before th
 - **Manifest hints for version/dependency checks:** basic format-specific identifiers and versions from listed `package.json`, `requirements.txt`, `pyproject.toml`, `go.mod`, `Cargo.toml`, and `pom.xml` files.
   - In the general manifest candidate set, concrete versions take precedence over unpinned entries. Python package names retain their Python-specific source precedence. Among equally concrete candidates, the later configured manifest wins.
   - Cargo parses simple and inline-table entries in `[dependencies]`, `[dev-dependencies]`, `[build-dependencies]`, and `[workspace.dependencies]`. Workspace references resolve from matching workspace definitions across explicitly listed `Cargo.toml` files. Dependency subtables, dotted keys, and target-specific sections are not parsed.
-- **Reporters:** `console`, `json`, `markdown`, `enhanced`.
+- **Reporters:** `console`, `json`, `markdown`, `enhanced`. In a Git repository with graph linking enabled, `enhanced` also lists the documents whose referenced code changed in the last seven days.
 - **Advanced modes:** incremental checking, freshness scoring, graph linking, semantic vector search.
 
 ## Prerequisites
@@ -263,6 +263,8 @@ rules: {
 
 Illustrative paths and symbols (e.g., tutorial placeholders) are detected automatically and can be skipped or downgraded in severity via rule configuration.
 
+To mark more paths as illustrative, add regular expressions to `illustrativePatterns` on the `file-path`, `directory-structure`, or `code-snippet` rule. Each pattern is matched without regard to case, in addition to the built-in patterns. For `code-snippet`, the patterns apply to import paths.
+
 ## Configuration
 
 ### Auto-Discovery
@@ -293,20 +295,6 @@ export default defineConfig({
   },
 });
 ```
-
-The following accepted configuration options do not affect validation or reporting and are planned for removal in v3.0.0.
-They remain part of the incremental configuration fingerprint, so changing one forces the next incremental run to perform
-a full validation:
-
-| Option                                                           | Current behavior / migration                                                                                                                                                                                                                  |
-| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rules.version.allowMinorDrift`                                  | Version validation compares major versions only.                                                                                                                                                                                              |
-| `outputDir`                                                      | Use `outputPath` with the JSON, Markdown, or Enhanced reporter. Console output remains on stdout.                                                                                                                                             |
-| `ignorePatterns`                                                 | `include` and `exclude` select documentation files. Rule-level `illustrativePatterns` can suppress illustrative `file-path`, `directory-structure`, and `code-snippet` references; there is no general semantic reference-ignore replacement. |
-| `git`, `git.enabled`, `git.trackChanges`, `git.changeWindow`     | Git availability is auto-detected during graph processing, and Enhanced reports use a fixed seven-day change window.                                                                                                                          |
-| `vectorSearch.indexCodeComments`, `vectorSearch.indexDocstrings` | Enabled vector search follows its built-in indexing behavior.                                                                                                                                                                                 |
-
-The exported `GitConfig` type is deprecated with the `git` property.
 
 <details>
 <summary>Full configuration example</summary>
@@ -341,7 +329,7 @@ export default {
   },
 
   reporters: ['console'],
-  cache: { enabled: true, dir: '.doc-freshness-cache', maxAge: 86400000 },
+  cache: { enabled: true, dir: '.doc-freshness-cache' },
   incremental: { enabled: false },
   vectorSearch: { enabled: false, similarityThreshold: 0.3 },
   verbose: false,
@@ -400,10 +388,7 @@ console.log(results.summary);
 
 `run()` and `runWithConfig()` reject when a matched document cannot be read or an extractor or validator throws. `runWithConfig()` also rejects when its configuration file cannot be loaded. Matched paths confirmed to have disappeared between discovery and reading are ignored as a normal filesystem race.
 
-> [!WARNING]
-> `Plugin` is deprecated because it is not consumed by `run()` and is planned for removal in v3.0.0. Use
-> `DocFreshnessConfig.customExtractors` and `DocFreshnessConfig.customValidators` for supported extensions. Reporter and
-> lifecycle hooks have no replacement.
+To add your own extractors or validators, use `DocFreshnessConfig.customExtractors` and `DocFreshnessConfig.customValidators`.
 
 Key exports:
 

@@ -34,12 +34,6 @@ export { GraphBuilder } from './graph/graphBuilder.js';
 export { GitChangeTracker } from './git/changeTracker.js';
 export { CacheManager } from './cache/cacheManager.js';
 export { FreshnessScorer } from './scoring/freshnessScorer.js';
-/**
- * @deprecated `Plugin` is not consumed by `run()`. Supported extension points are
- * `DocFreshnessConfig.customExtractors` and `DocFreshnessConfig.customValidators`.
- * Planned for removal in v3.0.0.
- */
-export { Plugin } from './plugins/plugin.js';
 export { IncrementalChecker } from './utils/incremental.js';
 export { VectorSearch } from './semantic/vectorSearch.js';
 
@@ -60,7 +54,6 @@ export type {
   RulesConfig,
   UrlValidationConfig,
   GraphConfig,
-  GitConfig,
   FreshnessScoringConfig,
   FreshnessScoringWeights,
   FreshnessScoringThresholds,

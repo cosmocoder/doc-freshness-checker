@@ -2,7 +2,6 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { CacheManager } from './cacheManager.js';
-import { CodeDocGraph } from '../graph/codeDocGraph.js';
 import type { DocFreshnessConfig } from '../types.js';
 
 describe('CacheManager', () => {
@@ -123,30 +122,6 @@ describe('CacheManager', () => {
     await fs.promises.rm(tempDir, { recursive: true, force: true });
   });
 
-  describe('graph operations', () => {
-    it('saves and loads a graph', async () => {
-      const manager = new CacheManager(config);
-      const graph = new CodeDocGraph();
-      graph.addReference('doc.md', 'src/a.ts', { type: 'file-path', value: 'a.ts', lineNumber: 1, raw: 'a.ts', sourceFile: 'doc.md' });
-      graph.buildTimestamp = Date.now();
-
-      await manager.saveGraph(graph);
-      const loaded = await manager.loadGraph();
-
-      expect(loaded).not.toBeNull();
-      expect(loaded!.getCodeReferencedByDoc('doc.md').has('src/a.ts')).toBe(true);
-    });
-
-    it('loadGraph returns null when no cache exists', async () => {
-      const freshConfig: DocFreshnessConfig = {
-        rootDir: process.cwd(),
-        cache: { dir: '.doc-freshness-cache/nonexistent-test' },
-      };
-      const manager = new CacheManager(freshConfig);
-      expect(await manager.loadGraph()).toBeNull();
-    });
-  });
-
   describe('URL cache operations', () => {
     it('saves and loads URL cache', async () => {
       const manager = new CacheManager(config);
@@ -182,7 +157,6 @@ describe('CacheManager', () => {
       const readSpy = vi.spyOn(fs.promises, 'readFile').mockRejectedValue(Object.assign(new Error('denied'), { code: 'EACCES' }));
 
       expect(await manager.loadUrlCache()).toEqual({});
-      expect(await manager.loadGraph()).toBeNull();
       expect(await manager.readEmbeddingCache()).toBeNull();
       readSpy.mockRestore();
     });
@@ -196,45 +170,6 @@ describe('CacheManager', () => {
 
       await expect(manager.loadUrlCache()).rejects.toBe(error);
       lstatSpy.mockRestore();
-    });
-  });
-
-  describe('isCacheValid', () => {
-    it('returns false for null graph', () => {
-      const manager = new CacheManager(config);
-      expect(manager.isCacheValid(null, null)).toBe(false);
-    });
-
-    it('returns false when graph has no buildTimestamp', () => {
-      const manager = new CacheManager(config);
-      const graph = new CodeDocGraph();
-      expect(manager.isCacheValid(graph, null)).toBe(false);
-    });
-
-    it('returns true when git commit matches', () => {
-      const manager = new CacheManager(config);
-      const graph = new CodeDocGraph();
-      graph.buildTimestamp = Date.now();
-      graph.gitCommit = 'abc123';
-      expect(manager.isCacheValid(graph, 'abc123')).toBe(true);
-    });
-
-    it('returns false when git commit differs', () => {
-      const manager = new CacheManager(config);
-      const graph = new CodeDocGraph();
-      graph.buildTimestamp = Date.now();
-      graph.gitCommit = 'abc123';
-      expect(manager.isCacheValid(graph, 'def456')).toBe(false);
-    });
-
-    it('uses time-based expiry when no git info', () => {
-      const manager = new CacheManager({ ...config, cache: { ...config.cache, maxAge: 1000 } });
-      const graph = new CodeDocGraph();
-      graph.buildTimestamp = Date.now();
-      expect(manager.isCacheValid(graph, null)).toBe(true);
-
-      graph.buildTimestamp = Date.now() - 2000;
-      expect(manager.isCacheValid(graph, null)).toBe(false);
     });
   });
 
@@ -260,65 +195,6 @@ describe('CacheManager', () => {
       await expect(manager.clearCache()).rejects.toBe(error);
       expect(rmSpy).toHaveBeenCalledWith(cacheDir, { recursive: true, force: true });
       rmSpy.mockRestore();
-    });
-  });
-
-  describe('isCacheValid - configHash', () => {
-    it('returns false when configHash differs', () => {
-      const manager = new CacheManager(config);
-      const graph = new CodeDocGraph();
-      graph.buildTimestamp = Date.now();
-      graph.configHash = 'stale-hash';
-      expect(manager.isCacheValid(graph, null)).toBe(false);
-    });
-
-    it('ignores configHash check when graph has no configHash', () => {
-      const manager = new CacheManager(config);
-      const graph = new CodeDocGraph();
-      graph.buildTimestamp = Date.now();
-      graph.configHash = null;
-      expect(manager.isCacheValid(graph, null)).toBe(true);
-    });
-  });
-
-  describe('getCacheStats', () => {
-    it('returns stats for existing cache', async () => {
-      const manager = new CacheManager(config);
-      const graph = new CodeDocGraph();
-      graph.buildTimestamp = Date.now();
-      await manager.saveGraph(graph);
-
-      const stats = await manager.getCacheStats();
-      expect(stats.exists).toBe(true);
-      expect(stats.graphSize).toBeGreaterThan(0);
-    });
-
-    it('returns empty stats when no cache', async () => {
-      const freshConfig: DocFreshnessConfig = { rootDir: process.cwd(), cache: { dir: '.doc-freshness-cache/no-stats' } };
-      const manager = new CacheManager(freshConfig);
-      const stats = await manager.getCacheStats();
-      expect(stats.exists).toBe(false);
-      expect(stats.lastUpdated).toBeNull();
-    });
-
-    it('reports a populated result cache without a graph cache', async () => {
-      const manager = new CacheManager({
-        rootDir: process.cwd(),
-        cache: { dir: '.doc-freshness-cache/test-cache/url-only-stats' },
-      });
-      await manager.saveUrlCache({ 'https://x.com': { result: { valid: true }, timestamp: Date.now() } });
-      const stats = await manager.getCacheStats();
-      expect(stats.exists).toBe(true);
-      expect(stats.urlCacheSize).toBeGreaterThan(0);
-      expect(stats.lastUpdated).toBeInstanceOf(Date);
-    });
-
-    it('treats ordinary stat failures as missing cache files', async () => {
-      const manager = new CacheManager(config);
-      const statSpy = vi.spyOn(fs.promises, 'stat').mockRejectedValue(Object.assign(new Error('denied'), { code: 'EACCES' }));
-
-      expect(await manager.getCacheStats()).toEqual({ exists: false, graphSize: 0, urlCacheSize: 0, lastUpdated: null });
-      statSpy.mockRestore();
     });
   });
 });

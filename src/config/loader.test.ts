@@ -327,18 +327,18 @@ describe('loadConfig', () => {
           `import { defineConfig } from 'doc-freshness-checker';`,
           `import { include } from './config-value.mjs';`,
           `import { readFileSync } from 'node:fs';`,
-          `export default defineConfig({ include, outputDir: readFileSync(new URL('./config-value.txt', import.meta.url), 'utf8'), outputPath: import.meta.filename });`,
+          `export default defineConfig({ include, cache: { dir: readFileSync(new URL('./config-value.txt', import.meta.url), 'utf8') }, outputPath: import.meta.filename });`,
         ].join('\n')
       );
       await fs.promises.writeFile(
         concurrentConfigPath,
-        `import { defineConfig } from 'doc-freshness-checker';\nexport default defineConfig({ outputDir: 'concurrent' });`
+        `import { defineConfig } from 'doc-freshness-checker';\nexport default defineConfig({ cache: { dir: 'concurrent' } });`
       );
       await fs.promises.symlink(targetConfigPath, configPath, 'file');
 
       expect(fs.existsSync(path.join(projectDir, 'node_modules'))).toBe(false);
       const loaderUrl = pathToFileURL(await transpilePublicLoader(buildDir)).href;
-      const reloadedSource = `import { defineConfig } from 'doc-freshness-checker';\nexport default defineConfig({ outputDir: 'reloaded' });`;
+      const reloadedSource = `import { defineConfig } from 'doc-freshness-checker';\nexport default defineConfig({ cache: { dir: 'reloaded' } });`;
       const script = `
         import { writeFile } from 'node:fs/promises';
         import { loadConfig } from ${JSON.stringify(loaderUrl)};
@@ -363,11 +363,11 @@ describe('loadConfig', () => {
       expect(canonicalConfigPath).toBe(canonicalTargetPath);
       expect(canonicalConfigPath).not.toBe(configPath);
       expect(result.config.include).toEqual(['from-sibling/**/*.md']);
-      expect(result.config.outputDir).toBe('from-asset');
+      expect(result.config.cache.dir).toBe('from-asset');
       expect(result.config.outputPath).toBe(canonicalConfigPath);
-      expect(result.concurrentConfig.outputDir).toBe('concurrent');
+      expect(result.concurrentConfig.cache.dir).toBe('concurrent');
       expect(result.errorMessage).toBe('config failed');
-      expect(result.reloadedConfig.outputDir).toBe('reloaded');
+      expect(result.reloadedConfig.cache.dir).toBe('reloaded');
     }
     finally {
       await fs.promises.rm(projectDir, { recursive: true, force: true });
@@ -376,19 +376,20 @@ describe('loadConfig', () => {
 
   it('loads a discovered ESM config from its original directory', async () => {
     const siblingModule = path.join(tmpDir, 'discovered-value.mjs');
-    await fs.promises.writeFile(siblingModule, `export const outputDir = 'discovered-sibling';`);
+    await fs.promises.writeFile(siblingModule, `export const cacheDir = 'discovered-sibling';`);
 
     try {
       await withTempConfig(
         '.doc-freshness.config.js',
-        [`import { outputDir } from './discovered-value.mjs';`, `export default { outputDir, outputPath: import.meta.filename };`].join(
-          '\n'
-        ),
+        [
+          `import { cacheDir } from './discovered-value.mjs';`,
+          `export default { cache: { dir: cacheDir }, outputPath: import.meta.filename };`,
+        ].join('\n'),
         async (configPath) => {
           const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(tmpDir);
           try {
             const config = await loadConfig();
-            expect(config.outputDir).toBe('discovered-sibling');
+            expect(config.cache?.dir).toBe('discovered-sibling');
             expect(config.outputPath).toBe(await fs.promises.realpath(configPath));
           }
           finally {

@@ -113,7 +113,6 @@ describe('runner', () => {
     urlValidation: { enabled: false },
     rules: Object.fromEntries(BUILT_IN_RULE_TYPES.map((rule) => [rule, { enabled: false }])),
     graph: { enabled: false },
-    git: { enabled: false },
     freshnessScoring: { enabled: false },
     vectorSearch: { enabled: false },
     cache: { enabled: false },
@@ -643,12 +642,11 @@ describe('runner', () => {
   });
 
   describe('graph and scoring', () => {
-    it('builds graph without persisting an unused graph cache', async () => {
+    it('writes the URL cache when the graph is enabled', async () => {
       captureLog();
       const cacheDir = '.doc-freshness-cache/runner-graph';
       try {
         await run({ ...baseConfig, graph: { enabled: true }, cache: { enabled: true, dir: cacheDir } });
-        await expect(fs.promises.access(path.join(process.cwd(), cacheDir, 'graph-cache.json'))).rejects.toThrow();
         await expect(fs.promises.access(path.join(process.cwd(), cacheDir, 'url-cache.json'))).resolves.toBeUndefined();
       }
       finally {
@@ -866,7 +864,6 @@ describe('runner', () => {
         expect(await exists('url-cache.json')).toBe(cache);
         expect(await exists('file-hashes.json')).toBe(cache && incremental);
         expect(await exists('embedding-cache.json')).toBe(cache && vector);
-        expect(await exists('graph-cache.json')).toBe(false);
         if (!cache) {
           await expect(fs.promises.access(resultDir)).rejects.toThrow();
         }
@@ -913,24 +910,6 @@ describe('runner', () => {
           cache: { enabled: true, dir: '.cache' },
           reporters: [],
         };
-
-        mockDocumentScan(docPath);
-        expect((await run(config)).summary.total).toBe(1);
-        mockDocumentScan(docPath);
-        expect((await run(config)).summary.total).toBe(0);
-      });
-    });
-
-    it('allows reuse when git tracking is enabled without freshness scoring', async () => {
-      await withIncrementalRoot('git-only', async (rootDir) => {
-        const docPath = path.join(rootDir, 'guide.md');
-        const targetPath = path.join(rootDir, 'target.ts');
-        await fs.promises.writeFile(docPath, '[target](target.ts)');
-        await fs.promises.writeFile(targetPath, 'export const target = true;');
-        const config = incrementalConfig(rootDir, {
-          git: { enabled: true },
-          rules: { 'file-path': { enabled: true } },
-        });
 
         mockDocumentScan(docPath);
         expect((await run(config)).summary.total).toBe(1);
