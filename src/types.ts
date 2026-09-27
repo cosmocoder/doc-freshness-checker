@@ -191,6 +191,8 @@ export interface Reference {
   importSpecifiers?: string[];
   argumentNames?: string[];
   keywordArgumentCount?: number;
+  /** The call spreads or unpacks an argument (`...args`, `*args`, `**mapping`, Go `args...`), so its argument count is unknown. */
+  unpacksArguments?: boolean;
   technology?: string;
   version?: string;
   kind?: string;

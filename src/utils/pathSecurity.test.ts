@@ -1,5 +1,7 @@
+import fs from 'fs';
+import os from 'os';
 import path from 'path';
-import { isWithinRoot, resolveProjectRoot, resolveDocumentDir } from './pathSecurity.js';
+import { isWithinRoot, locateRealPath, resolveProjectRoot, resolveDocumentDir } from './pathSecurity.js';
 
 describe('isWithinRoot', () => {
   const root = '/project';
@@ -17,6 +19,37 @@ describe('isWithinRoot', () => {
   it('resolves relative paths before comparing', () => {
     expect(isWithinRoot('/project/src/../src/file.ts', root)).toBe(true);
     expect(isWithinRoot('/project/../other', root)).toBe(false);
+  });
+});
+
+describe('locateRealPath', () => {
+  it('reports missing paths and rethrows other filesystem errors', async () => {
+    const realpath = fs.promises.realpath;
+    const rootDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'doc-freshness-path-security-'));
+    try {
+      const file = path.join(rootDir, 'file.txt');
+      await fs.promises.writeFile(file, '');
+      await expect(locateRealPath(path.join(rootDir, 'absent'), rootDir)).resolves.toBe('missing');
+      await expect(locateRealPath(path.join(file, 'child'), rootDir)).resolves.toBe('missing');
+      await fs.promises.symlink('loop-b', path.join(rootDir, 'loop-a'));
+      await fs.promises.symlink('loop-a', path.join(rootDir, 'loop-b'));
+      await expect(locateRealPath(path.join(rootDir, 'loop-a'), rootDir)).resolves.toBe('missing');
+      await expect(locateRealPath(path.join(rootDir, 'a'.repeat(300)), rootDir)).resolves.toBe('missing');
+      await expect(locateRealPath(path.join(rootDir, 'a\0b'), rootDir)).resolves.toBe('missing');
+
+      const permissionError = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+      vi.spyOn(fs.promises, 'realpath').mockRejectedValueOnce(permissionError);
+      await expect(locateRealPath(file, rootDir)).rejects.toBe(permissionError);
+
+      vi.spyOn(fs.promises, 'realpath').mockImplementation(async (candidate, options) =>
+        candidate === rootDir ? Promise.reject(permissionError) : realpath(candidate, options)
+      );
+      await expect(locateRealPath(file, rootDir)).rejects.toBe(permissionError);
+    }
+    finally {
+      vi.restoreAllMocks();
+      await fs.promises.rm(rootDir, { recursive: true, force: true });
+    }
   });
 });
 

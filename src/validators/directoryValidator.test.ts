@@ -139,6 +139,30 @@ describe('DirectoryValidator', () => {
     expect(results[0].message).toContain('escapes project root');
   });
 
+  it('tries the doc-relative candidate before rethrowing a root-relative permission error', async () => {
+    const rootDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'doc-freshness-directory-eacces-'));
+    try {
+      await fs.promises.mkdir(path.join(rootDir, 'docs', 'src'), { recursive: true });
+      await fs.promises.writeFile(path.join(rootDir, 'docs', 'src', 'index.ts'), '');
+      const permissionError = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+      const realpath = fs.promises.realpath;
+      vi.spyOn(fs.promises, 'realpath').mockImplementation(async (candidate, options) =>
+        String(candidate).startsWith(path.join(rootDir, 'src') + path.sep) ? Promise.reject(permissionError) : realpath(candidate, options)
+      );
+      const guide = makeBaseDoc({ path: 'docs/guide.md' });
+
+      const [found] = await new DirectoryValidator().validateBatch([makeRef('src/index.ts')], guide, { ...config, rootDir });
+      expect(found.valid).toBe(true);
+      await expect(new DirectoryValidator().validateBatch([makeRef('src/missing.ts')], guide, { ...config, rootDir })).rejects.toBe(
+        permissionError
+      );
+    }
+    finally {
+      vi.restoreAllMocks();
+      await fs.promises.rm(rootDir, { recursive: true, force: true });
+    }
+  });
+
   it('rejects symlinks that resolve outside project root and accepts symlinks inside it', async () => {
     const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'doc-freshness-directory-symlink-'));
     const rootDir = path.join(tempDir, 'root');

@@ -274,6 +274,15 @@ export class CodeSnippetValidator {
       };
     }
 
+    if (ref.unpacksArguments) {
+      return {
+        reference: ref,
+        valid: true,
+        skipped: true,
+        message: `Function ${funcName} call spreads or unpacks arguments, so its argument count is not checked`,
+      };
+    }
+
     // A call is valid if any signature can accept this many arguments
     const compatible = signatures.find((sig) => this.acceptsArity(sig, snippetArity, keywordCount));
 
