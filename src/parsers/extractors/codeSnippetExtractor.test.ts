@@ -146,6 +146,36 @@ describe('CodeSnippetExtractor', () => {
       expect(typescriptCall.keywordArgumentCount).toBeUndefined();
     });
 
+    it('marks calls that spread or unpack arguments, per language', () => {
+      const doc = makeDoc(
+        [
+          '```python',
+          'connect(*address)',
+          'connect(**settings)',
+          'connect(...)',
+          'connect(port * 2)',
+          '```',
+          '```typescript',
+          'mount(...args);',
+          '```',
+          '```go',
+          'Connect(*address)',
+          'Connect(addresses...)',
+          '```',
+        ].join('\n')
+      );
+      const calls = extractor.extract(doc).filter((r) => r.kind === 'function-call');
+      expect(calls.map((call) => [call.raw, call.unpacksArguments])).toEqual([
+        ['connect', true],
+        ['connect', true],
+        ['connect', true],
+        ['connect', undefined],
+        ['mount', true],
+        ['Connect', undefined],
+        ['Connect', true],
+      ]);
+    });
+
     it('counts zero arguments', () => {
       const doc = makeDoc(['```typescript', 'initialize();', '```'].join('\n'));
       const refs = extractor.extract(doc).filter((r) => r.kind === 'function-call');

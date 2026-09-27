@@ -10,6 +10,14 @@ const LANGUAGE_ALIASES: Record<SupportedSnippetLanguage, string[]> = {
 
 // `name=value` or `**mapping`; `==` is a comparison, not a keyword argument.
 const PYTHON_KEYWORD_ARGUMENT = /^(?:\*\*|[A-Za-z_]\w*\s*=(?!=))/;
+// A spread or unpacked argument hides the argument count.
+// Python reads a bare `...` as one Ellipsis argument, but docs use `f(...)` for omitted arguments, so it counts as unknown.
+const UNPACKED_ARGUMENT: Record<SupportedSnippetLanguage, RegExp> = {
+  javascript: /^\.\.\./,
+  typescript: /^\.\.\./,
+  python: /^(?:\*|\.\.\.$)/,
+  go: /\.\.\.$/,
+};
 
 /**
  * Identifiers to skip when extracting function calls.
@@ -409,6 +417,7 @@ export class CodeSnippetExtractor extends BaseExtractor {
           linkText: String(args.length),
           argumentNames,
           ...(lang === 'python' ? { keywordArgumentCount: args.filter((argument) => PYTHON_KEYWORD_ARGUMENT.test(argument)).length } : {}),
+          ...(args.some((argument) => UNPACKED_ARGUMENT[lang].test(argument)) ? { unpacksArguments: true } : {}),
         });
       }
     }

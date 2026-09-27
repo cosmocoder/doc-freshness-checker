@@ -303,6 +303,43 @@ describe('CodeSnippetValidator', () => {
       );
     });
 
+    it('skips arity and name checks for calls that spread or unpack arguments', async () => {
+      await withTempSourceFiles(
+        {
+          'src/api.py': 'def connect(host, port): pass\n',
+          'src/mount.ts': 'export function mount(target: string, options: object) {}\n',
+        },
+        async (tempConfig) => {
+          const python = { language: 'python' };
+          const results = await new CodeSnippetValidator().validateBatch(
+            [
+              makeRef('function-call', 'connect', { ...python, linkText: '1', unpacksArguments: true, raw: 'connect(*address)' }),
+              makeRef('function-call', 'connect', {
+                ...python,
+                linkText: '1',
+                keywordArgumentCount: 1,
+                unpacksArguments: true,
+                raw: 'connect(**settings)',
+              }),
+              makeRef('function-call', 'mount', {
+                language: 'typescript',
+                linkText: '1',
+                argumentNames: ['args'],
+                unpacksArguments: true,
+                raw: 'mount(...args)',
+              }),
+              makeRef('function-call', 'connect', { ...python, linkText: '1', raw: 'connect(address)' }),
+            ],
+            doc,
+            tempConfig
+          );
+          expect(results.map((result) => result.valid)).toEqual([true, true, true, false]);
+          expect(results.map((result) => result.skipped)).toEqual([true, true, true, undefined]);
+          expect(results[0].message).toBe('Function connect call spreads or unpacks arguments, so its argument count is not checked');
+        }
+      );
+    });
+
     it('checks only positional argument names and treats impossible keyword counts as zero', async () => {
       await withTempSourceFiles(
         {

@@ -211,7 +211,7 @@ The checker resolves `./services/userService` against the project source tree (t
    💡 Did you mean: sendOnboardingEmail?
 ```
 
-**Function signatures** — checks that the number of arguments shown in a code example matches the function's current signature, accounting for optional and rest parameters. In Python, `**kwargs` accepts any number of keyword arguments, but no extra positional arguments. When an example uses simple placeholder identifiers like `name, email`, those are also compared to the current parameter names to catch renamed positional parameters.
+**Function signatures** — checks that the number of arguments shown in a code example matches the function's current signature, accounting for optional and rest parameters. In Python, `**kwargs` accepts any number of keyword arguments, but no extra positional arguments. A call that spreads or unpacks an argument (`...args`, `*args`, `**mapping`, or Go `args...`) passes an unknown number of arguments, so its argument count is not checked and the call is reported as skipped. When an example uses simple placeholder identifiers like `name, email`, those are also compared to the current parameter names to catch renamed positional parameters.
 
 ````markdown
 ```typescript
