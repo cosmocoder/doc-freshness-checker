@@ -54,7 +54,6 @@ export type {
   RulesConfig,
   UrlValidationConfig,
   GraphConfig,
-  GitConfig,
   FreshnessScoringConfig,
   FreshnessScoringWeights,
   FreshnessScoringThresholds,

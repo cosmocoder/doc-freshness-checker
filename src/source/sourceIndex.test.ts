@@ -132,7 +132,6 @@ describe('SourceIndex', () => {
           rootDir,
           sourcePatterns: ['**/*'],
           exclude: ['src/ignored-by-config.ts'],
-          ignorePatterns: ['src/ignored-by-config.ts'],
         });
         expect(broad.patternFiles.has('src/ignored-by-config.ts')).toBe(true);
         expect(broad.snippetFiles.has('src/ignored-by-config.ts')).toBe(true);

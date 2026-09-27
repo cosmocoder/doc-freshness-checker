@@ -113,7 +113,6 @@ describe('runner', () => {
     urlValidation: { enabled: false },
     rules: Object.fromEntries(BUILT_IN_RULE_TYPES.map((rule) => [rule, { enabled: false }])),
     graph: { enabled: false },
-    git: { enabled: false },
     freshnessScoring: { enabled: false },
     vectorSearch: { enabled: false },
     cache: { enabled: false },
@@ -913,24 +912,6 @@ describe('runner', () => {
           cache: { enabled: true, dir: '.cache' },
           reporters: [],
         };
-
-        mockDocumentScan(docPath);
-        expect((await run(config)).summary.total).toBe(1);
-        mockDocumentScan(docPath);
-        expect((await run(config)).summary.total).toBe(0);
-      });
-    });
-
-    it('allows reuse when git tracking is enabled without freshness scoring', async () => {
-      await withIncrementalRoot('git-only', async (rootDir) => {
-        const docPath = path.join(rootDir, 'guide.md');
-        const targetPath = path.join(rootDir, 'target.ts');
-        await fs.promises.writeFile(docPath, '[target](target.ts)');
-        await fs.promises.writeFile(targetPath, 'export const target = true;');
-        const config = incrementalConfig(rootDir, {
-          git: { enabled: true },
-          rules: { 'file-path': { enabled: true } },
-        });
 
         mockDocumentScan(docPath);
         expect((await run(config)).summary.total).toBe(1);

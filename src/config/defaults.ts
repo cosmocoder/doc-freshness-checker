@@ -86,8 +86,6 @@ export const DEFAULT_CONFIG: DefaultConfig = {
     version: {
       enabled: true,
       severity: 'warning',
-      // Deprecated: ignored by validation; changing this value invalidates incremental reuse.
-      allowMinorDrift: true,
     },
     'directory-structure': {
       enabled: true,
@@ -120,14 +118,6 @@ export const DEFAULT_CONFIG: DefaultConfig = {
   // Reporter configuration
   reporters: ['console'],
 
-  // Output directory for reports
-  // Deprecated: ignored by reporting; changing this value invalidates incremental reuse.
-  outputDir: '.doc-freshness-reports',
-
-  // Ignore patterns (regex strings)
-  // Deprecated: ignored by reference filtering; changing this value invalidates incremental reuse.
-  ignorePatterns: [],
-
   // Custom extractors (advanced)
   customExtractors: [],
 
@@ -139,14 +129,6 @@ export const DEFAULT_CONFIG: DefaultConfig = {
     enabled: true,
     cacheDir: '.doc-freshness-cache',
     cacheMaxAge: 24 * 60 * 60 * 1000, // 24 hours for non-git repos
-  },
-
-  // Git integration settings
-  // Deprecated: ignored by Git behavior; changing these values invalidates incremental reuse.
-  git: {
-    enabled: true,
-    trackChanges: true,
-    changeWindow: 7,
   },
 
   // Freshness scoring settings
@@ -170,10 +152,6 @@ export const DEFAULT_CONFIG: DefaultConfig = {
   vectorSearch: {
     enabled: false, // Disabled by default
     similarityThreshold: 0.3, // Higher = stricter: doc sections need a closer code match, so more mismatches are reported
-    // Deprecated: ignored by vector indexing; changing this value invalidates incremental reuse.
-    indexCodeComments: true,
-    // Deprecated: ignored by vector indexing; changing this value invalidates incremental reuse.
-    indexDocstrings: true,
   },
 
   // Cache settings
