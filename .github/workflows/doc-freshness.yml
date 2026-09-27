@@ -92,7 +92,7 @@ jobs:
 
       - name: Add PR Comment
         if: github.event_name == 'pull_request' && steps.check.outputs.has_issues == 'true'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const { default: script } = await import('file://${{ github.workspace }}/.github/scripts/pr-comment.mjs');
@@ -100,7 +100,7 @@ jobs:
 
       - name: Create/Update Tracking Issue (Scheduled Run)
         if: github.event_name == 'schedule' && steps.check.outputs.has_issues == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const { default: script } = await import('file://${{ github.workspace }}/.github/scripts/tracking-issue.mjs');
