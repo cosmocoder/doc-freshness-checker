@@ -70,7 +70,7 @@
   "engine-strict": true,
   "dependencies": {
     "commander": "14.0.3",
-    "fastembed": "2.1.0",
+    "fastembed": "3.0.0",
     "semver": "7.8.5"
   },
   "devDependencies": {
